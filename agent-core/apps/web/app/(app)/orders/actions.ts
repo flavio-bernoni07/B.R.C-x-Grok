@@ -15,4 +15,5 @@ export async function runOrderSimulation() {
   revalidatePath("/actions");
   // Land on Actions so Send-off / Price / Quantity schede show the fresh gates immediately.
   redirect(`/actions?sim=1&total=${results.length}&waiting=${waiting}`);
+}
 
