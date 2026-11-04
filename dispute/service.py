@@ -1,0 +1,132 @@
+"""Dispute row on the shared Mini ERP.
+
+    handle_claim()     claim email -> Grok reads it -> facts from the Mini ERP (+ the
+                       Dispute fixtures) -> Grok verdict -> outcome, or a sign-off
+    approve_verdict()  a person signs off an ambiguous verdict; the outcome is written
+                       and the case is added to the Playbook's past cases
+    reject_verdict()   the person overturns Grok; nothing is sent, the claim is reopened
+
+Grok decides and explains, code writes every document and amount (dispute-dec.md).
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import date
+from pathlib import Path
+from typing import Any, Callable
+
+from core import signoff
+from core.erp import Erp
+from dispute.claim_reader import read_claim
+from dispute.mini_erp import MiniErpStore
+from dispute.outcome import emit_outcome
+from dispute.pull_facts import pull_facts
+from dispute.verdict import DEFAULT_PLAYBOOK, decide_verdict
+from shipping.service import export_for_dispute
+
+OUTCOME_KINDS = {
+    "td04_xml": "FatturaPA TD04",
+    "edi_invoic_381": "INVOIC 381",
+    "reject_reply": "claim reply",
+    "outcome_json": "outcome",
+}
+
+
+def _store(erp: Erp, include_fixtures: bool) -> MiniErpStore:
+    live = MiniErpStore.from_dict(export_for_dispute(erp), label="Mini ERP (core/erp.py)")
+    return live.merged_with(MiniErpStore.load()) if include_fixtures else live
+
+
+def _save_outcome(erp: Erp, claim_id: str, outcome: Any) -> None:
+    for key, path in outcome.paths.items():
+        body = Path(path).read_text(encoding="utf-8") if Path(path).is_file() else None
+        doc_id = erp.add_document(OUTCOME_KINDS.get(key, key), claim_id, body, path=path)
+        erp.log("code", f"dispute.{key}", claim_id, source_doc=doc_id)
+    erp.set_claim(claim_id, status="closed" if outcome.kind != "awaiting_sign_off" else "awaiting_sign_off",
+                  outcome=outcome.to_dict())
+
+
+def handle_claim(
+    erp: Erp,
+    email_text: str,
+    *,
+    out_dir: Path | str,
+    source_name: str = "claim email",
+    read_caller: Callable[[str], dict[str, Any]] | None = None,
+    verdict_caller: Callable[[list[dict[str, str]]], dict[str, Any]] | None = None,
+    include_fixtures: bool = True,
+    issue_date: date | None = None,
+) -> dict[str, Any]:
+    doc_id = erp.add_document("claim email", None, email_text, path=source_name)
+    claim_id = erp.next_id("claim", "CLM-")
+    erp.save_claim(claim_id=claim_id, source_doc=doc_id, status="received")
+    erp.log("retailer", "dispute.claim_received", claim_id, source_doc=doc_id)
+
+    extraction = read_claim(email_text, grok_caller=read_caller)
+    erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+    facts = pull_facts(extraction, store=_store(erp, include_fixtures))
+    erp.log("code", "dispute.facts_pulled", claim_id, detail={"misses": [m.to_dict() for m in facts.misses],
+                                                               "threeway": facts.threeway.summary if facts.threeway else None})
+    verdict = decide_verdict(extraction, facts, grok_caller=verdict_caller)
+    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict()}
+    erp.log("grok", "dispute.verdict", claim_id, detail={"decision": verdict.decision.value, "amount": verdict.amount,
+                                                          "sign_off_reasons": verdict.sign_off_reasons})
+    erp.set_claim(claim_id, order_ref=extraction.order_ref, invoice_ref=extraction.invoice_ref,
+                  extraction=extraction.to_dict(), verdict=verdict_dict)
+
+    facts_dict = facts.to_dict()
+    if verdict.needs_sign_off:
+        case_id = signoff.request(
+            erp, row="dispute", kind="verdict", subject_ref=claim_id,
+            title=f"Claim {claim_id} on {extraction.order_ref or 'an unknown order'}: Grok proposes {verdict.decision.value}",
+            proposal={"verdict": verdict_dict, "facts": facts_dict, "out_dir": str(out_dir)},
+            reasons=verdict.sign_off_reasons,
+        )
+        erp.set_claim(claim_id, status="awaiting_sign_off")
+        return {"status": "awaiting_person", "claim_id": claim_id, "case_id": case_id, "verdict": verdict_dict}
+
+    outcome = emit_outcome(verdict_dict, facts=facts_dict, out_dir=out_dir, issue_date=issue_date)
+    _save_outcome(erp, claim_id, outcome)
+    return {"status": "closed", "claim_id": claim_id, "verdict": verdict_dict, "outcome": outcome.to_dict()}
+
+
+def approve_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
+                    playbook_path: Path | str = DEFAULT_PLAYBOOK, issue_date: date | None = None) -> dict[str, Any]:
+    case = erp.signoff(case_id)
+    if not case or case["row"] != "dispute":
+        raise ValueError(f"{case_id} is not a dispute sign-off")
+    signoff.decide(erp, case_id, approve=True, by=by, reason=reason)
+    proposal = case["proposal"]
+    verdict = proposal["verdict"]
+    outcome = emit_outcome(verdict, facts=proposal["facts"], out_dir=proposal["out_dir"],
+                           issue_date=issue_date, approved_by=by)
+    _save_outcome(erp, case["subject_ref"], outcome)
+    claim = verdict.get("claim") or {}
+    signoff.record_past_case(playbook_path, when=(issue_date or date.today()).isoformat(),
+                             order_ref=claim.get("order_ref") or "—", case_type=claim.get("claim_type") or "other",
+                             decision=f"{verdict['decision']} (approved)", amount=verdict.get("amount"),
+                             notes=f"{by}: {reason}")
+    return {"status": "closed", "claim_id": case["subject_ref"], "outcome": outcome.to_dict()}
+
+
+def reject_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
+                   playbook_path: Path | str = DEFAULT_PLAYBOOK) -> dict[str, Any]:
+    case = erp.signoff(case_id)
+    if not case or case["row"] != "dispute":
+        raise ValueError(f"{case_id} is not a dispute sign-off")
+    signoff.decide(erp, case_id, approve=False, by=by, reason=reason)
+    verdict = case["proposal"]["verdict"]
+    claim = verdict.get("claim") or {}
+    erp.set_claim(case["subject_ref"], status="reopened")
+    signoff.record_past_case(playbook_path, when=date.today().isoformat(), order_ref=claim.get("order_ref") or "—",
+                             case_type=claim.get("claim_type") or "other",
+                             decision=f"{verdict['decision']} overturned", amount=verdict.get("amount"),
+                             notes=f"{by}: {reason}")
+    return {"status": "reopened", "claim_id": case["subject_ref"]}
+
+
+def offline_callers(path: Path | str) -> tuple[Callable, Callable]:
+    """Recorded Grok answers (for a demo with the network off). Same code checks apply."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return (lambda _text: dict(data["read_claim"])), (lambda _messages: json.loads(json.dumps(data["verdict"])))

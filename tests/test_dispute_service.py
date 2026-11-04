@@ -1,0 +1,86 @@
+"""Dispute row on the Mini ERP, the benchmark against threeway, and the whole demo."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+import demo
+from bench.score import score
+from core.world import fresh_erp
+from dispute.service import approve_verdict, handle_claim, offline_callers, reject_verdict
+
+ROOT = Path(__file__).resolve().parents[1]
+DISPUTES = ROOT / "data" / "disputes"
+
+
+@pytest.fixture(autouse=True)
+def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+
+
+def _unclear():
+    extraction = json.loads((DISPUTES / "extractions" / "05_ambiguous.json").read_text())
+    verdict = json.loads((DISPUTES / "verdicts" / "05_ambiguous_reject.json").read_text())
+    for key in ("claim", "playbook_path", "contract_path", "amount_notes", "known_amounts"):
+        verdict.pop(key, None)
+    return (lambda _t: dict(extraction)), (lambda _m: json.loads(json.dumps(verdict)))
+
+
+def test_unclear_claim_waits_then_approval_writes_reply_and_playbook(tmp_path: Path) -> None:
+    erp = fresh_erp()
+    playbook = tmp_path / "playbook.md"
+    shutil.copy(DISPUTES / "playbook.md", playbook)
+    read_c, verdict_c = _unclear()
+    res = handle_claim(erp, (DISPUTES / "claims" / "05_ambiguous_otif_or_shortage.txt").read_text(),
+                       out_dir=tmp_path, read_caller=read_c, verdict_caller=verdict_c)
+    assert res["status"] == "awaiting_person"
+    assert not list(tmp_path.glob("*_reject_reply.txt"))
+    assert erp.claim(res["claim_id"])["status"] == "awaiting_sign_off"
+    done = approve_verdict(erp, res["case_id"], by="Sara", reason="Late gate-in, quantities agree",
+                           playbook_path=playbook, issue_date=date(2026, 11, 7))
+    assert done["outcome"]["kind"] == "reject_reply" and done["outcome"]["approved_by"] == "Sara"
+    assert erp.claim(res["claim_id"])["status"] == "closed"
+    assert "| 2026-11-07 | RS26112 | other | reject (approved) |" in playbook.read_text()
+    assert erp.documents(ref=res["claim_id"], kind="claim reply")
+
+
+def test_overturned_verdict_reopens_the_claim(tmp_path: Path) -> None:
+    erp = fresh_erp()
+    playbook = tmp_path / "playbook.md"
+    shutil.copy(DISPUTES / "playbook.md", playbook)
+    read_c, verdict_c = _unclear()
+    res = handle_claim(erp, "unclear claim text", out_dir=tmp_path, read_caller=read_c, verdict_caller=verdict_c)
+    reject_verdict(erp, res["case_id"], by="Sara", reason="Ask Auchan for the receiving count first",
+                   playbook_path=playbook)
+    assert erp.claim(res["claim_id"])["status"] == "reopened"
+    assert "reject overturned" in playbook.read_text()
+
+
+def test_benchmark_beats_threeway_on_its_blind_spots() -> None:
+    res = score()
+    t = res["totals"]
+    assert t["ours_attention_ok"] > t["threeway_attention_ok"]
+    assert t["ours_causes_ok"] > t["threeway_causes_ok"]
+    rows = {r["id"]: r for r in res["rows"]}
+    for blind_spot in ("C06", "C13", "C14", "C15"):  # short invoiced right, two causes, ref typo
+        assert rows[blind_spot]["ours_causes_ok"] and not rows[blind_spot]["threeway_causes_ok"]
+    for parity in ("C01", "C04", "C09", "C11", "C20"):
+        assert rows[parity]["ours_causes_ok"] and rows[parity]["threeway_causes_ok"]
+
+
+def test_golden_order_runs_through_every_row(tmp_path: Path) -> None:
+    result = demo.run(out_dir=tmp_path, quiet=True)
+    assert result["order"] == "confirmed" or result["order"] in {"invoiced", "shipped"}
+    assert result["shipping"] == "sent"
+    assert result["golden_claim"] == "closed"
+    assert result["unclear_claim"] == "awaiting_person"
+    assert result["pending_signoffs"] == 0
+    assert list(tmp_path.glob("ESS-GOLD-001_TD04.xml"))
+    assert "credit notes issued: 1" in result["digest"]
+    assert (ROOT / "data" / "disputes" / "playbook.md").read_text().count("No past cases yet") == 1

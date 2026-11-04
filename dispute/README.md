@@ -89,6 +89,10 @@ There is no euro threshold. An ambiguous verdict (`needs_sign_off`, with the rea
 `sign_off_reasons`) writes nothing for the retailer: the outcome stays `awaiting_sign_off`
 until a person approves it with `--approved-by NAME`.
 
+## On the Mini ERP
+
+`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus these fixtures), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` writes it after a person's OK and adds the case to the Playbook's past cases; `reject_verdict()` reopens the claim. Tests: `tests/test_dispute_service.py`.
+
 ### Out of scope
 
 Sign-off web UI (for now a person approves from the CLI with `--approved-by`), real Mini ERP / SQLite persistence beyond writing outcome files.
