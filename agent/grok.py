@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -111,6 +113,50 @@ def extract_json_object(text: str) -> dict[str, Any]:
     return data
 
 
+USAGE: dict[str, Any] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "seconds": 0.0,
+                         "by_task": {}, "models": set()}
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """python.org builds on macOS ship without root certificates; certifi has them."""
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
+def _count(task: str | None, envelope: dict[str, Any], seconds: float) -> None:
+    usage = envelope.get("usage") or {}
+    USAGE["calls"] += 1
+    USAGE["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
+    USAGE["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+    USAGE["seconds"] += seconds
+    USAGE["by_task"][task or "?"] = USAGE["by_task"].get(task or "?", 0) + 1
+    if envelope.get("model"):
+        USAGE["models"].add(envelope["model"])
+
+
+def usage_summary() -> str:
+    """Live calls so far in this process; the cost is on console.x.ai."""
+    if not USAGE["calls"]:
+        return "no live Grok calls"
+    return (f"{USAGE['calls']} live Grok calls ({', '.join(f'{k} {v}' for k, v in USAGE['by_task'].items())}), "
+            f"{USAGE['prompt_tokens']:,} tokens in, {USAGE['completion_tokens']:,} out, "
+            f"{USAGE['seconds']:.1f} s, model {', '.join(sorted(USAGE['models'])) or model_for()}")
+
+
+def key_source() -> str | None:
+    """Where the key comes from, never the key itself."""
+    for name in ("XAI_API_KEY", "GROK_API_KEY"):
+        if os.environ.get(name, "").strip():
+            return f"environment ({name})"
+        if _env_file().get(name, "").strip():
+            return f".env.local ({name})"
+    return None
+
+
 def post_chat(messages: Messages, *, task: str | None = None, api_key_value: str | None = None,
               temperature: float = 0, timeout: int = 90) -> str:
     """One HTTP call to xAI chat completions; returns the message text."""
@@ -128,8 +174,9 @@ def post_chat(messages: Messages, *, task: str | None = None, api_key_value: str
         },
         method="POST",
     )
+    started = time.monotonic()
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout, context=_ssl_context()) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -137,6 +184,7 @@ def post_chat(messages: Messages, *, task: str | None = None, api_key_value: str
     except urllib.error.URLError as exc:
         raise RuntimeError(f"xAI API request failed: {exc}") from exc
     envelope = json.loads(raw)
+    _count(task, envelope, time.monotonic() - started)
     try:
         content = envelope["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
@@ -187,3 +235,28 @@ def chat_json(
                  + "; ".join(problems) + ". Return the corrected JSON object only."},
             ]
     raise GrokAnswerRejected(problems)
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Check the Grok connection with one tiny call")
+    parser.add_argument("--ping", action="store_true", help="send one small request and report the model and tokens")
+    args = parser.parse_args(argv)
+    source = key_source()
+    print(f"key: {'found in ' + source if source else 'not found (set XAI_API_KEY or create .env.local)'}")
+    print(f"model: {model_for('ping')}, endpoint: {base_url()}")
+    if not args.ping or not source:
+        return 0 if source else 1
+    try:
+        answer = chat_json([{"role": "user", "content": 'Reply with the JSON object {"ok": true} and nothing else.'}],
+                           task="ping", validate=lambda p: [] if p.get("ok") is True else ['answer {"ok": true}'])
+    except Exception as exc:  # noqa: BLE001 - report any failure plainly
+        print(f"ping failed: {exc}")
+        return 1
+    print(f"ping ok: {answer}; {usage_summary()}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -219,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     result = run(live=args.live, db=args.db, out_dir=args.out_dir)
     print(f"Every step above is in the audit log: {result['audit_events']} events. Files: {result['out_dir']}")
+    if args.live:
+        print(grok.usage_summary())
     return 0
 
 
