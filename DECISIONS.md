@@ -12,6 +12,72 @@ Detail: [order-dec.md](order-dec.md)
 
 ## Forecast and quality (Flavio, 4 Nov)
 
+### TL;DR
+
+- **What:** three tools that keep the stock figure honest:
+  - a weekly "buy now or wait" advice for paddy
+  - a photo check of each rice delivery
+  - a stock projection the Order row reads
+- **Why:** Italian paddy fell 27 to 40% last campaign because Asian rice got cheap. World prices are now up 43% in euros. When to buy is worth about €1M a year for every 1% saved, and a wrong stock figure turns into short deliveries and disputes.
+- **Data:** public and free: weekly EU paddy prices since 2015, World Bank world prices, ECB exchange rates, Ente Risi farmer stocks. All tested on 4 Nov.
+- **Proof:** a backtest over the last 10 campaigns, the advisor against buying the same amount every week. This is our number against a baseline.
+- **On stage:** about 40 seconds and one screen with three panels. It is a stretch goal, not the main task, so it gets a small slice of the pitch.
+- **Cost:** about 15 hours: 12 of backend, 3 for the screen. Everything else is a nice-to-have.
+
+### How it shows in the pitch
+
+About 40 seconds (to confirm when we split the pitch). One screen, three panels, clicked left to right while one person talks:
+
+1. *Before the screen:* "Last year Italian paddy fell up to 40% because Asian rice got cheap. This year world prices are up 43% in euros. For Riso Scotti, every 1% saved on paddy is about a million euros."
+2. *Buy or wait:* "Every Monday Grok proposes what to buy, and every number links to its source. Over the last ten campaigns this rule paid X € per tonne less than buying evenly." (X comes from the backtest, whatever it turns out to be.)
+3. *Lot check:* "A delivery arrives. A photo of the lab sample counts broken and chalky grains, applies the contract price cut, and sends the lot where it is worth most."
+4. *Stock:* "That lot leaves less Carnaroli for week 47, so the order desk sees the problem before the truck does."
+
+### The screen
+
+One web page (Streamlit) on the laptop. It reads the CSV tables and the Mini ERP, so it works offline. Only the Grok memo needs the network, and it falls back to text written by code.
+
+```
++---------------------------------------------------------------------------------+
+|  Buy or wait                                        week of 19 Oct 2026         |
+|  Long B    BUY 600 t   up 12% this week, Thai rice +43% in euros in a year [1][2] |
+|  Selenio   WAIT        31% below a year ago, farmers hold more than usual  [3]   |
+|  [price line 2015-2026: dots where the advisor bought, dots for even buying]     |
+|  Last 10 campaigns: the advisor paid X €/t less than buying evenly               |
++----------------------------------------+----------------------------------------+
+|  Lot check            Carnaroli, lot 17 |  Stock we can promise   Carnaroli 1 kg |
+|  [photo, grains outlined: green whole,  |  [bars for weeks 45 to 52, a drop of   |
+|   red broken, white chalky]             |   300 in week 46, a line at the order  |
+|  Broken 9%, chalky 4%                   |   waiting for week 47]                 |
+|  Yield 2.5 points under contract        |  Order 1047 for week 47 is now hard:   |
+|  Price cut 21 €/t (contract clause)     |  partial delivery offered              |
+|  Goes to rice drinks                    |                                        |
++----------------------------------------+----------------------------------------+
+```
+
+The lot numbers are an illustrative case until we photograph a real sample. The top panel is all real data.
+
+### Build budget
+
+**Must have**, in this order:
+
+| # | Step | Done when | Hours |
+|---|---|---|---|
+| 1 | Download EU paddy prices, world prices and exchange rates | `data/raw/` holds 11 years of weekly prices | 1.5 |
+| 2 | Purchasing advisor, 10-campaign backtest, Grok's weekly memo | One table per variety with € per tonne saved against even buying, and the 19 Oct memo citing every number | 5 |
+| 3 | Stock projection with production events | The Order row can read `available_to_promise` per product and week | 2.5 |
+| 4 | Quality check, demo version: broken and chalky, price cut, where the lot goes, quality hold | A real photo of Carnaroli gives a lot report | 2 |
+| 5 | Simple demand forecast on the invented order history | It beats "same week last year" and feeds step 3 | 1 |
+| 6 | The screen | It runs on the laptop with the network off | 3 |
+
+**Nice to have**, only after the must-haves:
+- the trained quality model on GrainSet, which needs the mentor's OK on the licence (4 h)
+- reading the Ente Risi PDFs automatically (1.5 h)
+- a weather and satellite chart for the Romanian fields (1.5 h)
+- Grok reading promotions from retailer emails (1 h)
+
+**Skipped:** field-level Sentinel maps, rice blast risk, sales team estimates, retailer sell-out data. They stay as answers for the Q&A.
+
 ### What this part does
 
 Riso Scotti buys paddy (risone: raw rice still in its husk) from farmers, mills it into white rice, packs it and sells it to supermarkets. This part answers four questions for them:
@@ -49,11 +115,11 @@ Rice areas (approximate): Lomellina 45.25, 8.73 · Vercelli 45.32, 8.42 · Novar
 
 ### How it can be implemented: five steps
 
-Hours are rough estimates for one person. Steps 2 and 3 can swap if the team needs the stock number first.
+Hours are in the build budget above. Steps 2 and 3 can swap if the team needs the stock number first.
 
-**1. Download the data (2 h).** One small script per source. Each downloads its data and saves it as a CSV table in `data/raw/`. Every later step reads these tables, never the internet, so the demo works offline and every number has a file it came from. The Ente Risi PDFs are typed in by hand for the weeks we need.
+**1. Download the data.** One small script per source. The must-have ones are EU prices, world prices and exchange rates; weather and satellite come later if time allows. Each downloads its data and saves it as a CSV table in `data/raw/`. Every later step reads these tables, never the internet, so the demo works offline and every number has a file it came from. The Ente Risi PDFs are typed in by hand for the weeks we need.
 
-**2. Purchasing advisor and backtest (6 h).** Each week the advisor says "buy 400 t of Carnaroli now" or "wait", with its reasons, each with a number and a source. It looks at:
+**2. Purchasing advisor and backtest.** Each week the advisor says "buy 400 t of Carnaroli now" or "wait", with its reasons, each with a number and a source. It looks at:
 
 - today's price against past years at the same week
 - whether world rice is getting more expensive in euros
@@ -62,7 +128,7 @@ Hours are rough estimates for one person. Steps 2 and 3 can swap if the team nee
 
 The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. Every purchase is above €500, so a person signs every one.
 
-**3. Stock projection (4 h).** For each product and each week:
+**3. Stock projection.** For each product and each week:
 
 ```
 available to promise = stock in the warehouse
@@ -74,7 +140,7 @@ available to promise = stock in the warehouse
 
 The Order row reads this number. If an order fits inside it, the order is easy and takes the green line. If not, it is hard, and Grok proposes a partial delivery or another date.
 
-**4. Quality check from a photo (6 h; demo version about 2 h).** The lab photographs a sample of milled rice from each delivery on a black tray. Code cuts the photo into single grains and measures each one:
+**4. Quality check from a photo.** The lab photographs a sample of milled rice from each delivery on a black tray. Code cuts the photo into single grains and measures each one:
 
 - **Broken:** shorter than 3/4 of a whole grain
 - **Chalky:** white and opaque over at least 3/4 of the grain
@@ -88,7 +154,9 @@ The percentages decide three things:
 
 Demo version first: broken and chalky only, by length and brightness, no trained model. The trained model on GrainSet only if time is left.
 
-**5. Demand forecast (3 h).** Estimates how much each supermarket will order in the coming weeks, from past orders, promotions, holidays and weather. The baseline is "same week last year". It comes last because our order history is invented for the hackathon: it shows the pipeline works, but proves nothing about accuracy.
+**5. Demand forecast.** Estimates how much each supermarket will order in the coming weeks, from past orders, promotions, holidays and weather. The baseline is "same week last year". It comes last because our order history is invented for the hackathon: it shows the pipeline works, but proves nothing about accuracy.
+
+**6. The screen.** The page in "The screen" above. It only reads what steps 1 to 5 produce, so it can be built in parallel once their outputs exist, and it is what the jury actually sees.
 
 ### Files in the repo
 
