@@ -1,10 +1,6 @@
-import { Suspense } from "react";
-import { DisputesView } from "@/components/dispute";
+import { redirect } from "next/navigation";
 
-export default function DisputesPage() {
-  return (
-    <Suspense fallback={null}>
-      <DisputesView />
-    </Suspense>
-  );
+/** Disputes live in Actions now (ops workspace). Keep this path so old links still land. */
+export default function Page() {
+  redirect("/actions");
 }

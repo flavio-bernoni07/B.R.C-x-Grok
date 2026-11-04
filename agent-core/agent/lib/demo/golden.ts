@@ -24,6 +24,7 @@ import * as cases from "../shipping/cases";
 import { exportForDispute, ingestConfirmedOrder, invoiceShipment, recordDelivery, reconcileAndSend } from "../shipping/service";
 import * as wh from "../shipping/warehouse";
 import { dataPath } from "../paths";
+import { seedDispatchDay } from "./dispatch";
 
 export type GoldenResult = {
   order: string | undefined;
@@ -42,7 +43,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 export async function runGolden(
   erp: Erp,
-  opts: { live?: boolean; say?: (line: string) => void; decideUnclear?: boolean } = {},
+  opts: { live?: boolean; say?: (line: string) => void; decideUnclear?: boolean; dispatchDay?: boolean } = {},
 ): Promise<GoldenResult> {
   const say = opts.say ?? (() => {});
   const live = !!opts.live;
@@ -142,7 +143,7 @@ export async function runGolden(
   const digest = buildDigest(erp, "Weekly digest, week of 2 Nov 2026").markdown;
   say("== 4. Weekly digest");
   say(digest);
-  return {
+  const result = {
     order: orderStatus,
     shipping: rec.status,
     goldenClaim: claim.status,
@@ -152,4 +153,12 @@ export async function runGolden(
     disputeCatalogOrders: exportForDispute(erp).orders.length,
     digest,
   };
+
+  // 5. The next dispatch day: six orders ready to ship, for the route agent to plan (after the
+  // result above, so the golden run's own counts stay those of demo.py).
+  if (opts.dispatchDay ?? true) {
+    say("== 5. Dispatch day");
+    await seedDispatchDay(erp, { say });
+  }
+  return result;
 }

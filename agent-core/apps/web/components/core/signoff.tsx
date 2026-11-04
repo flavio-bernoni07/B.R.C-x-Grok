@@ -318,13 +318,14 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
   };
 
   const open = c.status === "pending";
+  // Desk is Actions; order/shipping still have their pages.
   const subjectHref =
-    c.row === "dispute" && c.subjectRef
-      ? `/disputes?claim=${encodeURIComponent(c.subjectRef)}`
+    c.row === "dispute"
+      ? `/actions?case=${encodeURIComponent(c.caseId)}`
       : c.row === "order" && c.subjectRef
         ? `/orders?ref=${encodeURIComponent(c.subjectRef)}`
         : c.row === "shipping" && c.subjectRef
-          ? `/shipping?ref=${encodeURIComponent(c.subjectRef)}`
+          ? `/orders?ref=${encodeURIComponent(c.subjectRef)}`
           : null;
 
   return (
@@ -351,7 +352,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
             )}{" "}
             · asked {day(c.createdAt)}
             {c.row === "dispute" ? (
-              <span className="text-ink-68"> · open the claim for the full email, threeway and audit trail</span>
+              <span className="text-ink-68"> · open in Actions for the full decision package</span>
             ) : null}
           </p>
         ) : null}

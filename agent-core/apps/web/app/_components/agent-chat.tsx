@@ -185,7 +185,7 @@ export function AgentChat({
       <PromptInputTextarea
         disabled={isResuming}
         onChange={(event) => setHasInputText(event.currentTarget.value.trim().length > 0)}
-        placeholder="Ask about orders, shipments, claims, stock or paddy prices…"
+        placeholder="Ask about orders, stock, shipments, invoices, or what needs attention..."
       />
       <ComposerAction
         hasInputText={hasInputText}
@@ -326,7 +326,7 @@ function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) 
   return (
     <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
       <div className="relative mx-auto flex h-full w-full max-w-[860px] items-center justify-between bg-hh-seasalt px-6">
-        <span className="font-bold text-[22px] tracking-[-0.035em]">Overview</span>
+        <span className="font-bold text-[22px] tracking-[-0.035em]">Home</span>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"
