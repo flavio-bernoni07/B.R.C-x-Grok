@@ -3,7 +3,7 @@
 import type { InboxFilter, InboxRow } from "@agent/lib/order/inbox";
 import type { OrderWorkspace } from "@agent/lib/order/workspace";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { day, PageHeader, Panel, Pill, Segmented } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
@@ -53,54 +53,50 @@ function InboxList({ rows, selected, onOpen }: { readonly rows: InboxRow[]; read
 }
 
 /** The Orders page: an email-style inbox; a row (or /orders?ref=REF) opens the order workspace. */
-export function OrdersView() {
+export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] } = {}) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const selected = params.get("ref") ?? undefined;
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [q, setQ] = useState("");
-  const [rows, setRows] = useState<InboxRow[]>();
+  /** SSR seeds the inbox so the page is never stuck on Loading when client JS/HMR is flaky. */
+  const [rows, setRows] = useState<InboxRow[] | undefined>(initialRows);
   const [listError, setListError] = useState(false);
   const [ws, setWs] = useState<OrderWorkspace | null>(null);
   const [wsState, setWsState] = useState<"idle" | "loading" | "error" | "missing">("idle");
   const [simBusy, setSimBusy] = useState(false);
   const [simMsg, setSimMsg] = useState<string>();
   const [listTick, setListTick] = useState(0);
+  const skipFirstFetch = useRef(!!initialRows?.length || initialRows?.length === 0);
 
   useEffect(() => {
+    // First paint already has SSR rows for all/empty-q — don't blank the list waiting on client JS.
+    if (skipFirstFetch.current && filter === "all" && !q.trim() && listTick === 0) {
+      skipFirstFetch.current = false;
+      return;
+    }
+    skipFirstFetch.current = false;
     let cancelled = false;
-    let settled = false;
     const ctrl = new AbortController();
-    const watchdog = setTimeout(() => {
-      if (cancelled || settled) return;
-      settled = true;
-      setListError(true);
-      setRows((prev) => prev ?? []);
-      ctrl.abort();
-    }, 8_000);
     const t = setTimeout(() => {
       if (cancelled) return;
       setListError(false);
       fetch(`/api/orders/inbox?filter=${filter}&q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
         .then((d: { rows?: InboxRow[] }) => {
-          if (cancelled || settled) return;
-          settled = true;
+          if (cancelled) return;
           setRows(Array.isArray(d.rows) ? d.rows : []);
           setListError(false);
         })
         .catch((e: Error) => {
-          if (cancelled || settled || e.name === "AbortError") return;
-          settled = true;
+          if (cancelled || e.name === "AbortError") return;
           setListError(true);
-          setRows((prev) => prev ?? []);
         });
     }, 50);
     return () => {
       cancelled = true;
       clearTimeout(t);
-      clearTimeout(watchdog);
       ctrl.abort();
     };
   }, [filter, q, listTick]);
