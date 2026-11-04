@@ -67,7 +67,7 @@ flowchart TD
 - Qty entro disponibilità → avanti al check prezzo.
 - Qty oltre → **operatore** sceglie tra (**split** oppure **mail**):
   - **split**: si accetta la qty disponibile ora, si **rientra al check disponibilità** (e poi prezzo → sign-off → **ORDRSP** solo per quanto si riesce a spedire; il saldo resta fuori da questo ORDRSP);
-  - **mail**: bozza formale al cliente, ordine in **pending / bloccato** — **nessun ORDRSP** finché non viene riattivato (nuovo ORDERS o dati manuali).
+  - **mail**: bozza formale al cliente, ordine in **pending / bloccato** — **nessun ORDRSP** finché non viene riattivato (nuovo ORDERS o dati manuali). Il feed **prosegue** con l’ordine successivo (non si blocca sulla gate).
 - Dopo split, con qty rivista si **ritorna al check disponibilità** (non al sign-off diretto). Il loop continua finché `qty_ok`.
 
 ### 3. Prezzo (codice + contratto fittizio)
