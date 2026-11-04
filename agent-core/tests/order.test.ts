@@ -204,6 +204,7 @@ describe("order service on the Mini ERP", () => {
     expect(erp.order("ESS-MAIL")!.status).toBe("pending");
     expect(erp.documents({ ref: "ESS-MAIL", kind: "ORDRSP" })).toHaveLength(0);
     expect(String(erp.signoff(r.case_id)!.proposal!.draft_mail)).toContain("partial availability");
+    expect(erp.signoff(r.case_id)!.status).toBe("parked");
   });
 
   it("simulate feed keeps the 22 bench POs and never stops on the first human gate", async () => {
@@ -265,6 +266,8 @@ describe("order service on the Mini ERP", () => {
     const parked = await resolvePriceCase(erp, r.case_id, { by: "Giulia", reason: "wait for Esselunga" });
     expect(parked.status).toBe("parked");
     expect(erp.order(r.order_ref!)!.status).toBe("pending");
+    // Desk: Pending scheda, not Decided.
+    expect(erp.signoff(r.case_id)!.status).toBe("parked");
   });
 
   it("manual EDI goes back to parse", async () => {

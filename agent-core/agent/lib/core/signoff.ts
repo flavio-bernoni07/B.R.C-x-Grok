@@ -42,7 +42,12 @@ export function decide(
   if (!d.reason?.trim()) throw new SignoffError("write one line on why: it is what the Playbook learns from");
   const proposal = { ...(c.proposal ?? {}) } as Record<string, unknown>;
   if (d.edits) proposal.edits = d.edits;
-  const status = d.approve ? "approved" : "rejected";
+  // Mail / park: the order waits on the retailer — not a closed "approved" decision.
+  const edits = (d.edits ?? {}) as Record<string, unknown>;
+  const parked =
+    d.approve &&
+    (edits.parked === true || edits.qty_action === "mail" || edits.send_mail === true || edits.mail_sent === true);
+  const status = !d.approve ? "rejected" : parked ? "parked" : "approved";
   erp.updateSignoff(caseId, { status, decidedBy: d.by.trim(), decisionReason: d.reason.trim(), decidedAt: nowIso(), proposal });
   erp.log(`person:${d.by.trim()}`, `signoff.${status}`, c.subjectRef, { sourceDoc: caseId, detail: { reason: d.reason.trim(), edits: d.edits ?? null } });
   return erp.signoff(caseId)!;

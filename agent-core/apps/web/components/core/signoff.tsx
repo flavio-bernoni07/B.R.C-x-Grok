@@ -18,8 +18,15 @@ export function signoffTone(status: string): PillTone {
 }
 
 export function SignoffStatus({ status }: { readonly status: string }) {
-  const label = status === "pending" ? "Needs a person" : status === "approved" ? "Approved" : "Rejected";
-  return <Pill tone={signoffTone(status)}>{label}</Pill>;
+  const label =
+    status === "pending"
+      ? "Needs a person"
+      : status === "parked"
+        ? "Pending (parked)"
+        : status === "approved"
+          ? "Approved"
+          : "Rejected";
+  return <Pill tone={status === "parked" ? "quiet" : signoffTone(status)}>{label}</Pill>;
 }
 
 const EdiBox = ({ title, text }: { readonly title: string; readonly text: string }) => (
@@ -431,10 +438,16 @@ export function SignoffCard({
         </div>
       ) : (
         <p className="text-ink-78">
-          {c.status === "approved" ? "Approved" : "Rejected"} by <b>{c.decidedBy}</b>
+          {c.status === "parked" ? "Parked (pending)" : c.status === "approved" ? "Approved" : "Rejected"} by{" "}
+          <b>{c.decidedBy}</b>
           {c.decisionReason ? `: “${c.decisionReason}”` : ""} {c.decidedAt ? `· ${day(c.decidedAt)}` : ""}
         </p>
       )}
+      {c.status === "parked" ? (
+        <p className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] text-ink">
+          Waiting on the retailer (or a new ORDERS). This case stays under <b>Pending</b>, not Decided.
+        </p>
+      ) : null}
       {result ? (
         <details className="text-[12px]" open>
           <summary className="cursor-pointer select-none text-ink-68">What ran after the decision</summary>

@@ -8,14 +8,14 @@ import { Page } from "@/components/shell/app-shell";
 import { DeskModal } from "./desk-modal";
 import { SignoffCard, SignoffStatus } from "./signoff";
 
-/** Desk tabs: board overview + confirm / price / quantity gates. */
-type DeskTab = "board" | "sendoff" | "price" | "quantity" | "other" | "decided";
+/** Desk tabs: board + gates + Pending (mail/park) + Decided (true close). */
+type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
 
 const SEND_OFF_KINDS = new Set(["confirm"]);
 const PRICE_KINDS = new Set(["price_fix"]);
 const QTY_KINDS = new Set(["qty_choice", "stock_short"]);
 
-function tabFor(c: Signoff): Exclude<DeskTab, "decided" | "board"> {
+function tabFor(c: Signoff): Exclude<DeskTab, "decided" | "board" | "pending"> {
   if (c.status !== "pending") return "other";
   if (c.row === "order" && SEND_OFF_KINDS.has(c.kind)) return "sendoff";
   if (c.row === "order" && PRICE_KINDS.has(c.kind)) return "price";
@@ -65,28 +65,38 @@ export function SignoffView() {
     }
   }, []);
 
-  const pending = useMemo(() => cases.filter((c) => c.status === "pending"), [cases]);
-  const sendoff = useMemo(() => pending.filter((c) => tabFor(c) === "sendoff"), [pending]);
-  const price = useMemo(() => pending.filter((c) => tabFor(c) === "price"), [pending]);
-  const quantity = useMemo(() => pending.filter((c) => tabFor(c) === "quantity"), [pending]);
-  const other = useMemo(() => pending.filter((c) => tabFor(c) === "other"), [pending]);
-  const decided = useMemo(() => cases.filter((c) => c.status !== "pending"), [cases]);
+  const waiting = useMemo(() => cases.filter((c) => c.status === "pending"), [cases]);
+  const sendoff = useMemo(() => waiting.filter((c) => tabFor(c) === "sendoff"), [waiting]);
+  const price = useMemo(() => waiting.filter((c) => tabFor(c) === "price"), [waiting]);
+  const quantity = useMemo(() => waiting.filter((c) => tabFor(c) === "quantity"), [waiting]);
+  const other = useMemo(() => waiting.filter((c) => tabFor(c) === "other"), [waiting]);
+  /** Mail sent / parked — waiting on the retailer, not a closed decision. */
+  const parked = useMemo(() => cases.filter((c) => c.status === "parked"), [cases]);
+  const decided = useMemo(() => cases.filter((c) => c.status === "approved" || c.status === "rejected"), [cases]);
 
   const rows = useMemo(() => {
     if (tab === "sendoff") return sendoff;
     if (tab === "price") return price;
     if (tab === "quantity") return quantity;
+    if (tab === "pending") return parked;
     if (tab === "other") return other;
     if (tab === "decided") return decided;
     return [];
-  }, [tab, sendoff, price, quantity, other, decided]);
+  }, [tab, sendoff, price, quantity, parked, other, decided]);
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
 
   useEffect(() => {
-    if (selected && !cases.some((c) => c.caseId === selected && c.status === "pending") && tab !== "decided") {
-      if (selected && cases.some((c) => c.caseId === selected && c.status !== "pending")) setSelected(undefined);
+    if (!selected) return;
+    const c = cases.find((x) => x.caseId === selected);
+    if (!c) {
+      setSelected(undefined);
+      return;
     }
+    if (tab === "pending" && c.status === "parked") return;
+    if (tab === "decided" && (c.status === "approved" || c.status === "rejected")) return;
+    if (c.status === "pending" && tabFor(c) === tab) return;
+    if (c.status !== "pending") setSelected(undefined);
   }, [cases, selected, tab]);
 
   const sendOffAll = async () => {
@@ -145,9 +155,11 @@ export function SignoffView() {
         ? "No price errors waiting."
         : tab === "quantity"
           ? "No quantity errors waiting."
-          : tab === "other"
-            ? "No other cases waiting."
-            : "No decisions yet.";
+          : tab === "pending"
+            ? "No parked orders waiting on the retailer."
+            : tab === "other"
+              ? "No other cases waiting."
+              : "No decisions yet.";
 
   const onCaseDecided = () => {
     setSelected(undefined);
@@ -158,7 +170,7 @@ export function SignoffView() {
     <Page>
       <PageHeader
         title="Actions"
-        sub="Board shows every order’s stage. Schede by gate: Send-off, Price error, Quantity error. Send-off all releases every ready ORDRSP in one go."
+        sub="Board shows every order’s stage. After a price/qty mail the case moves to Pending (not Decided). Send-off all releases every ready ORDRSP."
       >
         <Segmented
           value={tab}
@@ -168,6 +180,7 @@ export function SignoffView() {
             { value: "sendoff", label: `Send-off${countLabel(sendoff.length)}` },
             { value: "price", label: `Price error${countLabel(price.length)}` },
             { value: "quantity", label: `Quantity error${countLabel(quantity.length)}` },
+            { value: "pending", label: `Pending${countLabel(parked.length)}` },
             ...(other.length ? [{ value: "other" as const, label: `Other${countLabel(other.length)}` }] : []),
             { value: "decided", label: `Decided${countLabel(decided.length)}` },
           ]}
@@ -255,6 +268,12 @@ export function SignoffView() {
           <b>Email &amp; park</b> (mail the retailer, order stays pending — no ORDRSP).
         </p>
       ) : null}
+      {tab === "pending" ? (
+        <p className="mb-3 text-[13px] text-ink-78">
+          Mail sent or order parked: waiting on the retailer (or a new ORDERS). These are not closed decisions — they
+          stay here until a new message arrives.
+        </p>
+      ) : null}
 
       {tab !== "board" ? (
         <Panel
@@ -265,9 +284,11 @@ export function SignoffView() {
                 ? "Price errors"
                 : tab === "quantity"
                   ? "Quantity errors"
-                  : tab === "other"
-                    ? "Other"
-                    : "Decided"
+                  : tab === "pending"
+                    ? "Pending (parked)"
+                    : tab === "other"
+                      ? "Other"
+                      : "Decided"
           }
         >
           <DataTable
