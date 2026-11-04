@@ -2,7 +2,7 @@
 
 Write here what you find from the research on your part and how it can be implemented
 
-Subdocuments: [order-dec.md](order-dec.md) (Order) · [dispute-dec.md](dispute-dec.md) (Dispute)
+Subdocuments: [order-dec.md](order-dec.md) (Order) · [dispute-dec.md](dispute-dec.md) (Dispute) · [grok-agent-dec.md](grok-agent-dec.md) (Grok agent, all lanes)
 
 ## Order
 
