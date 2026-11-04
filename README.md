@@ -23,7 +23,7 @@ Code does the work, Grok takes the exceptions, and a person is called only when 
 - **Code** reads every EDI message, checks stock against the forecast, plans the trucks, checks the pallet scans, writes the delivery note, the invoice and the credit note, and reconciles order, delivery and invoice line by line.
 - **Grok** gets what code cannot settle: a messy order, short stock to split, a claim email to read, a verdict to propose. It answers in fixed JSON and code checks it before anything happens; an amount Grok cannot tie to a document is dropped.
 - **A person** signs off whenever a case is ambiguous: Grok is unsure, a point has no source, a document is missing, the claim type is not in the Playbook. No euro threshold.
-- **Improving loop:** every case a person closes goes back to Grok as a precedent, and after 3 matching decisions it becomes a rule. In a replay of invented claims, the share that needs a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
+- **Improving loop:** every decision is logged, and the closest past cases go into Grok's prompt. After the same decision three times with none overturned, code drafts a rule; once a person approves it, the rule decides those cases with no Grok call. In a replay of invented claims, the share that needs a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
 
 ## Case study: an invisible error without Grok
 
