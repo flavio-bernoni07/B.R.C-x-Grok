@@ -49,9 +49,11 @@
   --color-st-wait: #e4e9de;
   --color-st-wait-ink: #5f6a5b;
   --color-st-wrong: #d2473b;
-  --color-st-reject: #d2473b;
-  --color-st-pending: #f6d4d0;
-  --color-st-pending-ink: #9a2f27;
+  /* Soft status fills (same recipe as ok/attention: tint bg + darker ink) */
+  --color-st-reject: #f4c7c2;
+  --color-st-reject-ink: #b4332a;
+  --color-st-pending: #fce9e7;
+  --color-st-pending-ink: #d2473b;
   /* Dark Green at the kit's ink levels */
   --color-ink: #203119;
   --color-ink-78: rgb(32 49 25 / 0.78);

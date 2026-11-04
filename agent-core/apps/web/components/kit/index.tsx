@@ -26,7 +26,7 @@ const PILL: Record<PillTone, string> = {
   wait: "bg-st-wait text-st-wait-ink",
   quiet: "bg-hh-honeydew text-ink-68",
   pending: "bg-st-pending text-st-pending-ink font-bold",
-  reject: "bg-st-reject text-hh-window font-bold",
+  reject: "bg-st-reject text-st-reject-ink font-bold",
 };
 
 export function Pill({ tone, children, className }: { readonly tone: PillTone; readonly children: ReactNode; readonly className?: string }) {
