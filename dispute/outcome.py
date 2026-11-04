@@ -122,9 +122,17 @@ def _line_description(verdict: dict[str, Any], facts: dict[str, Any] | None) -> 
         "product"
     )
     summary = verdict.get("summary") or "Dispute credit"
+    qty = claim.get("quantity")
+    amount = verdict.get("amount")
+    bits = ["Credit note"]
     if product:
-        return f"Credit note — {product}: {summary}"[:200]
-    return f"Credit note — {summary}"[:200]
+        bits.append(str(product))
+    if qty is not None:
+        bits.append(f"qty {qty}")
+    if amount is not None:
+        bits.append(f"€ {amount}")
+    bits.append(str(summary))
+    return " — ".join(bits)[:200]
 
 
 def build_td04_xml(
@@ -255,87 +263,118 @@ def build_edi_invoic_381(
     return "\n".join(lines) + "\n"
 
 
+_SOURCE_LABELS = {
+    "order": "Purchase order",
+    "desadv": "Despatch advice (DESADV)",
+    "invoice": "Invoice",
+    "ddt": "Delivery note (DDT)",
+    "pod": "Proof of delivery",
+    "warehouse_event": "Warehouse / gate event",
+    "contract": "Contract / promo clause",
+    "threeway": "Order–ship–invoice match",
+    "damage_photo": "Damage photo / portal",
+    "other": "Supporting document",
+}
+
+
+def _evidence_label(kind: str | None) -> str:
+    key = (kind or "other").strip().lower()
+    if key.startswith("proof:"):
+        key = key.split(":", 1)[1]
+    return _SOURCE_LABELS.get(key, "Supporting document")
+
+
 def build_reject_reply(
     *,
     verdict: dict[str, Any],
     facts: dict[str, Any] | None,
 ) -> str:
-    """Evidence reply — prose template; all refs/amounts filled from verdict/facts by code."""
+    """Retailer-facing evidence reply; refs/amounts filled from verdict/facts by code."""
     claim = verdict.get("claim") or {}
     order_ref = claim.get("order_ref") or ((facts or {}).get("order") or {}).get("order_ref")
     invoice_ref = claim.get("invoice_ref") or ((facts or {}).get("invoice") or {}).get(
         "invoice_ref"
     )
     customer = ((facts or {}).get("order") or {}).get("customer") or "Customer"
-    decision = verdict.get("decision")
     summary = verdict.get("summary") or ""
-    evidence_lines: list[str] = []
+
+    # Collect unique evidence by document ref (retailer-facing; skip internal playbook rules).
+    entries: list[tuple[str, str, str]] = []  # (dedupe_key, label, body)
+
+    def add_entry(kind: str | None, ref: str | None, body: str) -> None:
+        if (kind or "").lower() == "playbook":
+            return
+        ref_s = (ref or "").strip() or "n/a"
+        text = body.strip()
+        if not text:
+            return
+        key = f"{(kind or '').lower()}|{ref_s.lower()}"
+        entries.append((key, _evidence_label(kind), f"{ref_s} — {text}"))
+
     for point in verdict.get("points") or []:
         if not isinstance(point, dict):
             continue
         src = point.get("source") or {}
         amt = point.get("amount")
-        amt_bit = f" (€ {amt})" if amt is not None else ""
-        evidence_lines.append(
-            f"- [{src.get('kind', 'other')}] {src.get('ref', 'n/a')}: "
-            f"{point.get('text', '')}{amt_bit}"
-            + (f" — {src.get('detail')}" if src.get("detail") else "")
-        )
+        parts = [str(point.get("text") or "").strip()]
+        if src.get("detail"):
+            parts.append(str(src["detail"]).strip())
+        if amt is not None:
+            parts.append(f"amount € {amt}")
+        add_entry(src.get("kind"), src.get("ref"), "; ".join(p for p in parts if p))
+
     if facts:
         for proof in facts.get("proofs") or []:
-            evidence_lines.append(
-                f"- [proof:{proof.get('kind')}] {proof.get('ref')}: {proof.get('summary')}"
-            )
+            add_entry(proof.get("kind"), proof.get("ref"), str(proof.get("summary") or ""))
         desadv = facts.get("desadv") or {}
         if desadv.get("desadv_ref"):
-            evidence_lines.append(
-                f"- [desadv] {desadv.get('desadv_ref')}: order {desadv.get('order_ref')}"
+            add_entry(
+                "desadv",
+                desadv.get("desadv_ref"),
+                f"linked to order {desadv.get('order_ref')}",
             )
         threeway = facts.get("threeway") or {}
         for line in threeway.get("lines") or []:
-            if line.get("reason"):
-                evidence_lines.append(
-                    f"- [threeway] {line.get('item_code')}: {line.get('status')} — {line.get('reason')}"
-                    f" (qty_var={line.get('qty_variance')}, val_var={line.get('value_variance')})"
-                )
+            if not line.get("reason"):
+                continue
+            add_entry(
+                "threeway",
+                str(line.get("item_code") or "line"),
+                f"{line.get('reason')} "
+                f"(ordered {line.get('ordered')}, shipped/received {line.get('received')}, "
+                f"invoiced {line.get('invoiced')})",
+            )
 
-    # De-dupe while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for line in evidence_lines:
-        if line in seen:
+    seen_keys: set[str] = set()
+    unique_lines: list[str] = []
+    for key, label, body in entries:
+        if key in seen_keys:
             continue
-        seen.add(line)
-        unique.append(line)
+        seen_keys.add(key)
+        unique_lines.append(f"- {label}: {body}")
 
-    amount = verdict.get("amount")
-    amount_line = (
-        f"Proposed credit: none (decision={decision})."
-        if amount is None
-        else f"No credit note issued. Verdict amount field was € {amount} but decision is {decision}."
-    )
-
-    body = f"""Subject: Dispute decision — REJECT — order {order_ref or 'n/a'} / invoice {invoice_ref or 'n/a'}
+    invoice_bit = f" / invoice {invoice_ref}" if invoice_ref else ""
+    body = f"""Subject: Your claim — decision REJECT — order {order_ref or 'n/a'}{invoice_bit}
 
 Dear {customer},
 
-We reviewed your claim against our order, DESADV, invoice and warehouse evidence.
+Thank you for your claim. We compared it with our purchase order, despatch advice (DESADV),
+invoice, and warehouse / delivery evidence.
 
-Decision: REJECT
-{amount_line}
+Our decision: we are not issuing a credit note on this claim.
+No credit amount applies.
 
-Summary:
+Why:
 {summary}
 
-Evidence cited:
-{chr(10).join(unique) if unique else '- (no evidence lines)'}
+Evidence we relied on:
+{chr(10).join(unique_lines) if unique_lines else '- (no document refs available)'}
 
-This reply was assembled by dispute.outcome from verdict + facts document refs.
-Document numbers and amounts above are copied from those structures (not invented).
-Sign-off desk / Playbook follow-up is out of scope for this module.
+If you can provide a clearer order/invoice reference, a formal receiving count, or additional
+proof, please reply and we will re-open the review.
 
 Kind regards,
-Riso Scotti — Dispute desk (demo)
+Riso Scotti — Supplier dispute desk
 """
     return body
 

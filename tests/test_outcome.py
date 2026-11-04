@@ -73,8 +73,13 @@ def test_emit_reject_reply(tmp_path: Path) -> None:
     text = Path(outcome.paths["reject_reply"]).read_text(encoding="utf-8")
     assert "REJECT" in text
     assert "RS26112" in text
-    assert "DESADV-2026-26112" in text or "desadv" in text.lower()
-    assert "GATE-AUCHAN" in text or "warehouse" in text.lower()
+    assert "DESADV-2026-26112" in text
+    assert "GATE-AUCHAN" in text or "DDT-26112" in text
+    # Retailer-facing: no internal Playbook / generator meta
+    assert "Playbook" not in text
+    assert "dispute.outcome" not in text
+    assert "out of scope" not in text
+    assert "Despatch advice" in text or "Delivery note" in text
 
 
 def test_edi_bgm_381() -> None:
