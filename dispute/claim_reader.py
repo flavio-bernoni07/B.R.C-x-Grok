@@ -2,7 +2,8 @@
 
 Required environment (production / live extraction):
   XAI_API_KEY or GROK_API_KEY — xAI API key for chat completions.
-  Optional: XAI_BASE_URL (default https://api.x.ai/v1), XAI_MODEL (default grok-2-latest).
+  Optional: XAI_BASE_URL (default https://api.x.ai/v1),
+  XAI_MODEL or GROK_MODEL (default grok-4-latest).
 
 Usage:
   python -m dispute.claim_reader path/to/claim.txt
@@ -87,8 +88,16 @@ def _base_url() -> str:
     return os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")
 
 
+DEFAULT_XAI_MODEL = "grok-4-latest"
+
+
 def _model() -> str:
-    return os.environ.get("XAI_MODEL", "grok-2-latest")
+    """Resolve chat model: XAI_MODEL, else GROK_MODEL, else DEFAULT_XAI_MODEL."""
+    for name in ("XAI_MODEL", "GROK_MODEL"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return DEFAULT_XAI_MODEL
 
 
 def _null_str(value: Any) -> str | None:

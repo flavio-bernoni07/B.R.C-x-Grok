@@ -2,7 +2,7 @@
 
 Required environment (live path):
   XAI_API_KEY or GROK_API_KEY — same as claim_reader.
-  Optional: XAI_BASE_URL, XAI_MODEL.
+  Optional: XAI_BASE_URL, XAI_MODEL or GROK_MODEL (default grok-4-latest).
 
 Usage:
   python -m dispute.verdict --extraction data/disputes/extractions/01_shortage.json
