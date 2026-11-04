@@ -10,7 +10,7 @@ A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and
 
 The only automatic check is an exact text match. threeway, the track's baseline, joins order, delivery and invoice on order number plus item code, so:
 
-- a short delivery invoiced for what actually shipped comes out as "matched", and nobody chases the missing goods
+- a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a one-letter typo in a reference turns into two false alarms
 - a price error behind a quantity problem is never named
 
