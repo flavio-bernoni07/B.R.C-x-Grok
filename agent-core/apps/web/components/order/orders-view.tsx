@@ -68,7 +68,14 @@ function InboxList({ rows, selected, onOpen }: { readonly rows: InboxRow[]; read
 }
 
 /** The Orders page: an email-style inbox; a row (or /orders?ref=REF) opens the order workspace. */
-export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] } = {}) {
+export function OrdersView({
+  initialRows,
+  simBanner,
+}: {
+  readonly initialRows?: InboxRow[];
+  /** SSR success line after Run order simulation (no client JS needed). */
+  readonly simBanner?: string;
+} = {}) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -80,18 +87,9 @@ export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] 
   const [listError, setListError] = useState(false);
   const [ws, setWs] = useState<OrderWorkspace | null>(null);
   const [wsState, setWsState] = useState<"idle" | "loading" | "error" | "missing">("idle");
-  const [simMsg, setSimMsg] = useState<string>();
   const [listTick, setListTick] = useState(0);
   const skipFirstFetch = useRef(!!initialRows?.length || initialRows?.length === 0);
-
-  useEffect(() => {
-    const total = params.get("total");
-    const waiting = params.get("waiting");
-    if (params.get("sim") === "1" && total) {
-      setSimMsg(`Desk cleared. Loaded ${total} orders · ${waiting ?? "?"} waiting in Actions.`);
-      if (initialRows) setRows(initialRows);
-    }
-  }, [params, initialRows]);
+  const simMsg = simBanner;
 
   useEffect(() => {
     // First paint already has SSR rows for all/empty-q — don't blank the list waiting on client JS.
@@ -170,7 +168,9 @@ export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] 
         />
         <Segmented options={FILTERS} value={filter} onChange={setFilter} />
       </PageHeader>
-      {simMsg ? <p className="text-[13px] text-ink-78">{simMsg}</p> : null}
+      {simMsg ? (
+        <p className="rounded-[10px] bg-st-ok px-3 py-2 text-[13px] text-st-ok-ink">{simMsg}</p>
+      ) : null}
       <div className={selected ? "mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : "mt-4 grid gap-5"}>
         <Panel title="Inbox">
           {listError && !rows?.length ? (
