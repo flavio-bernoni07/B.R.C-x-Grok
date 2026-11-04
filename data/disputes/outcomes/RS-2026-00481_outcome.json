@@ -1,0 +1,37 @@
+{
+  "kind": "credit_note",
+  "decision": "accept",
+  "amount": 186.0,
+  "order_ref": "RS-2026-00481",
+  "invoice_ref": "FT-2026/1187",
+  "credit_note_number": "NC-20261104-RS202600481",
+  "paths": {
+    "td04_xml": "data/disputes/outcomes/RS-2026-00481_TD04.xml",
+    "edi_invoic_381": "data/disputes/outcomes/RS-2026-00481_INVOIC_381.edi"
+  },
+  "evidence_refs": [
+    {
+      "kind": "threeway",
+      "ref": "Billed for more than was received",
+      "detail": "invoiced 40 received 28; 12 × 15.50 = 186.00",
+      "text": "Over-billed 12 CTN versus DESADV received qty"
+    },
+    {
+      "kind": "ddt",
+      "ref": "DDT-1187",
+      "detail": "quantity_confirmed 28",
+      "text": "Signed DDT confirms 28 CTN at Esselunga Melzo"
+    },
+    {
+      "kind": "warehouse_event",
+      "ref": "WH-PAVIA-2026-10-27-8821",
+      "detail": "12 CTN unavailable at ship wave",
+      "text": "Warehouse pick-short event supports DESADV qty"
+    }
+  ],
+  "notes": [
+    "Generated with a38 (PyPI package name for Truelite/python-a38).",
+    "Demo VAT rate 4.00% applied so net+IVA ≈ verdict amount.",
+    "Sign-off UI out of scope."
+  ]
+}

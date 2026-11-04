@@ -1,0 +1,50 @@
+{
+  "decision": "accept",
+  "amount": 186.0,
+  "confidence": 0.9,
+  "needs_sign_off": false,
+  "summary": "Invoiced 40 CTN vs DESADV/DDT 28; credit 12 CTN at PO price €15.50.",
+  "points": [
+    {
+      "text": "Over-billed 12 CTN versus DESADV received qty",
+      "amount": 186.0,
+      "source": {
+        "kind": "threeway",
+        "ref": "Billed for more than was received",
+        "detail": "invoiced 40 received 28; 12 × 15.50 = 186.00"
+      }
+    },
+    {
+      "text": "Signed DDT confirms 28 CTN at Esselunga Melzo",
+      "amount": null,
+      "source": {
+        "kind": "ddt",
+        "ref": "DDT-1187",
+        "detail": "quantity_confirmed 28"
+      }
+    },
+    {
+      "text": "Warehouse pick-short event supports DESADV qty",
+      "amount": null,
+      "source": {
+        "kind": "warehouse_event",
+        "ref": "WH-PAVIA-2026-10-27-8821",
+        "detail": "12 CTN unavailable at ship wave"
+      }
+    }
+  ],
+  "playbook_path": "data/disputes/playbook.md",
+  "contract_path": "data/disputes/contract_excerpt.md",
+  "amount_notes": [],
+  "known_amounts": [186.0, 15.5, 620.0],
+  "claim": {
+    "order_ref": "RS-2026-00481",
+    "invoice_ref": "FT-2026/1187",
+    "product": "Riso Scotti Arborio 1kg",
+    "quantity": 12,
+    "amount": 186.0,
+    "claim_type": "shortage",
+    "confidence": 0.92,
+    "raw_notes": "PO spacing typo in email"
+  }
+}
