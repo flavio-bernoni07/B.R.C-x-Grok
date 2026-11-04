@@ -384,7 +384,7 @@ describe("order sign-off decisions and read models", () => {
     expect(erp.order("ESS001")!.status).toBe("rejected");
   });
 
-  it("decideSignoff on a price case parks it or takes a manual EDI", async () => {
+  it("decideSignoff on a price case leaves Pending or takes a manual EDI", async () => {
     const erp = freshErp();
     const r = await receiveOrder(erp, edi("ordine_ess_bad_price.edi"));
     const fixed = edi("ordine_ess_bad_price.edi").replace("PRI+AAA:2.50", "PRI+AAA:1.85");
