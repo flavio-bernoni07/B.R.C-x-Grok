@@ -59,10 +59,10 @@ flowchart TD
 
 - Interfaccia tipo `getAvailability({ gtin, buyer, supplier, requestedDate })` con implementazione stub/`TODO` finché Core non fornisce stock + production events.
 - Qty entro disponibilità → avanti al check prezzo.
-- Qty oltre → Grokbot sceglie tra:
-  - **split** su più giornate (priorità a chiudere questo ordine prima dei nuovi) + comunicazione informativa;
-  - **negoziare** qty inferiore (eventuale sconto da contratto) + comunicazione all’azienda.
-- Dopo la decisione Grokbot si **ritorna al check disponibilità** sull’ordine/righe riviste (non al sign-off diretto). Il loop continua finché `qty_ok` (con un limite di tentativi in implementazione per evitare cicli infiniti).
+- Qty oltre → Grokbot sceglie tra (**split oppure mail**):
+  - **split** su più giornate (priorità a chiudere questo ordine prima dei nuovi) + comunicazione informativa all’azienda;
+  - **mail** all’azienda: insufficienza di disponibilità, accordo su qty inferiore (eventuale sconto da contratto).
+- In entrambi i casi, con le qty riviste si **ritorna al check disponibilità** (non al sign-off diretto). Il loop continua finché `qty_ok` (con un limite di tentativi in implementazione per evitare cicli infiniti).
 
 ### 3. Prezzo (codice + contratto fittizio)
 
