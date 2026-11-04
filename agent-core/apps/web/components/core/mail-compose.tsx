@@ -17,6 +17,7 @@ export function MailCompose({
   draft,
   busy,
   error,
+  signer,
   onCancel,
   onSend,
   inline = false,
@@ -26,29 +27,38 @@ export function MailCompose({
   readonly draft: string;
   readonly busy?: boolean;
   readonly error?: string;
+  readonly signer?: string;
   readonly onCancel: () => void;
-  readonly onSend: (mail: { to: string; subject: string; body: string; full: string }) => void;
+  readonly onSend: (mail: { to: string; subject: string; body: string; full: string; by: string }) => void;
   /** When true, render the form in place (no second overlay). */
   readonly inline?: boolean;
 }) {
   const initial = useMemo(() => splitDraft(draft), [draft]);
   const [to, setTo] = useState(defaultTo);
-  const [subject, setSubject] = useState(initial.subject);
+  const [subject, setSubject] = useState(initial.subject || title);
   const [body, setBody] = useState(initial.body);
+  const [by, setBy] = useState(signer ?? "");
 
   const send = () => {
     const full = `Subject: ${subject.trim()}\n\n${body.trim()}\n`;
-    onSend({ to: to.trim(), subject: subject.trim(), body: body.trim(), full });
+    onSend({ to: to.trim(), subject: subject.trim(), body: body.trim(), full, by: by.trim() });
   };
 
   const form = (
     <div className="space-y-3 text-[13px]">
-      {!inline ? null : (
-        <p className="text-[12.5px] text-ink-68">
-          Review Grok’s draft for <b className="text-ink">{title}</b>, then send. Delivery is simulated — the order parks
-          with no ORDRSP.
-        </p>
-      )}
+      <p className="text-[12.5px] text-ink-68">
+        Review Grok’s draft{title ? <> for <b className="text-ink">{title}</b></> : null}, then send. Delivery is
+        simulated — the order parks with no ORDRSP.
+      </p>
+      <label className="block space-y-1">
+        <span className="text-[12px] text-ink-68">Your name</span>
+        <input
+          className="h-9 w-full rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
+          value={by}
+          onChange={(e) => setBy(e.target.value)}
+          placeholder="Who sends this mail"
+        />
+      </label>
       <label className="block space-y-1">
         <span className="text-[12px] text-ink-68">To</span>
         <input
@@ -77,7 +87,7 @@ export function MailCompose({
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <button
           type="button"
-          disabled={busy || !to.trim() || !subject.trim() || !body.trim()}
+          disabled={busy || !by.trim() || !to.trim() || !subject.trim() || !body.trim()}
           onClick={send}
           className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
         >

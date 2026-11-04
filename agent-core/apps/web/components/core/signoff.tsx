@@ -118,16 +118,21 @@ export function SignoffCard({
     setManualEdi("");
   }, [signoff.caseId]);
 
-  const decide = async (approve: boolean, edits?: Record<string, unknown>, reasonOverride?: string) => {
-    const why = (reasonOverride ?? reason).trim();
-    if (!by.trim() || !why) {
+  const decide = async (
+    approve: boolean,
+    edits?: Record<string, unknown>,
+    overrides?: { reason?: string; by?: string },
+  ) => {
+    const who = (overrides?.by ?? by).trim();
+    const why = (overrides?.reason ?? reason).trim();
+    if (!who || !why) {
       setError("Enter your name and one line on why.");
       return;
     }
     setBusy(true);
     setError(undefined);
     try {
-      localStorage.setItem("brc:signer", by);
+      localStorage.setItem("brc:signer", who);
     } catch {
       /* ignore */
     }
@@ -135,7 +140,7 @@ export function SignoffCard({
     const res = await fetch(`/api/signoffs/${encodeURIComponent(c.caseId)}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approve, by, reason: why, edits: payloadEdits }),
+      body: JSON.stringify({ approve, by: who, reason: why, edits: payloadEdits }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
@@ -154,12 +159,17 @@ export function SignoffCard({
       <MailCompose
         title={`Mail · ${c.subjectRef ?? c.caseId}`}
         defaultTo={defaultMailTo(c)}
-        draft={draftMail}
+        draft={
+          draftMail ||
+          `Subject: Order no. ${c.subjectRef ?? c.caseId} — notice\n\nDear Customer,\n\nwe are writing with reference to order no. ${c.subjectRef ?? c.caseId}.\n\nKind regards,\nOrder office\n`
+        }
         busy={busy}
         error={error}
+        signer={by}
         inline={embedded}
         onCancel={() => setComposeMail(false)}
         onSend={(mail) => {
+          if (mail.by) setBy(mail.by);
           const why = reason.trim() || `Sent availability mail to ${mail.to}`;
           setReason(why);
           void decide(
@@ -170,7 +180,7 @@ export function SignoffCard({
               draft_mail: mail.full,
               mail_to: mail.to,
             },
-            why,
+            { reason: why, by: mail.by },
           );
         }}
       />
@@ -245,8 +255,11 @@ export function SignoffCard({
                 </button>
                 <button
                   type="button"
-                  disabled={busy || !by.trim() || !reason.trim() || !draftMail}
-                  onClick={() => setComposeMail(true)}
+                  disabled={busy}
+                  onClick={() => {
+                    setError(undefined);
+                    setComposeMail(true);
+                  }}
                   className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
                 >
                   Mail…
@@ -262,11 +275,14 @@ export function SignoffCard({
                 {sendOffLabel}
               </button>
             )}
-            {priceCase && draftMail ? (
+            {priceCase ? (
               <button
                 type="button"
-                disabled={busy || !by.trim() || !reason.trim()}
-                onClick={() => setComposeMail(true)}
+                disabled={busy}
+                onClick={() => {
+                  setError(undefined);
+                  setComposeMail(true);
+                }}
                 className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
               >
                 Mail &amp; park…
