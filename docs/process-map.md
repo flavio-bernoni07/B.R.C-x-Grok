@@ -12,7 +12,7 @@
 | Prepare | It is turned into clean data |
 | Check | Code compares it with the facts: stock, prices, other documents |
 | Grok decides | Grok steps in, only if a check failed |
-| Sign-off | A person approves, only if more than €500 is at stake or Grok is unsure |
+| Sign-off | A person approves whenever anything is ambiguous. The amount alone never decides |
 | Out | A document goes out |
 
 **Rows are moments in an order's life**: the order arrives, it is shipped and invoiced, and sometimes it comes back as a dispute. The grey lines that wrap from the end of one row to the start of the next show time passing.
@@ -22,7 +22,7 @@
 **White arrows** are the path when something needs attention. **Green lines** are the shortcuts where nobody intervenes:
 
 - the green line on top: every check passed, so the case skips Grok and the person
-- the green line underneath: Grok handled it and less than €500 is at stake, so it skips the person
+- the green line underneath: Grok handled it and nothing is ambiguous, so it skips the person
 
 ## Row 1: Order
 
@@ -30,7 +30,7 @@
 2. **Parse the EDI.** Code reads it. The format is fixed, so no AI is needed.
 3. **Run the checks.** Code asks: do we know these products and stores? Is the price the contract price? Do we have the stock, counting production coming up? Is the quantity normal for this store? If everything passes, the order is easy and takes the green line to the end. If anything fails, it is hard.
 4. **Fix the hard ones.** Grok proposes a solution: ship 150 now and 50 next week, offer another pack size, move the date.
-5. **Sign-off.** A person looks only if more than €500 is at stake or Grok is unsure.
+5. **Sign-off.** A person looks whenever anything is ambiguous: Grok is unsure, a point has no source, or the case is not in the Playbook. On this row the Order team goes further: a person confirms every order before ORDRSP (see [order-dec.md](../order-dec.md)).
 6. **ORDRSP.** Code tells the retailer what will be delivered and when, before anything ships. A shortage agreed in advance does not become a complaint later.
 
 ## Row 2: Shipping and invoicing
@@ -64,9 +64,9 @@ A retailer orders 200 cases of Carnaroli at €2.40.
 
 - **Order row.** Stock is fine and the price matches, so it is easy: the green line takes it straight to ORDRSP. No Grok, no person.
 - **Shipping and invoicing row.** The truck leaves with 200 cases, the invoice says 200, threeway matches. Green line again.
-- **Dispute row.** Two weeks later an email says "only 180 arrived". Grok reads it. Code pulls the DESADV (200 shipped) and the DDT the retailer signed with no notes. Grok proposes rejecting the claim, citing both documents and the contract's complaint deadline. Only 20 × €2.40 = €48 is at stake, under €500, so the reply goes out with no person involved.
+- **Dispute row.** Two weeks later an email says "only 180 arrived". Grok reads it. Code pulls the DESADV (200 shipped) and the DDT the retailer signed with no notes. Grok proposes rejecting the claim, citing both documents and the contract's complaint deadline. The documents agree and every point has a source, so nothing is ambiguous and the reply goes out with no person involved.
 
-If the same claim were worth €2,000, it would stop at Sign-off. A person approves or changes Grok's proposal, and the decision goes into the Playbook for next time.
+If the DDT carried a note, a document were missing or Grok were unsure, the claim would stop at Sign-off, whatever the amount. A person approves or changes Grok's proposal, and the decision goes into the Playbook for next time.
 
 ## Rules to agree before coding
 
@@ -81,9 +81,9 @@ If the same claim were worth €2,000, it would stop at Sign-off. A person appro
 
 **A person signs off when**
 
-- more than €500 is at stake
 - a point in Grok's proposal has no source to cite
 - Grok marks itself unsure, or the case type is not in the Playbook yet
+- a document cannot be found, or an amount cannot be tied to the documents
 - a Playbook rule would change
 
-€500 and the three-times-average test are placeholders until the mentor answers (see [MENTOR.md](../MENTOR.md)).
+There is no euro threshold: the amount alone never sends a case to a person. The three-times-average test is a placeholder until the mentor answers (see [MENTOR.md](../MENTOR.md)).

@@ -10,10 +10,11 @@ Detail: [order-dec.md](order-dec.md)
 
 | When | Decision | Why | Who |
 |---|---|---|---|
-| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
+| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no euro threshold on Order; no usual-qty check | Order team design from discussion | order |
 | Wed 4 Nov | After Grokbot on parse_flags, re-enter Parse EDI on the corrected message; after Grokbot on qty_short, re-enter availability check — no skip to sign-off | Corrections must pass code checks again | order |
 | Wed 4 Nov | Price mismatch: after draft mail, separate human step (manual EDI or park pending + assign new ORDERS later) — not the always-confirm sign-off; re-enters Parse when data arrives | Wrong price needs retailer correction path, not silent confirm | order |
 | Wed 4 Nov | Dispute row detail in dispute-dec.md: claim_reader → pull_facts/threeway → verdict+sources → optional sign-off → TD04/INVOIC 381 or evidence reply | Same schemino style as Order for the team | dispute |
+| Wed 4 Nov | No euro threshold anywhere. A person signs off whenever a case is ambiguous: Grok unsure or confidence under 0.55, a point with no source, a claim type not in the Playbook, a document not found, an amount not in the documents. A clear case goes out whatever the amount. In Dispute, code blocks the credit note or reply until a person approves | The amount does not make a case unclear, the facts do | Flavio, all rows |
 
 ## Forecast and quality (Flavio)
 
@@ -130,7 +131,7 @@ Hours are in the build budget above. Steps 2 and 3 can swap if the team needs th
 - how much paddy farmers still hold, against normal for the date
 - how many weeks of paddy we already have in the silos
 
-The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. Every purchase is above €500, so a person signs every one.
+The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. A person signs every purchase.
 
 **3. Stock projection.** For each product and each week:
 
@@ -236,7 +237,7 @@ Rules we locked in:
 - The invoice uses the dispatched quantity at the approved price. The older ordered quantity is history.
 - A short shipment with a matching invoice is a fulfillment gap, not a billing error.
 - The same shipment cannot be invoiced twice.
-- A person reviews billing errors, and also a fulfillment gap above the 500 EUR placeholder.
+- A person reviews billing errors, and any fulfilment gap that is ambiguous. There is no euro threshold (team decision, 4 Nov); v0.5.0 still has a 500 EUR placeholder, to remove when the code moves into `shipping/`.
 - Sample VAT is 4% on the rice SKUs and 10% on the ready risotto. An unknown product gets no guessed rate.
 - Prices, quantities, VAT, weights, pallet sizes, and GTINs are never invented.
 

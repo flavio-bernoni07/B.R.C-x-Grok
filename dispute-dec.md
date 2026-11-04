@@ -57,13 +57,13 @@ flowchart TD
 - Legge **Playbook** (`data/disputes/playbook.md`) + **contract excerpt** + claim + facts.
 - Decide `accept` | `partial` | `reject` con `points[]` ciascuno con **source** (order, desadv, invoice, ddt/pod, threeway, contract, playbook, …).
 - Importi solo da claim / docs / threeway — codice clampa/droppa euro inventati.
-- `needs_sign_off`: true se amount **>€500** (placeholder Playbook), unsure, source mancante, o tipo fuori Playbook.
+- `needs_sign_off`: **nessuna soglia in euro**. True se qualcosa è ambiguo: Grok unsure o confidence < 0.55, un punto senza source, tipo fuori Playbook (`other`), claim letto con confidence < 0.55, documento non trovato, importo non presente nei documenti. Lo calcola il codice e scrive il perché in `sign_off_reasons`.
 
 ### 5. Sign-off (condizionale)
 
 - Se `needs_sign_off` → persona approva/modifica; caso approvato può entrare nel Playbook “past cases”.
 - Se no → path auto verso outcome.
-- UI web di sign-off: **out of scope** nel codice attuale (soglia solo da Playbook).
+- Finché una persona non approva (`--approved-by NOME`), `outcome.py` non scrive né TD04 né reply: l'esito resta `awaiting_sign_off`. UI web di sign-off: ancora da fare.
 
 ### 6. Out — `outcome.py` (codice)
 

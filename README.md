@@ -10,7 +10,7 @@ How to read it:
 - **Columns** are the kind of work, the same in every row: In, Prepare, Check, Grok decides, Sign-off, Out.
 - **Rows** are moments in an order's life: the order arrives, it is shipped and invoiced, and sometimes it comes back as a dispute.
 - **Colours** show who does the work: grey is the retailer, blue outline is code, white is Grok, amber is a person, dashed is a stretch goal.
-- **Green lines** are the zero-touch paths: clean cases skip Grok, and Grok decisions under €500 skip the person.
+- **Green lines** are the zero-touch paths: clean cases skip Grok, and Grok decisions with nothing ambiguous skip the person. There is no euro threshold: whenever something is ambiguous, a person decides.
 
 The full walkthrough, box by box, is in [docs/process-map.md](docs/process-map.md). The interactive version of the map is [here](https://claude.ai/artifact/T91ncru9B4aTf8kup8AvE7).
 

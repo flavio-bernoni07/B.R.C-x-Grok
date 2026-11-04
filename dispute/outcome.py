@@ -6,7 +6,9 @@ this module never invents euro totals.
 
 EDI: also emits a minimal INVOIC with BGM 381 as a credit hint alongside TD04.
 
-Sign-off web UI is out of scope (shared Playbook threshold only).
+Sign-off: there is no euro threshold. When a verdict is ambiguous (needs_sign_off),
+nothing is written for the retailer until a person approves it: pass approved_by
+(CLI: --approved-by NAME). Until then the outcome is awaiting_sign_off.
 
 Usage:
   python -m dispute.outcome --verdict data/disputes/verdicts/01_shortage_accept.json
@@ -68,7 +70,7 @@ DEMO_ALIQUOTA_IVA = Decimal("4.00")
 
 @dataclass
 class DisputeOutcome:
-    kind: str  # credit_note | reject_reply
+    kind: str  # credit_note | reject_reply | awaiting_sign_off
     decision: str
     amount: float | None
     order_ref: str | None
@@ -77,6 +79,8 @@ class DisputeOutcome:
     paths: dict[str, str] = field(default_factory=dict)
     evidence_refs: list[dict[str, str]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    sign_off_reasons: list[str] = field(default_factory=list)
+    approved_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -405,10 +409,21 @@ def emit_outcome(
     facts: dict[str, Any] | None = None,
     out_dir: Path | str | None = None,
     issue_date: date | None = None,
+    approved_by: str | None = None,
 ) -> DisputeOutcome:
-    """Write TD04 (+ EDI) or reject reply under out_dir; return structured result."""
+    """Write TD04 (+ EDI) or reject reply under out_dir; return structured result.
+
+    An ambiguous verdict (needs_sign_off) writes nothing for the retailer until
+    approved_by names the person who signed it off.
+    """
     known = list(verdict.get("known_amounts") or [])
-    parsed = parse_verdict_payload(verdict, known_amounts=[float(x) for x in known])
+    claim_for_checks = verdict.get("claim") if isinstance(verdict.get("claim"), dict) else None
+    parsed = parse_verdict_payload(
+        verdict,
+        known_amounts=[float(x) for x in known],
+        claim=claim_for_checks,
+        facts=facts,
+    )
     decision = parsed.decision
     out = Path(out_dir) if out_dir else DEFAULT_OUT_DIR
     out.mkdir(parents=True, exist_ok=True)
@@ -431,7 +446,38 @@ def emit_outcome(
             }
         )
 
+    reasons: list[str] = []
+    for reason in list(verdict.get("sign_off_reasons") or []) + parsed.sign_off_reasons:
+        if reason not in reasons:
+            reasons.append(reason)
+    if verdict.get("needs_sign_off") is True and not reasons:
+        reasons.append("the verdict was marked as needing sign-off")
+    approver = (approved_by or "").strip() or None
+
+    if reasons and approver is None:
+        meta_path = out / f"{stem}_outcome.json"
+        result = DisputeOutcome(
+            kind="awaiting_sign_off",
+            decision=decision.value,
+            amount=parsed.amount,
+            order_ref=order_ref,
+            invoice_ref=invoice_ref,
+            credit_note_number=None,
+            paths={},
+            evidence_refs=evidence_refs,
+            notes=["Nothing sent to the retailer: a person must approve this verdict first."],
+            sign_off_reasons=reasons,
+        )
+        meta_path.write_text(
+            json.dumps(result.to_dict(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        result.paths["outcome_json"] = str(meta_path)
+        return result
+
     notes: list[str] = []
+    if approver:
+        notes.append(f"Signed off by {approver}.")
     if decision is VerdictDecision.REJECT:
         reply = build_reject_reply(verdict=verdict, facts=facts)
         reply_path = out / f"{stem}_reject_reply.txt"
@@ -446,7 +492,9 @@ def emit_outcome(
             credit_note_number=None,
             paths={"reject_reply": str(reply_path)},
             evidence_refs=evidence_refs,
-            notes=["Sign-off UI out of scope; escalate via Playbook if needs_sign_off."],
+            notes=notes,
+            sign_off_reasons=reasons,
+            approved_by=approver,
         )
         meta_path.write_text(
             json.dumps(result.to_dict(), ensure_ascii=False, indent=2) + "\n",
@@ -495,7 +543,6 @@ def emit_outcome(
     edi_path.write_text(edi, encoding="utf-8")
     notes.append("Generated with a38 (PyPI package name for Truelite/python-a38).")
     notes.append(f"Demo VAT rate {DEMO_ALIQUOTA_IVA}% applied so net+IVA ≈ verdict amount.")
-    notes.append("Sign-off UI out of scope.")
 
     result = DisputeOutcome(
         kind="credit_note",
@@ -507,6 +554,8 @@ def emit_outcome(
         paths={"td04_xml": str(xml_path), "edi_invoic_381": str(edi_path)},
         evidence_refs=evidence_refs,
         notes=notes,
+        sign_off_reasons=reasons,
+        approved_by=approver,
     )
     meta_path = out / f"{stem}_outcome.json"
     meta_path.write_text(
@@ -551,6 +600,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Credit note issue date YYYY-MM-DD (default: today)",
     )
+    parser.add_argument(
+        "--approved-by",
+        type=str,
+        default=None,
+        help="Name of the person who signed off an ambiguous verdict",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -569,6 +624,7 @@ def main(argv: list[str] | None = None) -> int:
             facts=facts,
             out_dir=args.out_dir,
             issue_date=issue,
+            approved_by=args.approved_by,
         )
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
