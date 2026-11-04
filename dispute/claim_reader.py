@@ -2,7 +2,8 @@
 
 Required environment (production / live extraction):
   XAI_API_KEY or GROK_API_KEY — xAI API key for chat completions.
-  Optional: XAI_BASE_URL (default https://api.x.ai/v1), XAI_MODEL (default grok-2-latest).
+  Optional: XAI_BASE_URL (default https://api.x.ai/v1),
+  XAI_MODEL or GROK_MODEL (default grok-4-latest).
 
 Usage:
   python -m dispute.claim_reader path/to/claim.txt
@@ -15,12 +16,13 @@ import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from agent import grok
+from agent.grok import MissingApiKeyError
 
 
 class ClaimType(str, Enum):
@@ -48,8 +50,30 @@ Rules:
 - Do not invent order_ref or invoice_ref. If missing or unreadable, use null.
 - Prefer null over guessing when a field is absent.
 - claim_type must be exactly one of the allowed values.
+- Remittance / short-payment texts with price reason codes (PRI, PRI/UNK) or
+  unit-price / promo variance → claim_type "pricing" (not "other").
 - Tolerate Italian and English, typos, and remittance/short-payment style texts.
 """.strip()
+
+# Remittance short-pays often arrive as portal "other" / PRI/UNK; map to pricing.
+_PRICING_MARKERS = (
+    "pri/unk",
+    "pri_unk",
+    "reason code: pri",
+    "reason code on remittance: pri",
+    "short-pay",
+    "short pay",
+    "shortpaid",
+    "paid short",
+    "invoice paid short",
+    "price variance",
+    "price hold",
+    "unit price",
+    "promo price",
+    "promo agreement",
+    "list price",
+    "listino",
+)
 
 
 @dataclass(frozen=True)
@@ -71,24 +95,20 @@ class ClaimExtraction:
         return data
 
 
-class MissingApiKeyError(RuntimeError):
-    """Raised when no xAI/Grok API key is configured for a live extraction."""
-
-
 def _api_key() -> str | None:
-    for name in ("XAI_API_KEY", "GROK_API_KEY"):
-        value = os.environ.get(name, "").strip()
-        if value:
-            return value
-    return None
+    return grok.api_key()
 
 
 def _base_url() -> str:
-    return os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")
+    return grok.base_url()
+
+
+DEFAULT_XAI_MODEL = grok.DEFAULT_MODEL
 
 
 def _model() -> str:
-    return os.environ.get("XAI_MODEL", "grok-2-latest")
+    """Resolve chat model: XAI_MODEL_DISPUTE_READ_CLAIM, else XAI_MODEL, else GROK_MODEL, else DEFAULT_XAI_MODEL."""
+    return grok.model_for("dispute.read_claim")
 
 
 def _null_str(value: Any) -> str | None:
@@ -118,7 +138,44 @@ def _null_float(value: Any) -> float | None:
     return None
 
 
-def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
+def looks_like_pricing_remittance(*texts: str | None) -> bool:
+    """True when remittance / PRI/UNK / short-pay language points at a price dispute."""
+    blob = " ".join(t for t in texts if t).lower()
+    if not blob:
+        return False
+    if any(marker in blob for marker in _PRICING_MARKERS):
+        return True
+    # Remittance feed + price/PRI token (portal often leaves claim type blank).
+    if "remittance" in blob and (
+        "pri" in blob or "price" in blob or "prezzo" in blob or "€" in blob or "eur" in blob
+    ):
+        return True
+    return False
+
+
+def refine_claim_type(
+    claim_type: ClaimType,
+    *,
+    raw_notes: str = "",
+    claim_text: str = "",
+) -> ClaimType:
+    """Post-process claim_type: remittance PRI/UNK / short-pay → pricing.
+
+    Leaves shortage / damage / late_delivery / pricing unchanged. Only upgrades
+    ``other`` (or unknown→other) when pricing remittance signals are present.
+    """
+    if claim_type is not ClaimType.OTHER:
+        return claim_type
+    if looks_like_pricing_remittance(raw_notes, claim_text):
+        return ClaimType.PRICING
+    return claim_type
+
+
+def parse_extraction(
+    payload: dict[str, Any],
+    *,
+    claim_text: str = "",
+) -> ClaimExtraction:
     """Build a ClaimExtraction from a model JSON object; never invent refs."""
     claim_raw = payload.get("claim_type", "other")
     if isinstance(claim_raw, ClaimType):
@@ -136,6 +193,9 @@ def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
 
     notes = payload.get("raw_notes")
     raw_notes = notes.strip() if isinstance(notes, str) else (str(notes) if notes else "")
+    claim_type = refine_claim_type(
+        claim_type, raw_notes=raw_notes, claim_text=claim_text
+    )
 
     return ClaimExtraction(
         order_ref=_null_str(payload.get("order_ref")),
@@ -149,34 +209,12 @@ def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
     )
 
 
-def _extract_json_object(text: str) -> dict[str, Any]:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end <= start:
-            raise
-        data = json.loads(text[start : end + 1])
-    if not isinstance(data, dict):
-        raise ValueError("Grok response JSON must be an object")
-    return data
+_extract_json_object = grok.extract_json_object
 
 
 def call_grok(claim_text: str, *, api_key: str) -> dict[str, Any]:
     """Call xAI chat completions and return the parsed JSON object from the model."""
-    url = f"{_base_url()}/chat/completions"
     body = {
-        "model": _model(),
-        "temperature": 0,
         "messages": [
             {
                 "role": "system",
@@ -191,33 +229,7 @@ def call_grok(claim_text: str, *, api_key: str) -> dict[str, Any]:
             },
         ],
     }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"xAI API HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"xAI API request failed: {exc}") from exc
-
-    envelope = json.loads(raw)
-    try:
-        content = envelope["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Unexpected xAI response shape: {envelope!r}") from exc
-    if not isinstance(content, str):
-        raise RuntimeError("xAI message content is not a string")
-    return _extract_json_object(content)
+    return grok.chat_json(body["messages"], task="dispute.read_claim", api_key_value=api_key)
 
 
 def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:
@@ -235,7 +247,7 @@ def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:
         payload = grok_caller(text)
         if not isinstance(payload, dict):
             raise TypeError("grok_caller must return a dict")
-        return parse_extraction(payload)
+        return parse_extraction(payload, claim_text=text)
 
     key = _api_key()
     if not key:
@@ -243,7 +255,7 @@ def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:
             "Missing API key. Set XAI_API_KEY or GROK_API_KEY for live claim extraction. "
             "Use --dry-run to validate fixture loading without calling Grok."
         )
-    return parse_extraction(call_grok(text, api_key=key))
+    return parse_extraction(call_grok(text, api_key=key), claim_text=text)
 
 
 def load_claim_file(path: Path | str) -> str:

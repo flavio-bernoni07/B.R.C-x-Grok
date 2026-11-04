@@ -2,15 +2,24 @@
 
 Write here what you find from the research on your part and how it can be implemented
 
+Subdocuments: [order-dec.md](order-dec.md) (Order) · [dispute-dec.md](dispute-dec.md) (Dispute) · [grok-agent-dec.md](grok-agent-dec.md) (Grok agent, all lanes)
+
 ## Order
 
 Detail: [order-dec.md](order-dec.md)
 
 | When | Decision | Why | Who |
 |---|---|---|---|
-| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
+| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no euro threshold on Order; no usual-qty check | Order team design from discussion | order |
 | Wed 4 Nov | After Grokbot on parse_flags, re-enter Parse EDI on the corrected message; after Grokbot on qty_short, re-enter availability check — no skip to sign-off | Corrections must pass code checks again | order |
 | Wed 4 Nov | Price mismatch: after draft mail, separate human step (manual EDI or park pending + assign new ORDERS later) — not the always-confirm sign-off; re-enters Parse when data arrives | Wrong price needs retailer correction path, not silent confirm | order |
+| Wed 4 Nov | Dispute row detail in dispute-dec.md: claim_reader → pull_facts/threeway → verdict+sources → optional sign-off → TD04/INVOIC 381 or evidence reply | Same schemino style as Order for the team | dispute |
+| Wed 4 Nov | No euro threshold anywhere. A person signs off whenever a case is ambiguous: Grok unsure or confidence under 0.55, a point with no source, a claim type not in the Playbook, a document not found, an amount not in the documents. A clear case goes out whatever the amount. In Dispute, code blocks the credit note or reply until a person approves | The amount does not make a case unclear, the facts do | Flavio, all rows |
+| Wed 4 Nov | One Mini ERP for every row: `core/erp.py` (SQLite), stock from production events (`core/stock.py`), one sign-off queue (`core/signoff.py`) where the person must write why | The rows could not hand anything to each other; every record keeps its source document | Flavio, core |
+| Wed 4 Nov | Order code back on main (reverted commit 68fe04a), now reading stock from the Mini ERP, with the three Grokbot cases wired and the person confirming every order | The design was approved; the revert left Order with no code | Flavio, order |
+| Wed 4 Nov | `shipping/` rebuilt from the v0.5.0 write-up below (trucks, scans, dispatch, cases), plus TD01 + INVOIC 380 and reconciliation that names every cause. No euro threshold: an employee in the case role approves every exception resolution | Nicola's code is not in the repo; the demo needs one order end to end | Flavio, shipping |
+| Wed 4 Nov | One Grok client, `agent/grok.py`, used by every row (Dispute moved onto it) | grok-agent-dec.md step 1 | Flavio, all rows |
+| Wed 4 Nov | Benchmark: 22 labelled cases, ours 21/22 against threeway 14/22 on whether to act, 21/22 against 10/22 on causes (`python -m bench.score`) | The track's first criterion | Flavio, shipping |
 
 ## Forecast and quality (Flavio)
 
@@ -127,7 +136,7 @@ Hours are in the build budget above. Steps 2 and 3 can swap if the team needs th
 - how much paddy farmers still hold, against normal for the date
 - how many weeks of paddy we already have in the silos
 
-The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. Every purchase is above €500, so a person signs every one.
+The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. A person signs every purchase.
 
 **3. Stock projection.** For each product and each week:
 
@@ -196,3 +205,223 @@ tests/
 4. What are your internal quality limits compared with the legal tolerances?
 5. How many hectares do you farm in Romania today, which varieties, and can we have past yields per field?
 6. Do any retailers send you their sales or warehouse stock data (SLSRPT, INVRPT)?
+## Shipping and invoicing
+
+### What we built, step by step
+
+This is the shipping and invoicing lane for the Grok Hackathon Pavia 2026, Track B (Autonomous Company, Riso Scotti). The current version is **0.5.0**.
+
+The module is a Python library with a local SQLite database. Tables start with `si_`. Money and quantities are strings. Every invoice is marked **SIMULATED — NOT A VALID FISCAL DOCUMENT**. The module prepares JSON for a teammate's Grok agent and does not call Grok.
+
+Times below are Europe/Rome.
+
+### Where we started
+
+**4 November 2026, 12:04** — commit `eb40163`, "Initialize project".
+
+The folder was empty. There was no shipping code, no database, and no screen. The CRM dashboard was left for later. This lane only had to receive an approved retailer order and handle shipping and invoicing.
+
+### Step 1 — Ship, write documents, and find mismatches
+
+**4 November 2026, 12:24** — commit `95d6590`, "Add the shipping and invoicing module." Version **0.1.0**.
+
+An approved order goes in. The module looks at released stock and the confirmed quantity, writes a simulated shipment, a delivery note (DDT / DESADV), and a draft invoice, then compares the order, the shipment, the invoice, and an optional retailer receipt.
+
+Functions:
+
+- `simulate_shipping`
+- `generate_delivery_note`
+- `generate_invoice`
+- `reconcile`
+- `apply_match_result` and `record_decision` for the invoice status
+- `get_case` for the stored file of one order
+
+Rules we locked in:
+
+- A batch on quality hold is never shipped.
+- The invoice uses the dispatched quantity at the approved price. The older ordered quantity is history.
+- A short shipment with a matching invoice is a fulfillment gap, not a billing error.
+- The same shipment cannot be invoiced twice.
+- A person reviews billing errors, and any fulfilment gap that is ambiguous. There is no euro threshold (team decision, 4 Nov); v0.5.0 still has a 500 EUR placeholder, to remove when the code moves into `shipping/`.
+- Sample VAT is 4% on the rice SKUs and 10% on the ready risotto. An unknown product gets no guessed rate.
+- Prices, quantities, VAT, weights, pallet sizes, and GTINs are never invented.
+
+`demo.py` shows a complete order, a partial shipment, an invoice that bills too much, a second click on the same shipment, and stock on hold.
+
+### Step 2 — Pick, scan, load, then dispatch
+
+**4 November 2026, 13:12** — commit `2c33940`, "Add warehouse picking and loading verification before dispatch." Version **0.2.0**.
+
+The first shipping path stayed in place for callers with no scans. A second path was added in front of dispatch.
+
+Functions:
+
+- `create_picking_list`
+- `verify_scans`
+- `confirm_loading`
+- `authorize_dispatch`
+
+A pallet is checked with simulated scans only. There is no barcode hardware. Prepared, loaded, and dispatched quantities stay separate. The invoice on this path uses the quantity that was scanned, loaded, and checked again at dispatch. A wrong product, a wrong batch, a bad quantity, a duplicate scan, or a quality hold keeps that pallet off the shipment. Picking does not deduct stock. Stock is recorded when dispatch is authorized.
+
+After this step the suite was **41 passed**.
+
+### Step 3 — Plan trucks, without loading them
+
+**4 November 2026, 13:38** — commit `f1a397c`, "Add simulated truck planning and loading manifests." Version **0.3.0**.
+
+Functions:
+
+- `register_trucks`
+- `plan_truck_loads`
+
+A plan assigns whole orders to simulated trucks. The manifest says `physically_loaded` false and `dispatched` false. Planning does not write a shipment and does not write `si_batch_allocations`. Pallet count and weight come from product data the caller supplies (`unit_weight_kg` and `units_per_pallet`). A missing weight or pallet size stops the plan.
+
+The planner checks, in order: the truck is available, the destination matches, the delivery window overlaps, pallet space remains, and payload weight remains. The first truck that fits is used. An order is not split across trucks.
+
+`demo.py` section 7 plans three orders onto two trucks: ORD-1061 and ORD-1062 on TRUCK-NORD, ORD-1063 on TRUCK-SUD.
+
+After truck planning the suite was **54 passed**.
+
+### Step 4 — Tie the plan to the warehouse
+
+**4 November 2026, 13:57** — commit `ae64466`, "Connect truck manifests to warehouse loading." Version **0.4.0**.
+
+The plan and the warehouse were connected. Nothing from steps 1–3 was replaced.
+
+What changed:
+
+- `create_picking_list` copies pallets from the truck manifest when a plan exists.
+- `verify_scans` and `confirm_loading` accept an optional `truck_id`. A pallet must match the assigned truck, product, batch, and expected quantity.
+- A pallet from truck A scanned against truck B is `WRONG_TRUCK`.
+- `authorize_dispatch` creates a shipment only when the loading record names the same truck and manifest. The shipment, the delivery note, and the invoice gain `truck_id` and `manifest_id` when a plan exists. Older shipments simply omit those fields.
+- Two orders share a truck when they go to the same distribution center, or when that truck has an explicit `compatible_routes` entry that covers both centers. Overlapping delivery windows are not enough.
+- `cancel_truck_plan` and `revise_truck_plan` release a plan before loading. After a loading record exists, or after dispatch, the assignment stays locked.
+
+`demo.py` section 8 runs two orders on two trucks through planning, scanning, dispatch, a DDT, and an invoice. ORD-1071 on TRUCK-1071 and ORD-1072 on TRUCK-1072 each dispatch 10 bags and invoice **25.00 EUR** net. Planning added no stock allocation for LOT-1071 or LOT-1072.
+
+After this step the suite was **65 passed** (54 previous and 11 new integration tests).
+
+### Step 5 — Turn a failed check into an employee case
+
+**4 November 2026, 14:19** — commit `65e6c38`, "Add exception cases and employee approval." Version **0.5.0**.
+
+When a check fails, the CRM can ask for a case. The original functions still return the same dictionaries. They do not open a case by themselves.
+
+Functions:
+
+- `open_exception_cases`
+- `grok_case_package`
+- `submit_resolution_proposal`
+- `assign_exception`
+- `view_exception_case`
+- `decide_resolution`
+- `execute_resolution`
+- `recheck_exception_case`
+
+One new table, `si_exception_cases`, stores the case, the proposals, and the history. `get_case` now includes `exception_cases`. `plan_truck_loads` gained an optional `only_truck_id`. Leave it out and the planner still picks the first truck that fits.
+
+A case keeps the exception id, type, and severity, the affected order, truck, pallet, shipment, and invoice ids, the explanation and evidence, the financial impact already calculated on the exception, the department and role, possible actions, the approval requirement, the status, and the full history. Templates list candidates. `selected` starts false. The module does not pick a winner.
+
+Templates cover a missing pallet, the wrong truck, a duplicate scan, a quality hold, truck capacity, weight, a delivery window, a short shipment, an invoice quantity or price, and a retailer receiving or acceptance gap. Every case also offers `REQUEST_CLARIFICATION`.
+
+The read-only package is for the teammate's Grok agent. A proposal comes back as JSON. Python checks stock, product and batch eligibility, truck capacity, the delivery window, the route, and the approval rules before the proposal is accepted. One failing action rejects the whole proposal. Releasing a quality hold, unblocking dispatch, issuing an invoice or a credit note, sending a message, editing an amount, or ignoring capacity or a window is rejected.
+
+The assigned employee, in the case role, approves, rejects, or asks for clarification. Approval does not run the action. `execute_resolution` runs one approved action. A second call returns `DUPLICATE_EXECUTION`. `recheck_exception_case` sets `resolved` or `unresolved` from the stored facts and does not change stock or documents.
+
+`demo.py` section 9 walks one case from detection to a verified plan:
+
+1. ORD-1081 needs 20 bags, 10 per pallet, so two pallets.
+2. The only truck is TRUCK-SMALL, with one pallet space.
+3. `plan_truck_loads` returns `TRUCK_CAPACITY_EXCEEDED`.
+4. That opens **CASE-00001** for **EXC-00001**, role `transport_planner`.
+5. TRUCK-WIDE, with two pallet spaces, is registered after the failure.
+6. Proposal **PRP-00001** asks to plan the order on TRUCK-WIDE. The truck rules accept it.
+7. Employee **EMP-PLANNER-01** approves, then execution runs the plan.
+8. Recheck sets the case to **resolved**. ORD-1081 sits on TRUCK-WIDE with `dispatched` false. No stock row, no shipment, and no invoice were written.
+
+The five new tests also cover a proposal for the too-small truck, a proposal to release a quality hold, execution before approval, a second execution, and a missing pallet that stays unresolved after it is only recorded.
+
+### Where the code stands now
+
+The full path a future CRM can call:
+
+```text
+Approved order
+  → plan_truck_loads
+  → create_picking_list
+  → verify_scans
+  → confirm_loading
+  → authorize_dispatch
+  → generate_delivery_note
+  → generate_invoice
+  → reconcile
+  → open_exception_cases    only when a check failed
+```
+
+`cancel_truck_plan` and `revise_truck_plan` sit between planning and loading. `simulate_shipping` is still the path with no scans and no truck.
+
+Latest check of this version: **70 passed in 0.21s** (`pytest`), and `python demo.py` completed through section 9.
+
+The contract for the other teammates is `INTEGRATION.md`. How to run the module is `README.md`.
+
+### Left for other lanes
+
+Real EDI, FatturaPA XML, submission to SdI, credit notes, GPS, a route optimizer, hardware scanners, external logistics APIs, a second Grok agent, and the CRM screen stay outside this module. A planned manifest is a plan. A case does not send a message, release a quality hold, unblock dispatch, or issue a financial document.
+
+### In this repo now (Flavio, 4 Nov evening)
+
+The functions above are rebuilt in `shipping/` from this write-up, on the shared Mini ERP: `register_trucks`, `plan_truck_loads`, `cancel_truck_plan`, `revise_truck_plan`, `create_picking_list`, `verify_scans`, `confirm_loading`, `authorize_dispatch` (`shipping/warehouse.py`), `open_exception_cases`, `grok_case_package`, `submit_resolution_proposal`, `assign_exception`, `view_exception_case`, `decide_resolution`, `execute_resolution`, `recheck_exception_case` (`shipping/cases.py`), and `ship_order` as the path with no scans. The same rules hold, with one change: there is no 500 EUR placeholder, an employee in the case role approves every resolution. New on top: `ingest_confirmed_order` and `export_for_dispute` (the two hand-overs), `record_delivery` (proof of delivery), the FatturaPA TD01 and INVOIC 380, and `propose_with_grok`, which sends the case package to Grok. Tests: `tests/test_shipping.py`.
+
+### Review and next steps (Flavio, 4 Nov)
+
+**TL;DR:** the rules and the safety design are right. What is missing is the link to the rest of the team, plus the proof the jury scores:
+- the code is not in this repo
+- it does not take the Order lane's hand-over or feed the Dispute lane
+- it writes no real DESADV, INVOIC or FatturaPA
+- `reconcile` has never been scored against threeway
+
+**Keep as it is:**
+- the invoice uses the dispatched quantity, never the ordered one
+- a batch on quality hold never ships, and a shipment is never invoiced twice
+- Grok proposes, Python validates, a person approves, and the action runs once
+- scans are tied to the assigned truck (`WRONG_TRUCK`)
+
+**Improve, most important first:**
+1. **Bring the code into this repo** as `shipping/` with `tests/shipping/`. Today it lives outside, so it can be neither in the demo nor in the repo we deliver.
+2. **Connect the hand-overs.**
+   - **In:** the Order lane's payload from `order-dec.md`: confirmed lines, dates, order and ORDRSP references, sent only after the human sign-off.
+   - **Out:** the shape the Dispute lane reads in `data/disputes/erp/catalog.json`: `orders`, `desadv`, `invoices` and `proofs`, keyed by `order_ref`, `desadv_ref` and `invoice_ref`, with numeric quantities. Strings inside the module are fine; convert at the hand-over.
+3. **Write the real documents.** On the map this row ends with DESADV + INVOIC + FatturaPA, and no other lane owns them. `dispute/outcome.py` already writes a FatturaPA TD04 with `a38` and an EDI INVOIC 381, with the seller's data. Reuse both for:
+   - the FatturaPA TD01 invoice
+   - an EDI INVOIC 380
+   - an EANCOM DESADV
+4. **Score `reconcile` against threeway.** It is the track's first judging criterion, and threeway is already in the repo (`dispute/_threeway_core.py`). Some cases show the difference clearly. For example, a short shipment invoiced correctly is a fulfillment gap for us and "matched" for threeway. That difference needs a number.
+5. **Call Grok.** `grok_case_package` is ready, but no lane sends it to Grok. A small adapter sends it, passes the answer to `submit_resolution_proposal` (which already validates it), and falls back to code-written text if the network fails.
+6. **Add proof of delivery.** The driver scans the pallets off at the retailer's dock, and we store the signed-DDT reference. Both are exported as `proofs` for disputes.
+7. **No more logistics features.** Truck planning already goes beyond the brief, and route optimisation was ruled out.
+8. **One screen for a case,** showing each step: plan, scan, dispatch, invoice, reconcile, case, Grok's proposal, approval.
+
+**Build plan, about 11 hours:**
+
+| # | Step | Done when | Hours |
+|---|---|---|---|
+| 1 | Move the code into `shipping/` and `tests/shipping/` | The PR is merged and the 70 tests pass next to the Dispute tests | 0.5 |
+| 2 | Hand-overs, written as one line each in this section | `ingest_confirmed_order(payload)` accepts the Order payload; `export_for_dispute(order_ref)` returns the catalog shape | 1.5 |
+| 3 | Real documents, reusing `dispute/outcome.py` | Each dispatch writes an EANCOM DESADV and an INVOIC 380, and a FatturaPA TD01 that `a38` validates | 2.5 |
+| 4 | Reconciliation scored against threeway | About 25 labelled cases give a table of right status and right reason for both | 2.5 |
+| 5 | Grok adapter for exception cases | A live proposal passes the validator, with a fallback when the network is down | 1 |
+| 6 | Proof of delivery | The unload scan and the signed-DDT reference appear in `export_for_dispute` | 1 |
+| 7 | The case screen | One page shows a case end to end, in the same style as the team's UI | 2 |
+
+Steps 1, 2 and 4 come first. Without them this lane stays a separate project, and the main criterion has no number.
+
+The step 4 cases should cover:
+- a clean order
+- a short shipment invoiced correctly
+- overbilling
+- a price gap
+- a typo in a reference
+- a split delivery
+- two causes on one line
+- cases against bags (unit of measure)
+- an orphan invoice

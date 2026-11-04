@@ -5,11 +5,15 @@
       "order_ref": "RS-2026-00481",
       "aliases": ["PO RS 2026 00481", "RS202600481", "PO RS-2026-00481"],
       "customer": "Esselunga",
+      "buyer_gln": "8000001000001",
+      "seller_gln": "8000000165222",
+      "ship_to": "CDC Melzo",
       "order_date": "2026-10-20",
       "lines": [
         {
           "item_code": "ARB-1KG-CTN12",
           "product": "Riso Scotti Arborio 1kg",
+          "pack_size": 12,
           "quantity": 40,
           "unit_price": 15.5,
           "uom": "CTN"
@@ -21,12 +25,14 @@
       "order_ref": "PO77821",
       "aliases": ["77821", "PO 77821"],
       "customer": "Carrefour Italia",
+      "buyer_gln": "8000002000002",
+      "seller_gln": "8000000165222",
       "order_date": "2026-10-15",
       "contract_ref": "RS-PROMO-AUT26",
       "lines": [
         {
           "item_code": "BAS-500G",
-          "product": "Scotti Basmati 500g",
+          "product": "Riso Scotti Basmati 500g",
           "ean": "8003660012345",
           "quantity": 200,
           "unit_price": 1.49,
@@ -39,11 +45,14 @@
       "order_ref": "RS-ORD-99102",
       "aliases": ["RSORD99102", "99102"],
       "customer": "Conad Ancona",
+      "buyer_gln": "8000003000003",
+      "seller_gln": "8000000165222",
       "order_date": "2026-10-28",
       "lines": [
         {
           "item_code": "CAR-1KG-CTN12",
           "product": "Riso Scotti Carnaroli 1kg",
+          "pack_size": 12,
           "quantity": 24,
           "unit_price": 15.5,
           "uom": "CTN"
@@ -55,14 +64,17 @@
       "order_ref": "RS2026/771",
       "aliases": ["RS2026-771", "RS2026771", "RS 2026/771"],
       "customer": "Coop Italia",
+      "buyer_gln": "8000004000004",
+      "seller_gln": "8000000165222",
       "order_date": "2026-10-22",
       "lines": [
         {
-          "item_code": "ARB-VAC-1KG",
-          "product": "Arborio vacuum 1kg",
+          "item_code": "ARB-VAC-1KG-CTN12",
+          "product": "Riso Scotti Arborio sottovuoto 1kg",
+          "pack_size": 12,
           "quantity": 100,
           "unit_price": 12.4,
-          "uom": "EA"
+          "uom": "CTN"
         }
       ]
     },
@@ -70,13 +82,16 @@
       "doc_id": "ORD-RS26112",
       "order_ref": "RS26112",
       "aliases": ["R S 26 112", "RS-26112", "RS 26112"],
-      "customer": "Auchan",
+      "customer": "Iper",
+      "buyer_gln": "8000005000005",
+      "seller_gln": "8000000165222",
       "order_date": "2026-11-01",
       "delivery_slot": "06:00-08:00",
       "lines": [
         {
           "item_code": "ARB-1KG-CTN12",
           "product": "Riso Scotti Arborio 1kg",
+          "pack_size": 12,
           "quantity": 30,
           "unit_price": 15.5,
           "uom": "CTN"
@@ -108,7 +123,7 @@
       "lines": [
         {
           "item_code": "BAS-500G",
-          "product": "Scotti Basmati 500g",
+          "product": "Riso Scotti Basmati 500g",
           "quantity": 200,
           "uom": "EA"
         }
@@ -135,10 +150,10 @@
       "ship_date": "2026-10-30",
       "lines": [
         {
-          "item_code": "ARB-VAC-1KG",
-          "product": "Arborio vacuum 1kg",
+          "item_code": "ARB-VAC-1KG-CTN12",
+          "product": "Riso Scotti Arborio sottovuoto 1kg",
           "quantity": 100,
-          "uom": "EA"
+          "uom": "CTN"
         }
       ]
     },
@@ -190,7 +205,7 @@
       "lines": [
         {
           "item_code": "BAS-500G",
-          "product": "Scotti Basmati 500g",
+          "product": "Riso Scotti Basmati 500g",
           "quantity": 200,
           "unit_price": 1.85,
           "uom": "EA"
@@ -227,14 +242,14 @@
       "total": 1310.0,
       "lines": [
         {
-          "item_code": "ARB-VAC-1KG",
-          "product": "Arborio vacuum 1kg",
+          "item_code": "ARB-VAC-1KG-CTN12",
+          "product": "Riso Scotti Arborio sottovuoto 1kg",
           "quantity": 100,
           "unit_price": 13.1,
-          "uom": "EA"
+          "uom": "CTN"
         }
       ],
-      "notes": "Unit price 13.10 vs PO 12.40 → €70 gap (matches remittance short)"
+      "notes": "Unit price €13.10/CTN vs PO €12.40/CTN → €70 gap (matches remittance short)"
     },
     {
       "doc_id": "INV-FT-2026-26112",
@@ -277,7 +292,7 @@
       "order_ref": "PO77821",
       "kind": "contract_excerpt",
       "ref": "RS-PROMO-AUT26",
-      "summary": "Autumn promo Basmati 500g unit price €1.49 through 15/11/2026"
+      "summary": "Autumn promo Riso Scotti Basmati 500g unit price €1.49 through 15/11/2026"
     },
     {
       "doc_id": "POD-77821",
@@ -286,7 +301,7 @@
       "ref": "POD-CF-77821",
       "signed": true,
       "quantity_confirmed": 200,
-      "summary": "Carrefour POD: 200 packs received intact"
+      "summary": "Carrefour POD: 200 consumer packs received intact"
     },
     {
       "doc_id": "DDT-4521",
@@ -312,13 +327,13 @@
       "ref": "POD-COOP-771",
       "signed": true,
       "quantity_confirmed": 100,
-      "summary": "Coop POD confirms full qty; dispute is price-only on remittance"
+      "summary": "Coop POD confirms full 100 CTN; dispute is price-only on remittance"
     },
     {
       "doc_id": "SLOT-26112",
       "order_ref": "RS26112",
       "kind": "warehouse_event",
-      "ref": "GATE-AUCHAN-2026-11-03",
+      "ref": "GATE-IPER-2026-11-03",
       "summary": "Gate-in 10:40 vs booked slot 06:00-08:00; OTIF miss logged"
     },
     {

@@ -9,3 +9,5 @@ build/
 
 # Forecast caches (rebuilt from data/raw)
 data/out/
+# Mini ERP files written by the demo or by hand
+*.sqlite

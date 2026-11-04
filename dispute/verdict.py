@@ -2,7 +2,7 @@
 
 Required environment (live path):
   XAI_API_KEY or GROK_API_KEY — same as claim_reader.
-  Optional: XAI_BASE_URL, XAI_MODEL.
+  Optional: XAI_BASE_URL, XAI_MODEL or GROK_MODEL (default grok-4-latest).
 
 Usage:
   python -m dispute.verdict --extraction data/disputes/extractions/01_shortage.json
@@ -15,13 +15,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
+from agent import grok
 from dispute.claim_reader import (
     ClaimExtraction,
     MissingApiKeyError,
@@ -43,6 +42,9 @@ DEFAULT_CONTRACT = (
 )
 
 AMOUNT_EPS = 0.05  # euro tolerance when matching proposed amounts to known figures
+# There is no euro threshold: any amount can go out without a person when nothing is
+# ambiguous. Below this confidence (Grok's verdict or the claim reading) a person decides.
+MIN_CONFIDENCE = 0.55
 
 
 class VerdictDecision(str, Enum):
@@ -59,7 +61,8 @@ Return a single JSON object only (no markdown), with these keys:
   decision: "accept" | "partial" | "reject"
   amount: number or null — total credit € to propose (null if reject with €0 or unknown)
   confidence: number from 0 to 1
-  needs_sign_off: boolean — true if amount > 500, unsure, missing source, or off-playbook
+  needs_sign_off: boolean — true if anything is ambiguous: you are unsure, a point has
+                  no source, the case is not covered by the Playbook, or the documents disagree
   summary: short string — one-paragraph rationale
   points: array of objects, each with:
     text: string — the finding
@@ -116,6 +119,7 @@ class DisputeVerdict:
     contract_path: str | None = None
     amount_notes: list[str] = field(default_factory=list)
     known_amounts: list[float] = field(default_factory=list)
+    sign_off_reasons: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -129,6 +133,7 @@ class DisputeVerdict:
             "contract_path": self.contract_path,
             "amount_notes": self.amount_notes,
             "known_amounts": self.known_amounts,
+            "sign_off_reasons": self.sign_off_reasons,
         }
 
 
@@ -285,12 +290,58 @@ def normalize_amounts(
     return amount, fixed_points, notes
 
 
+def sign_off_reasons(
+    payload: dict[str, Any],
+    *,
+    decision: VerdictDecision,
+    amount: float | None,
+    confidence: float,
+    points: list[VerdictPoint],
+    amount_notes: list[str],
+    claim: ClaimExtraction | dict[str, Any] | None = None,
+    facts: dict[str, Any] | None = None,
+) -> list[str]:
+    """Why a person must decide. Empty list = nothing ambiguous, no sign-off.
+
+    The size of the amount is not a reason: only ambiguity is.
+    """
+    reasons: list[str] = []
+    if payload.get("needs_sign_off") is True:
+        reasons.append("Grok marked the case as unsure")
+    if confidence < MIN_CONFIDENCE:
+        reasons.append(f"verdict confidence {confidence:.2f} is under {MIN_CONFIDENCE}")
+    if not points:
+        reasons.append("the verdict has no points")
+    if any(p.source.ref == "unspecified" for p in points):
+        reasons.append("a point has no source")
+    if amount_notes:
+        reasons.append("Grok proposed an amount that is not in the documents")
+    if decision is not VerdictDecision.REJECT and amount is None:
+        reasons.append("a credit is proposed without an amount from the documents")
+
+    if claim is not None:
+        extraction = parse_extraction(claim) if isinstance(claim, dict) else claim
+        if extraction.claim_type.value == "other":
+            reasons.append("the claim type is not covered by the Playbook")
+        if extraction.confidence < MIN_CONFIDENCE:
+            reasons.append(
+                f"claim reading confidence {extraction.confidence:.2f} is under {MIN_CONFIDENCE}"
+            )
+    if facts is not None:
+        missing = [str(m.get("kind")) for m in facts.get("misses") or [] if isinstance(m, dict)]
+        if missing:
+            reasons.append("documents not found: " + ", ".join(missing))
+    return reasons
+
+
 def parse_verdict_payload(
     payload: dict[str, Any],
     *,
     known_amounts: list[float],
     playbook_path: str | None = None,
     contract_path: str | None = None,
+    claim: ClaimExtraction | dict[str, Any] | None = None,
+    facts: dict[str, Any] | None = None,
 ) -> DisputeVerdict:
     raw_decision = str(payload.get("decision") or "reject").strip().lower()
     if raw_decision not in DECISIONS:
@@ -332,19 +383,16 @@ def parse_verdict_payload(
         known_amounts,
     )
 
-    needs = payload.get("needs_sign_off")
-    if isinstance(needs, bool):
-        needs_sign_off = needs
-    else:
-        needs_sign_off = False
-    if amount is not None and amount > 500:
-        needs_sign_off = True
-    if confidence < 0.55:
-        needs_sign_off = True
-    if any(p.source.ref == "unspecified" for p in points):
-        needs_sign_off = True
-    if not points:
-        needs_sign_off = True
+    reasons = sign_off_reasons(
+        payload,
+        decision=decision,
+        amount=amount,
+        confidence=confidence,
+        points=points,
+        amount_notes=amount_notes,
+        claim=claim,
+        facts=facts,
+    )
 
     summary = _null_str(payload.get("summary")) or ""
 
@@ -352,13 +400,14 @@ def parse_verdict_payload(
         decision=decision,
         amount=amount,
         confidence=confidence,
-        needs_sign_off=needs_sign_off,
+        needs_sign_off=bool(reasons),
         summary=summary,
         points=points,
         playbook_path=playbook_path,
         contract_path=contract_path,
         amount_notes=amount_notes,
         known_amounts=known_amounts,
+        sign_off_reasons=reasons,
     )
 
 
@@ -399,39 +448,7 @@ def build_verdict_prompt(
 
 
 def call_grok_verdict(messages: list[dict[str, str]], *, api_key: str) -> dict[str, Any]:
-    url = f"{_base_url()}/chat/completions"
-    body = {
-        "model": _model(),
-        "temperature": 0,
-        "messages": messages,
-    }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"xAI API HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"xAI API request failed: {exc}") from exc
-
-    envelope = json.loads(raw)
-    try:
-        content = envelope["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Unexpected xAI response shape: {envelope!r}") from exc
-    if not isinstance(content, str):
-        raise RuntimeError("xAI message content is not a string")
-    return _extract_json_object(content)
+    return grok.chat_json(messages, task="dispute.verdict", api_key_value=api_key)
 
 
 def decide_verdict(
@@ -480,6 +497,8 @@ def decide_verdict(
         known_amounts=known,
         playbook_path=str(pb_path),
         contract_path=str(ct_path),
+        claim=extraction,
+        facts=facts_map,
     )
 
 

@@ -8,13 +8,16 @@ from pathlib import Path
 import pytest
 
 from dispute.claim_reader import (
+    DEFAULT_XAI_MODEL,
     ClaimExtraction,
     ClaimType,
     MissingApiKeyError,
+    _model,
     load_claim_file,
     main,
     parse_extraction,
     read_claim,
+    refine_claim_type,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "data" / "disputes" / "claims"
@@ -141,6 +144,55 @@ def test_cli_missing_key(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
     assert code == 1
     err = capsys.readouterr().err
     assert "XAI_API_KEY" in err or "GROK_API_KEY" in err
+
+
+def test_remittance_pri_unk_maps_to_pricing() -> None:
+    result = parse_extraction(
+        {
+            "order_ref": "RS2026/771",
+            "invoice_ref": "334",
+            "product": "Arborio sottovuoto",
+            "quantity": 100,
+            "amount": 70.0,
+            "claim_type": "other",
+            "confidence": 0.55,
+            "raw_notes": "Remittance PRI/UNK; price hold 70",
+        }
+    )
+    assert result.claim_type is ClaimType.PRICING
+
+
+def test_refine_claim_type_uses_claim_text_short_pay() -> None:
+    assert (
+        refine_claim_type(
+            ClaimType.OTHER,
+            claim_text="REMITTANCE ADVICE\nInvoice paid short.\nUnit price hold",
+        )
+        is ClaimType.PRICING
+    )
+    assert refine_claim_type(ClaimType.SHORTAGE, raw_notes="PRI/UNK") is ClaimType.SHORTAGE
+
+
+def test_fixture_04_is_pricing() -> None:
+    path = Path(__file__).resolve().parents[1] / "data" / "disputes" / "extractions" / "04_short_payment.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["claim_type"] == "pricing"
+    assert parse_extraction(payload).claim_type is ClaimType.PRICING
+
+
+def test_model_default_is_current(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XAI_MODEL", raising=False)
+    monkeypatch.delenv("GROK_MODEL", raising=False)
+    assert DEFAULT_XAI_MODEL == "grok-4-latest"
+    assert _model() == "grok-4-latest"
+
+
+def test_model_env_override_prefers_xai(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XAI_MODEL", "grok-3")
+    monkeypatch.setenv("GROK_MODEL", "ignored-when-xai-set")
+    assert _model() == "grok-3"
+    monkeypatch.delenv("XAI_MODEL")
+    assert _model() == "ignored-when-xai-set"
 
 
 def test_cli_live_with_mocked_api(

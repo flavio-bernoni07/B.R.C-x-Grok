@@ -12,7 +12,7 @@ Dispute-owned code for the Riso Scotti zero-touch back office (hackathon Track B
 |---|---|---|
 | `XAI_API_KEY` or `GROK_API_KEY` | yes for live runs | xAI API key |
 | `XAI_BASE_URL` | no | default `https://api.x.ai/v1` |
-| `XAI_MODEL` | no | default `grok-2-latest` |
+| `XAI_MODEL` or `GROK_MODEL` | no | default `grok-4-latest` (`XAI_MODEL` wins if both set) |
 
 Without a key, live extraction fails clearly (no silent fake output). `--dry-run` only checks that a fixture file loads.
 
@@ -79,12 +79,31 @@ Contract excerpt: `data/disputes/contract_excerpt.md`
 ```bash
 pip install -r requirements.txt
 python3 -m dispute.outcome --verdict data/disputes/verdicts/01_shortage_accept.json --issue-date 2026-11-04
-python3 -m dispute.outcome --verdict data/disputes/verdicts/05_ambiguous_reject.json
+python3 -m dispute.outcome --verdict data/disputes/verdicts/05_ambiguous_reject.json --approved-by EMP-DISPUTE-01
 python3 -m pytest tests/test_outcome.py -q
 ```
 
 Outputs land in `data/disputes/outcomes/` (override with `--out-dir`).
 
+There is no euro threshold. An ambiguous verdict (`needs_sign_off`, with the reasons in
+`sign_off_reasons`) writes nothing for the retailer: the outcome stays `awaiting_sign_off`
+until a person approves it with `--approved-by NAME`.
+
+## One-shot demo runner
+
+```bash
+./scripts/run_dispute_claim.sh data/disputes/claims/01_shortage_messy_it.txt
+# No API key → offline fixtures (extraction+verdict); with key → live claim_reader+verdict.
+# Writes JSON under data/disputes/runs/<claim-stem>/ (or OUT_DIR=… / --out-dir).
+# Passes --approved-by demo by default so needs_sign_off verdicts still emit TD04/reject reply.
+```
+
+Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing` in `claim_reader` (and via threeway price-gap safety net in `pull_facts`).
+
+## On the Mini ERP
+
+`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus these fixtures), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` writes it after a person's OK and adds the case to the Playbook's past cases; `reject_verdict()` reopens the claim. Tests: `tests/test_dispute_service.py`.
+
 ### Out of scope
 
-Sign-off web UI (Playbook threshold only), real Mini ERP / SQLite persistence beyond writing outcome files.
+Sign-off web UI (for now a person approves from the CLI with `--approved-by`), real Mini ERP / SQLite persistence beyond writing outcome files.

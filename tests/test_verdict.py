@@ -167,6 +167,8 @@ def test_decide_verdict_rejects_invented_amount() -> None:
     assert verdict.amount != 12345.67
     assert all(p.amount != 12345.67 for p in verdict.points)
     assert verdict.amount_notes
+    assert verdict.needs_sign_off
+    assert "Grok proposed an amount that is not in the documents" in verdict.sign_off_reasons
 
 
 def test_decide_verdict_missing_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -228,3 +230,107 @@ def test_cli_missing_key(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
     code = main(["--extraction", str(EXTRACTIONS / "01_shortage.json")])
     assert code == 1
     assert "XAI_API_KEY" in capsys.readouterr().err
+
+
+# --- Sign-off: no euro threshold, only ambiguity sends a case to a person ---
+
+def _clear_payload(amount: float = 2000.0, **overrides):
+    payload = {
+        "decision": "accept",
+        "amount": amount,
+        "confidence": 0.9,
+        "needs_sign_off": False,
+        "summary": "Clear over-billing",
+        "points": [
+            {
+                "text": "Billed for more than was received",
+                "amount": amount,
+                "source": {"kind": "threeway", "ref": "Billed for more than was received", "detail": ""},
+            }
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+_CLEAR_CLAIM = {
+    "order_ref": "RS-2026-00481",
+    "invoice_ref": "FT-2026/1187",
+    "product": "Riso Scotti Arborio 1kg",
+    "quantity": 129,
+    "amount": 2000.0,
+    "claim_type": "shortage",
+    "confidence": 0.92,
+    "raw_notes": "",
+}
+
+
+def test_large_clear_credit_needs_no_sign_off() -> None:
+    verdict = parse_verdict_payload(
+        _clear_payload(2000.0),
+        known_amounts=[2000.0],
+        claim=_CLEAR_CLAIM,
+        facts={"misses": []},
+    )
+    assert verdict.amount == 2000.0
+    assert verdict.needs_sign_off is False
+    assert verdict.sign_off_reasons == []
+
+
+def test_grok_unsure_needs_sign_off() -> None:
+    verdict = parse_verdict_payload(
+        _clear_payload(186.0, needs_sign_off=True), known_amounts=[186.0]
+    )
+    assert verdict.needs_sign_off
+    assert "Grok marked the case as unsure" in verdict.sign_off_reasons
+
+
+def test_low_verdict_confidence_needs_sign_off() -> None:
+    verdict = parse_verdict_payload(_clear_payload(186.0, confidence=0.5), known_amounts=[186.0])
+    assert verdict.needs_sign_off
+    assert any("verdict confidence" in r for r in verdict.sign_off_reasons)
+
+
+def test_point_without_source_needs_sign_off() -> None:
+    payload = _clear_payload(186.0)
+    payload["points"][0]["source"] = {}
+    verdict = parse_verdict_payload(payload, known_amounts=[186.0])
+    assert verdict.needs_sign_off
+    assert "a point has no source" in verdict.sign_off_reasons
+
+
+def test_claim_type_not_in_playbook_needs_sign_off() -> None:
+    # Synthetic "other" (fixture 04 remittance is now pricing after PRI/UNK mapping).
+    claim = dict(_CLEAR_CLAIM, claim_type="other", amount=70.0, order_ref="RS2026/771")
+    verdict = parse_verdict_payload(
+        _clear_payload(70.0), known_amounts=[70.0], claim=claim, facts={"misses": []}
+    )
+    assert verdict.needs_sign_off
+    assert "the claim type is not covered by the Playbook" in verdict.sign_off_reasons
+
+
+def test_unsure_claim_reading_needs_sign_off() -> None:
+    claim = dict(_CLEAR_CLAIM, confidence=0.4)
+    verdict = parse_verdict_payload(_clear_payload(186.0), known_amounts=[186.0], claim=claim)
+    assert verdict.needs_sign_off
+    assert any("claim reading confidence" in r for r in verdict.sign_off_reasons)
+
+
+def test_missing_document_needs_sign_off() -> None:
+    facts = {"misses": [{"kind": "invoice", "queried": "334", "detail": "No invoice matched"}]}
+    verdict = parse_verdict_payload(
+        _clear_payload(186.0), known_amounts=[186.0], claim=_CLEAR_CLAIM, facts=facts
+    )
+    assert verdict.needs_sign_off
+    assert "documents not found: invoice" in verdict.sign_off_reasons
+
+
+def test_decide_verdict_clear_shortage_goes_without_person() -> None:
+    claim, facts = _shortage_bundle()
+
+    def fake_grok(_messages):
+        return _clear_payload(186.0)
+
+    verdict = decide_verdict(claim, facts, grok_caller=fake_grok)
+    assert verdict.needs_sign_off is False
+    assert verdict.to_dict()["sign_off_reasons"] == []

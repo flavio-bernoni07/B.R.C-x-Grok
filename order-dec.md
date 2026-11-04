@@ -11,7 +11,7 @@ Fuori scope: DESADV, FatturaPA, threeway, dispute.
 ## Regole fissate
 
 - **ORDRSP** è obbligatorio prima dello shipping (sottointeso nel flusso; resta esplicito nel design).
-- **Niente soglia €500** per Order: era solo uno sketch della mappa; per noi non guida il routing.
+- **Nessuna soglia in euro** (regola di tutto il team, vedi [DECISIONS.md](DECISIONS.md)): su Order la persona conferma sempre.
 - **Prezzo**: se l’ORDERS dichiara un prezzo (`PRI` o equivalente), si verifica contro il **contratto fittizio** Scotti↔retailer (listino + eventuali sconti per soglia quantità). Se manca il prezzo sull’ordine, non si inventa un mismatch su PRI assente.
 - **Quantità**: si confronta con **disponibilità** (non con una “media storica store”). Disponibilità = hook lasciato dal compagno Core/Mini ERP; stub finché non c’è.
 - **Sign-off umano prima della cessione a delivery: sempre**, anche se tutti i check passano. Zero-touch qui significa: il sistema prepara tutto; la persona conferma sempre prima di ORDRSP/handoff.
@@ -109,7 +109,7 @@ Finché non c’è un EDI accettato dal parse + checks ok, questo ramo **non** e
 ## Impatto docs (quando si implementerà)
 
 - Aggiornare [docs/order.md](docs/order.md) con owner flow e queste regole.
-- Una riga in [DECISIONS.md](DECISIONS.md): per Order, sign-off sempre prima di ORDRSP; niente soglia €500 su questa riga (la mappa restava sketch).
+- Una riga in [DECISIONS.md](DECISIONS.md): per Order, sign-off sempre prima di ORDRSP; nessuna soglia in euro su questa riga.
 
 ## Non in questo documento (ancora)
 

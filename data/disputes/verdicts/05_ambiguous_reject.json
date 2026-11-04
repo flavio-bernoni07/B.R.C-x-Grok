@@ -19,7 +19,7 @@
       "amount": null,
       "source": {
         "kind": "warehouse_event",
-        "ref": "GATE-AUCHAN-2026-11-03",
+        "ref": "GATE-IPER-2026-11-03",
         "detail": "OTIF miss; no liquidated damages € in contract excerpt"
       }
     },

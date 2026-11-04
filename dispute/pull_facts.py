@@ -208,8 +208,20 @@ def pull_facts(
     proofs = erp.find_proofs(resolved_order_ref or extraction.order_ref)
     threeway = run_threeway(order, desadv, invoice)
 
+    claim_dict = extraction.to_dict()
+    # Safety net: portal "other" + threeway invoice/PO price gap → pricing for Playbook.
+    if extraction.claim_type is ClaimType.OTHER and threeway is not None:
+        price_gap = any(
+            "price differs" in (line.reason or "").lower() for line in threeway.lines
+        )
+        if price_gap:
+            claim_dict["claim_type"] = ClaimType.PRICING.value
+            note = (claim_dict.get("raw_notes") or "").strip()
+            suffix = "mapped to pricing via threeway price gap"
+            claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
+
     return DisputeFacts(
-        claim=extraction.to_dict(),
+        claim=claim_dict,
         order=order,
         desadv=desadv,
         invoice=invoice,

@@ -59,7 +59,7 @@ def test_emit_pricing_credit_note(tmp_path: Path) -> None:
     assert "TD04" in xml
 
 
-def test_emit_reject_reply(tmp_path: Path) -> None:
+def test_ambiguous_verdict_waits_for_a_person(tmp_path: Path) -> None:
     verdict = load_verdict_json(VERDICTS / "05_ambiguous_reject.json")
     outcome = emit_outcome(
         verdict,
@@ -67,6 +67,33 @@ def test_emit_reject_reply(tmp_path: Path) -> None:
         out_dir=tmp_path,
         issue_date=date(2026, 11, 4),
     )
+    assert outcome.kind == "awaiting_sign_off"
+    assert outcome.sign_off_reasons
+    assert "reject_reply" not in outcome.paths
+    assert not list(tmp_path.glob("*_reject_reply.txt"))
+    assert not list(tmp_path.glob("*_TD04.xml"))
+    meta = json.loads(Path(outcome.paths["outcome_json"]).read_text(encoding="utf-8"))
+    assert meta["kind"] == "awaiting_sign_off"
+
+
+def test_clear_verdict_has_no_sign_off_reasons(tmp_path: Path) -> None:
+    verdict = load_verdict_json(VERDICTS / "01_shortage_accept.json")
+    outcome = emit_outcome(verdict, facts=resolve_facts(verdict), out_dir=tmp_path)
+    assert outcome.kind == "credit_note"
+    assert outcome.sign_off_reasons == []
+    assert outcome.approved_by is None
+
+
+def test_emit_reject_reply(tmp_path: Path) -> None:
+    verdict = load_verdict_json(VERDICTS / "05_ambiguous_reject.json")
+    outcome = emit_outcome(
+        verdict,
+        facts=resolve_facts(verdict),
+        out_dir=tmp_path,
+        issue_date=date(2026, 11, 4),
+        approved_by="EMP-DISPUTE-01",
+    )
+    assert outcome.approved_by == "EMP-DISPUTE-01"
     assert outcome.kind == "reject_reply"
     assert outcome.decision == "reject"
     assert outcome.credit_note_number is None
@@ -74,7 +101,7 @@ def test_emit_reject_reply(tmp_path: Path) -> None:
     assert "REJECT" in text
     assert "RS26112" in text
     assert "DESADV-2026-26112" in text
-    assert "GATE-AUCHAN" in text or "DDT-26112" in text
+    assert "GATE-IPER" in text or "DDT-26112" in text
     # Retailer-facing: no internal Playbook / generator meta
     assert "Playbook" not in text
     assert "dispute.outcome" not in text
@@ -121,8 +148,24 @@ def test_cli_reject(tmp_path: Path, capsys) -> None:
             str(VERDICTS / "05_ambiguous_reject.json"),
             "--out-dir",
             str(tmp_path),
+            "--approved-by",
+            "EMP-DISPUTE-01",
         ]
     )
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["kind"] == "reject_reply"
+
+
+def test_cli_ambiguous_without_approval(tmp_path: Path, capsys) -> None:
+    code = main(
+        [
+            "--verdict",
+            str(VERDICTS / "05_ambiguous_reject.json"),
+            "--out-dir",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["kind"] == "awaiting_sign_off"
