@@ -1,6 +1,6 @@
 # Dispute
 
-**Owner:**
+**Owner:** carlojolly / Dispute
 **Boxes on the map:** Claim email, Read the claim, Pull the facts, Verdict + sources, Credit note or reply
 
 ## Starting points
@@ -15,6 +15,9 @@
 
 ## What I decided
 
+- First dispute-owned slice is the **claim reader** only (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
+- Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage). Verdict, facts puller, and TD04 are out of scope for this step.
+
 ## What I need from others
 
 - Order, DESADV, invoice, threeway result and signed DDT for any order, from the Mini ERP (core, Shipping and invoicing)
@@ -24,5 +27,6 @@
 
 - A verdict per claim: accept, partial or reject, with the amount and a source for every point
 - A credit note or a reply to the retailer, saved in the Mini ERP
+- Structured claim extraction from the claim reader (input for Pull the facts)
 
 ## Open questions

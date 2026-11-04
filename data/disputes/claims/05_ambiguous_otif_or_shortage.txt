@@ -1,0 +1,17 @@
+From: vendor.claims@auchan.it
+To: claims@risoscotti.it
+Subject: Problema consegna ordine??
+
+Ciao,
+
+c'è un problema sulla consegna di ieri. Non siamo sicuri se manca merce o se
+è arrivata fuori slot (finestra 06:00-08:00, arrivo dichiarato 10:40).
+
+Numero ordine sul DDT sembra "R S 26 112" oppure RS26112 — scrittura poco chiara.
+Fattura non citata.
+Prodotto forse Arborio o Carnaroli, quantità "qualche collo in meno" secondo il
+responsabile ricevimento (nessun conteggio formale).
+Importo: non calcolato.
+
+Vi preghiamo di verificare e dirci se aprire shortage o OTIF.
+Auchan – Claim intake
