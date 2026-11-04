@@ -14,6 +14,14 @@ Team B.R.C, Grok Hackathon Pavia 2026, Track B (Riso Scotti): a zero-touch back 
 | `data/out/` | Forecast cache, gitignored, rebuilt automatically | – |
 | `data/disputes/` | Synthetic dispute world (claims, ERP, verdicts) | `dispute/README.md` |
 | `dispute/`, `tests/` | Dispute row in Python (root `pyproject.toml`, pytest) | `dispute/README.md` |
+| `core/` | Mini ERP (one SQLite for every row, audit log), stock from production events, the sign-off queue, the digest and KPIs, the order trace (`python -m core.trace`) | `docs/core.md` |
+| `agent/` | The one Grok client every Python row uses, the number checks, and the learning loop with its case-curve replay | `grok-agent-dec.md` |
+| `order/`, `shipping/`, `finance/` | Order row on the Mini ERP; Shipping (trucks, scans, dispatch, invoice, reconcile, RECADV); receivables (REMADV, deductions, aging) | `order/README.md`, `DECISIONS.md` |
+| `crm/` | Backend for the CRM screen: one `decide()` for the sign-off desk, briefings, inbox router, questions on read-only views, JSON API (`python -m crm.api`) | `DECISIONS.md` |
+| `forecast_quality/` | Buy-or-wait advisor with its backtest, lot photo check, demand forecast and stock projection (root project, pytest). Its weekly price data is in `data/market/` (from 2015); `data/raw/` stays the Rice Agent's | `DECISIONS.md` (Forecast and quality) |
+| `bench/` | Our reconciliation scored against threeway (`python -m bench.score`) | `docs/results.md` |
+| `data/world/`, `data/inbox/` | The one fake world (products, retailers, stock, golden order) and sample retailer messages | – |
+| `demo.py`, `test.sh` | The golden order through every row (offline); the whole Python test suite in one command | – |
 
 ## Team rules that apply to code
 

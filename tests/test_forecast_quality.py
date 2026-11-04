@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from core.world import fresh_erp
-from planning import advisor, data, demand, memo, quality
+from forecast_quality import advisor, data, demand, memo, quality
 
 
 @pytest.fixture(autouse=True)

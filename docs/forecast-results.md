@@ -1,6 +1,6 @@
 # Buy or wait: backtest and this week's advice
 
-Weekly Italian paddy prices from the EU Agri-food Data Portal, world rice prices from the World Bank Pink Sheet in euros (ECB rates). Rebuild with `python -m planning.data` then `python -m planning.advisor`.
+Weekly Italian paddy prices from the EU Agri-food Data Portal, world rice prices from the World Bank Pink Sheet in euros (ECB rates). Rebuild with `python -m forecast_quality.data` then `python -m forecast_quality.advisor`.
 
 **Backtest, 64 variety-campaigns, 2017/18 to 2025/26:** the advisor paid +0.38% against buying the same amount every week (+1.93 €/t on average; it did better in 32 of 64). At 200,000 t a year and the average price of €513/t that is about €390,911 a year (the tonnage is our estimate, to check with the mentor). A positive number means the advisor paid less.
 

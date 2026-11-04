@@ -49,7 +49,7 @@ def weekly_memo(calls: list[dict[str, Any]], backtest: dict[str, Any] | None = N
         return [f"figures not in the facts: {extra}"] if extra else []
 
     try:
-        payload = grok.chat_json(messages, task="planning.memo", validate=validate, caller=caller)
+        payload = grok.chat_json(messages, task="forecast_quality.memo", validate=validate, caller=caller)
     except (grok.GrokAnswerRejected, grok.MissingApiKeyError, RuntimeError):
         return {"memo": text, "by": "code"}
     return {"memo": str(payload["memo"]), "by": "grok"}

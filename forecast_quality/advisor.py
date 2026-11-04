@@ -1,7 +1,7 @@
 """Buy or wait: a weekly paddy purchasing advisor, backtested against buying evenly.
 
-    python -m planning.advisor                 # backtest table + this week's advice
-    python -m planning.advisor --write docs/forecast-results.md
+    python -m forecast_quality.advisor                 # backtest table + this week's advice
+    python -m forecast_quality.advisor --write docs/forecast-results.md
 
 Each week, for each variety, a model trained only on the past predicts the paddy
 price change over the next 8 weeks from:
@@ -31,7 +31,7 @@ from typing import Any
 
 import numpy as np
 
-from planning.data import SOURCES, eu_series, world_price_eur
+from forecast_quality.data import SOURCES, eu_series, world_price_eur
 
 VARIETIES = ["Carnaroli", "Arborio", "Selenio", "S. Andrea", "Long B", "Baldo", "Roma", "Loto"]
 HORIZON = 8
@@ -208,7 +208,7 @@ def advice(varieties: list[str] = VARIETIES) -> list[dict[str, Any]]:
 def to_markdown(bt: dict[str, Any], calls: list[dict[str, Any]]) -> str:
     lines = ["# Buy or wait: backtest and this week's advice", "",
              "Weekly Italian paddy prices from the EU Agri-food Data Portal, world rice prices from the World Bank "
-             "Pink Sheet in euros (ECB rates). Rebuild with `python -m planning.data` then `python -m planning.advisor`.", "",
+             "Pink Sheet in euros (ECB rates). Rebuild with `python -m forecast_quality.data` then `python -m forecast_quality.advisor`.", "",
              f"**Backtest, {bt['n']} variety-campaigns, 2017/18 to 2025/26:** the advisor paid "
              f"{bt['saved_pct']:+.2%} against buying the same amount every week "
              f"({bt['saved_per_t']:+.2f} €/t on average; it did better in {bt['wins']} of {bt['n']}). "

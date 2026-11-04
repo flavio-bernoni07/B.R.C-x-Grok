@@ -72,7 +72,7 @@ def _stock(erp: Erp, item_code: str | None = None) -> list[dict[str, Any]]:
 def _projection(erp: Erp, item_code: str = "CAR-1KG", start: str | None = None) -> list[dict[str, Any]]:
     from datetime import date
 
-    from planning.demand import production_suggestion, stock_projection
+    from forecast_quality.demand import production_suggestion, stock_projection
 
     product = erp.product(item_code=item_code)
     if not product:

@@ -172,10 +172,10 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     if with_planning:
         if not quiet:
             step("5. Forecast and quality")
-        from planning.advisor import advice
-        from planning.demand import production_suggestion, stock_projection
-        from planning.memo import weekly_memo
-        from planning.quality import check_lot, make_sample
+        from forecast_quality.advisor import advice
+        from forecast_quality.demand import production_suggestion, stock_projection
+        from forecast_quality.memo import weekly_memo
+        from forecast_quality.quality import check_lot, make_sample
 
         calls = advice(["Carnaroli", "Arborio", "Selenio", "Long B"])
         note = weekly_memo(calls)

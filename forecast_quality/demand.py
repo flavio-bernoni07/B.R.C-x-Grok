@@ -1,6 +1,6 @@
 """Demand forecast per product and week, and the weekly stock projection the Order row can read.
 
-    python -m planning.demand
+    python -m forecast_quality.demand
 
 The order history is invented (data/world/order_history.csv, written by
 `make_history()`): risotto rice peaks in winter, flyer weeks sell more, August is

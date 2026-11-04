@@ -14,7 +14,7 @@ dependencies = ["a38>=0.1.8,<0.2", "numpy>=1.26", "scipy>=1.11", "scikit-learn>=
 dev = ["pytest>=8.0,<9"]
 
 [tool.setuptools.packages.find]
-include = ["agent*", "bench*", "core*", "crm*", "dispute*", "finance*", "order*", "planning*", "shipping*"]
+include = ["agent*", "bench*", "core*", "crm*", "dispute*", "finance*", "order*", "forecast_quality*", "shipping*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

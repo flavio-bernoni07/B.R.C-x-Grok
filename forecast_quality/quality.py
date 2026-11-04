@@ -1,6 +1,6 @@
 """Lot quality from a photo of the lab sample, and what it is worth.
 
-    python -m planning.quality data/quality/sample_tray.png --variety Carnaroli --lot LOT-PADDY-17
+    python -m forecast_quality.quality data/quality/sample_tray.png --variety Carnaroli --lot LOT-PADDY-17
 
 1. The lab photographs the milled sample of a paddy delivery on a black tray.
 2. Code finds each grain (threshold + connected regions) and measures it:
@@ -112,7 +112,7 @@ def analyse(image: Path | str | np.ndarray) -> dict[str, Any]:
 
 
 def _latest(variety: str, stage: str) -> float | None:
-    from planning.data import eu_series
+    from forecast_quality.data import eu_series
 
     try:
         values = [p for _, p in eu_series(variety, stage) if not math.isnan(p)]
@@ -158,7 +158,7 @@ def lot_report(analysis: dict[str, Any], *, variety: str, lot: str, tonnes: floa
             "paddy_price_eur_t": paddy_price, "lot_value_cut_eur": round(cut * tonnes, 2),
             "destination": destination, "decision": decision, "needs_lab_check": bool(reasons),
             "why_lab_check": reasons,
-            "sources": ["photo analysis (planning/quality.py)",
+            "sources": ["photo analysis (forecast_quality/quality.py)",
                         f"EU Agri-food prices: {variety} paddy and milled, Mezzagrana broken (latest week)",
                         "contract whole-grain yield (demo value)"]}
 

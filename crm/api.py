@@ -80,7 +80,7 @@ class Api:
 
             return _projection(erp, query.get("item_code") or "CAR-1KG", query.get("start"))
         if parts == ["api", "advice"]:
-            from planning.advisor import advice
+            from forecast_quality.advisor import advice
 
             return advice()
         if parts == ["api", "digest"]:

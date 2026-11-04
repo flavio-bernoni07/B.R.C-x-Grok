@@ -1,7 +1,7 @@
 """Public market data for the purchasing advisor, kept as CSV in data/market/ so everything
 downstream runs offline and every number has a file it came from.
 
-    python -m planning.data          # refresh all three sources
+    python -m forecast_quality.data          # refresh all three sources
 
 - EU Agri-food Data Portal: Italian rice prices per variety and stage, weekly since
   Sep 2015. "€0.00" means no quote that week: it becomes missing, never zero.
@@ -21,7 +21,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-# data/raw/ holds the files of the Rice Agent (agent-core, planning/rice_forecast/), from 2021 on;
+# data/raw/ holds the Rice Agent's files (agent-core, planning/rice_forecast/), from 2021 on;
 # the advisor's backtest needs weekly prices from 2015, so its own copies live in data/market/.
 RAW = Path(__file__).resolve().parents[1] / "data" / "market"
 EU_URL = ("https://ec.europa.eu/agrifood/api/rice/prices?memberStateCodes=IT"
