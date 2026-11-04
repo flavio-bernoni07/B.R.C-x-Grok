@@ -6,31 +6,84 @@ Inbound calls → xAI Speech-to-Speech → our tools → same Mini ERP dispute p
 
 ```bash
 XAI_API_KEY=xai-...                 # grok.com or console.x.ai key
-XAI_VOICE_WEBHOOK_SECRET=whsec_...  # shown once when you register the number
-BRC_PUBLIC_BASE_URL=https://....    # tunnel URL (step C)
+XAI_VOICE_WEBHOOK_SECRET=whsec_...  # only for Direct SIP webhook path (below)
+BRC_PUBLIC_BASE_URL=https://....    # tunnel URL — do this BEFORE registering a webhook
 BRC_PHONE_ALLOWLIST=+39...          # optional; your mobile for demos
 # BRC_PHONE_DEMO_OPEN=0             # set to reject non-allowlisted callers
 # BRC_PHONE_ALLOW_UNSIGNED_WEBHOOK=1  # local fixture posts only — never in prod
 ```
 
-## Your setup (after code is running)
+## Do this order
 
-### B — Free xAI number
-1. Open [console.x.ai](https://console.x.ai) → team **grok hackathon** → **Voice Agents (Beta)** or **Voice**.
-2. Claim / attach the **free provisioned number**, or register via API once the webhook URL exists (`POST /v2/phone-numbers` with webhook URL).
-3. Set the webhook URL to: `{BRC_PUBLIC_BASE_URL}/api/telephony/incoming`
-4. Copy the **webhook signing secret** (`whsec_…`) into `.env.local` as `XAI_VOICE_WEBHOOK_SECRET`.
+1. **Key** in `.env.local` (`XAI_API_KEY`) — you already did this.
+2. **Step C — tunnel** (public HTTPS) — needed before any webhook.
+3. **Step B — number** — pick Path 1 (easiest for demo) or Path 2 (full SIP).
+4. Or skip the phone and use **simulate** (still creates a real `DSP-…` in Actions).
 
-### C — Public tunnel
-1. Run the web app: `pnpm dev:web` (from `agent-core`).
-2. In another terminal: `npx cloudflared tunnel --url http://localhost:3000` (or ngrok).
-3. Put the `https://…` URL in `BRC_PUBLIC_BASE_URL` and on the xAI number webhook.
+---
 
-### Demo script
-Call the number and say: *“Ordine ORD-3001, Carnaroli: ne abbiamo ricevuti solo 1100 su 1200.”*  
-Expect a spoken `DSP-…`, then open **Actions → Disputes**.
+## Step C — Public tunnel (do this before Step B)
 
-## Offline rehearsal (no phone)
+1. Terminal 1, from `agent-core`:
+   ```bash
+   pnpm db:reset
+   pnpm dev:web
+   ```
+2. Terminal 2:
+   ```bash
+   npx cloudflared tunnel --url http://localhost:3000
+   ```
+   (or ngrok: `npx ngrok http 3000`)
+3. Copy the `https://….trycloudflare.com` (or ngrok) URL.
+4. Add to `.env.local`:
+   ```bash
+   BRC_PUBLIC_BASE_URL=https://YOUR-TUNNEL-HOST
+   ```
+5. Leave both terminals running.
+
+---
+
+## Step B — Getting a number (two paths)
+
+### Path 1 — Voice Agent Builder free number (easiest, recommended for jury)
+
+xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with *their* builder agent, so we point that agent at our app with one HTTP tool.
+
+1. Open [console.x.ai](https://console.x.ai) → team **grok hackathon** → **Voice Agents (Beta)**.
+2. Open one of your **Untitled** agents, or click **Create agent** / **Customer Support**.
+3. Paste instructions roughly like:
+   > You are Riso Scotti retailer support. Collect order ref (e.g. ORD-3001), problem (shortage/pricing/damage), and claimed quantity. Never promise refunds or credit notes. When you have the details, call the submit_dispute tool. Tell the caller the DSP id only if the tool returns success.
+4. Add an **API Request** tool named `submit_dispute`:
+   - Method: **POST**
+   - URL: `https://YOUR-TUNNEL-HOST/api/telephony/simulate`
+   - Body JSON fields (map from the call):
+     - `order_ref` (string, required)
+     - `category` (string: shortage | pricing | damage | late_delivery | other)
+     - `claimed_quantity` (number, optional)
+     - `claimed_amount` (number, optional)
+     - `customer_description` (string, required)
+     - `language` (`en` or `it`)
+5. Find **Phone number** / telephony on the agent (often near Publish / Live). Claim the **free US number**. Note the number.
+6. **Publish / Live** the agent (drafts stay silent).
+7. Call that number → expect a spoken `DSP-…` → open **Actions → Disputes**.
+
+You do **not** need `XAI_VOICE_WEBHOOK_SECRET` for Path 1.
+
+### Path 2 — Direct SIP webhook (our `/api/telephony/incoming`)
+
+This is the “join WebSocket yourself” path. The free Builder number is **not** created this way. Docs: provisioning xAI numbers via API is **not** supported; API create is for **bring-your-own** numbers (`origin: "byo_trunk"`, e.g. Twilio).
+
+You only need Path 2 if you later bring a Twilio/Telnyx number. Then:
+
+1. Have `BRC_PUBLIC_BASE_URL` from Step C.
+2. Register the number with webhook  
+   `https://YOUR-TUNNEL-HOST/api/telephony/incoming`
+3. Copy the one-time `whsec_…` into `.env.local` as `XAI_VOICE_WEBHOOK_SECRET`.
+4. Restart `pnpm dev:web`.
+
+---
+
+## Offline rehearsal (no phone, no tunnel)
 
 ```bash
 curl -s -X POST http://localhost:3000/api/telephony/simulate \
@@ -38,10 +91,12 @@ curl -s -X POST http://localhost:3000/api/telephony/simulate \
   -d '{"order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli","language":"en"}'
 ```
 
+Then open **Actions → Disputes** — you should see a Phone-channel case.
+
 ## Smoke-check Voice key
 
 ```bash
 pnpm voice:check
 ```
 
-Reports whether `XAI_API_KEY` is set and whether ephemeral realtime / phone-number list APIs respond (does not print the key).
+Loads `.env.local` and checks whether the key can list phone numbers (does not print the key).

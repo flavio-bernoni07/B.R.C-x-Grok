@@ -2,10 +2,29 @@
  * Smoke-check Voice readiness without printing secrets.
  * Usage: pnpm voice:check
  */
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { apiKey, hasKey } from "../agent/lib/grok/client";
 import { voiceCapabilities } from "../agent/lib/dispute/voice";
 
+/** Load agent-core/.env.local into process.env without printing values (tsx does not load it alone). */
+function loadEnvLocal() {
+  const path = resolve(process.cwd(), ".env.local");
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const i = t.indexOf("=");
+    if (i <= 0) continue;
+    const k = t.slice(0, i).trim();
+    let v = t.slice(i + 1).trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    if (k && process.env[k] == null) process.env[k] = v;
+  }
+}
+
 async function main() {
+  loadEnvLocal();
   const caps = voiceCapabilities();
   console.log("voice_capabilities:", caps);
 
