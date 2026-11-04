@@ -7,14 +7,11 @@
  */
 import type { Signoff } from "@agent/lib/core/erp";
 import { useEffect, useMemo, useState } from "react";
-import { Facts, Panel, Pill, type PillTone, SourceTag, day } from "@/components/kit";
+import { Panel, Pill, type PillTone, SourceTag, day } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import { MailCompose } from "./mail-compose";
 
 const ROW_LABEL: Record<string, string> = { order: "Order", shipping: "Shipping", dispute: "Dispute" };
-
-const EDI_KEYS = new Set(["draft_ordrsp", "ordrsp", "edi", "corrected_edi", "manual_edi"]);
-const HIDDEN_KEYS = new Set(["_dir", "_path", "draft_mail", "options", "grokbot"]);
 
 export function signoffTone(status: string): PillTone {
   return status === "pending" ? "attention" : status === "approved" ? "ok" : "wait";
@@ -34,26 +31,123 @@ const EdiBox = ({ title, text }: { readonly title: string; readonly text: string
   </div>
 );
 
-/** Shows the proposal as readable lines; EDI drafts get their own scroll box. */
-function Proposal({ proposal }: { readonly proposal: Record<string, unknown> | null }) {
-  if (!proposal || !Object.keys(proposal).length) return null;
-  const shown = Object.entries(proposal).filter(([k]) => !HIDDEN_KEYS.has(k) && !/_dir$|_path$/.test(k));
-  const ediEntries = shown.filter(([k, v]) => EDI_KEYS.has(k) || (typeof v === "string" && v.includes("UNA:") && v.length > 80));
-  const ediKeys = new Set(ediEntries.map(([k]) => k));
-  const simple = shown.filter(([k, v]) => !ediKeys.has(k) && (v == null || typeof v !== "object"));
-  const nested = shown.filter(([k, v]) => !ediKeys.has(k) && v != null && typeof v === "object");
+function fmtQty(n: unknown): string {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "–";
+  return Number.isInteger(v) ? v.toLocaleString("en-US") : v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function fmtMoney(n: unknown): string {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "–";
+  return `€${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+type ProblemLine = { title: string; detail?: string };
+
+/** Turn the machine proposal into a short, person-facing problem list. No raw JSON / EDI. */
+function proposalProblems(signoff: Signoff): ProblemLine[] {
+  const p = signoff.proposal ?? {};
+  const out: ProblemLine[] = [];
+
+  if (typeof p.summary === "string" && p.summary.trim()) {
+    out.push({ title: p.summary.trim() });
+  }
+
+  if (Array.isArray(p.lines) && (signoff.kind === "qty_choice" || signoff.kind === "confirm")) {
+    for (const raw of p.lines as Record<string, unknown>[]) {
+      if (signoff.kind === "qty_choice") {
+        const name = String(raw.product || raw.gtin || `Line ${raw.line_no ?? "?"}`);
+        const now = raw.ship_now ?? raw.now_qty ?? raw.available_qty;
+        const later = raw.later ?? raw.later_qty;
+        const laterDate = raw.later_date;
+        const ordered = raw.ordered ?? raw.ordered_qty;
+        let detail = `Ordered ${fmtQty(ordered)} · can ship now ${fmtQty(now)}`;
+        if (Number(later) > 0 && laterDate) detail += ` · later ${fmtQty(later)} on ${laterDate}`;
+        out.push({ title: name, detail });
+      } else if (raw.gtin != null || raw.qty_confirmed != null || raw.quantity != null) {
+        const name = String(raw.product || raw.gtin || `Line ${raw.line_no ?? "?"}`);
+        const qty = raw.qty_confirmed ?? raw.quantity ?? raw.qty;
+        out.push({ title: name, detail: qty != null ? `${fmtQty(qty)} units` : undefined });
+      }
+    }
+  }
+
+  const price = p.price_check as { lines?: Record<string, unknown>[] } | null | undefined;
+  if (price?.lines?.length) {
+    for (const line of price.lines) {
+      if (line.ok === true) continue;
+      out.push({
+        title: `Price mismatch on ${String(line.gtin ?? "a line")}`,
+        detail: `Ordered at ${fmtMoney(line.order_price)}; contract is ${fmtMoney(line.expected_price)}`,
+      });
+    }
+  }
+
+  if (Array.isArray(p.flags)) {
+    for (const f of p.flags as Record<string, unknown>[]) {
+      const what = String(f.what || f.message || f.code || "Read problem");
+      const where = f.where || f.segment;
+      out.push({ title: what, detail: where ? `In segment ${where}` : undefined });
+    }
+  }
+
+  if (Array.isArray(p.availability) && signoff.kind === "stock_short") {
+    for (const a of p.availability as Record<string, unknown>[]) {
+      out.push({
+        title: String(a.product || a.gtin || "Product"),
+        detail: `Ordered ${fmtQty(a.ordered ?? a.ordered_qty)} · available ${fmtQty(a.available ?? a.available_qty)}`,
+      });
+    }
+  }
+
+  if (Array.isArray(p.backorders) && (p.backorders as unknown[]).length) {
+    for (const b of p.backorders as Record<string, unknown>[]) {
+      out.push({
+        title: `Later shipment for ${String(b.gtin ?? "a product")}`,
+        detail: `${fmtQty(b.qty)} units${b.date ? ` on ${b.date}` : ""}`,
+      });
+    }
+  }
+
+  // Deduplicate titles that already appear in reasons (shown separately above).
+  return out.filter((row, i, arr) => arr.findIndex((x) => x.title === row.title && x.detail === row.detail) === i);
+}
+
+function ProblemList({ items }: { readonly items: ProblemLine[] }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <div className="mb-1.5 text-[12px] text-ink-68">What needs a decision</div>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={`${item.title}-${item.detail ?? ""}`} className="rounded-[10px] bg-hh-honeydew px-3 py-2">
+            <div className="font-bold text-[13px] tracking-[-0.01em]">{item.title}</div>
+            {item.detail ? <div className="mt-0.5 text-[12.5px] text-ink-78">{item.detail}</div> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProposalBody({ signoff }: { readonly signoff: Signoff }) {
+  const p = signoff.proposal ?? {};
+  const problems = proposalProblems(signoff);
+  const draftOrdrsp = typeof p.draft_ordrsp === "string" ? p.draft_ordrsp : null;
+  // Raw ORDERS EDI stays collapsed — never the main surface on qty / Other / price.
+  const rawEdi = typeof p.edi === "string" && p.edi.includes("UNA") ? p.edi : typeof p.edi === "string" && p.edi.length > 40 ? p.edi : null;
+
   return (
     <div className="space-y-3">
-      {simple.length ? <Facts items={simple.map(([k, v]) => [k.replace(/_/g, " "), String(v ?? "–")])} /> : null}
-      {ediEntries.map(([k, v]) => (
-        <EdiBox key={k} title={k === "draft_ordrsp" ? "Draft ORDRSP" : k.replace(/_/g, " ")} text={String(v)} />
-      ))}
-      {nested.length ? (
+      <ProblemList items={problems} />
+      {draftOrdrsp ? <EdiBox title="Draft ORDRSP" text={draftOrdrsp} /> : null}
+      {rawEdi ? (
         <details className="text-[12px]">
-          <summary className="cursor-pointer select-none text-ink-68">Proposal details</summary>
-          <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-hh-honeydew p-3 font-mono text-[11px] leading-relaxed text-ink-78">
-            {JSON.stringify(Object.fromEntries(nested), null, 2)}
-          </pre>
+          <summary className="cursor-pointer select-none text-ink-68">Technical EDI (for support)</summary>
+          <div className="mt-2">
+            <EdiBox title="ORDERS as received" text={rawEdi} />
+          </div>
         </details>
       ) : null}
     </div>
@@ -71,6 +165,30 @@ function defaultMailTo(signoff: Signoff): string {
     if (slug) return `orders@${slug}.example`;
   }
   return "buyer@retailer.example";
+}
+
+function qtySplitCopy(signoff: Signoff): { headline: string; detail: string } {
+  const lines = (signoff.proposal?.lines as Record<string, unknown>[] | undefined) ?? [];
+  const first = lines[0];
+  if (!first) {
+    return {
+      headline: "Split: ship what is available now",
+      detail: "Confirm the available quantity toward ORDRSP; any remainder can follow as a later order when stock returns.",
+    };
+  }
+  const now = first.ship_now ?? first.now_qty ?? first.available_qty;
+  const later = first.later ?? first.later_qty;
+  const laterDate = first.later_date;
+  if (Number(later) > 0 && laterDate) {
+    return {
+      headline: `Split: ship ${fmtQty(now)} now + ${fmtQty(later)} later`,
+      detail: `Send an ORDRSP for ${fmtQty(now)} now. The remaining ${fmtQty(later)} stay as a later order (earliest ${laterDate}).`,
+    };
+  }
+  return {
+    headline: `Split: ship ${fmtQty(now)} now`,
+    detail: `Accept the available quantity and continue toward ORDRSP for that amount only. The rest is not confirmed on this response.`,
+  };
 }
 
 export function SignoffCard({
@@ -92,7 +210,8 @@ export function SignoffCard({
   const [manualEdi, setManualEdi] = useState("");
   const takesEdi = c.row === "order" && (c.kind === "price_fix" || c.kind === "manual_edi");
   const qtyChoice = c.row === "order" && c.kind === "qty_choice";
-  const priceCase = c.row === "order" && (c.kind === "price_fix" || c.kind === "manual_edi");
+  const priceCase = c.row === "order" && c.kind === "price_fix";
+  const manualEdiCase = c.row === "order" && c.kind === "manual_edi";
   const draftMail = useMemo(() => {
     const fromProposal = c.proposal?.draft_mail;
     return typeof fromProposal === "string" ? fromProposal : "";
@@ -101,6 +220,7 @@ export function SignoffCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [result, setResult] = useState<Record<string, unknown>>();
+  const splitCopy = qtySplitCopy(c);
 
   useEffect(() => {
     try {
@@ -176,7 +296,7 @@ export function SignoffCard({
             true,
             {
               qty_action: qtyChoice ? "mail" : undefined,
-              send_mail: priceCase ? true : undefined,
+              send_mail: priceCase || manualEdiCase ? true : undefined,
               draft_mail: mail.full,
               mail_to: mail.to,
             },
@@ -202,18 +322,20 @@ export function SignoffCard({
       ) : null}
       {c.reasons?.length ? (
         <div>
-          <div className="mb-1 text-[12px] text-ink-68">Why a person is asked</div>
-          <ul className="list-disc space-y-0.5 pl-5">
+          <div className="mb-1.5 text-[12px] text-ink-68">Why a person is asked</div>
+          <ul className="space-y-2">
             {c.reasons.map((r) => (
-              <li key={r}>{r}</li>
+              <li key={r} className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] leading-snug">
+                {r}
+              </li>
             ))}
           </ul>
         </div>
       ) : null}
-      <Proposal proposal={c.proposal} />
+      <ProposalBody signoff={c} />
 
       {open ? (
-        <div className="space-y-2 rounded-[12px] bg-hh-honeydew p-3">
+        <div className="space-y-3 rounded-[12px] bg-hh-honeydew p-3">
           <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
             <input
               className="h-9 rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
@@ -236,23 +358,44 @@ export function SignoffCard({
               onChange={(e) => setManualEdi(e.target.value)}
             />
           ) : null}
+
           {qtyChoice ? (
-            <p className="text-[12px] text-ink-68">
-              Split continues toward ORDRSP for the available quantity only. Mail opens a compose window — no ORDRSP while
-              blocked.
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            {qtyChoice ? (
-              <>
-                <button
-                  type="button"
-                  disabled={busy || !by.trim() || !reason.trim()}
-                  onClick={() => void decide(true, { qty_action: "split" })}
-                  className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-                >
-                  Split available qty
-                </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={busy || !by.trim() || !reason.trim()}
+                onClick={() => void decide(true, { qty_action: "split" })}
+                className="rounded-[12px] bg-hh-dark px-3 py-3 text-left text-hh-window disabled:opacity-40"
+              >
+                <div className="font-bold text-[13px]">{splitCopy.headline}</div>
+                <div className="mt-1 text-[12px] text-hh-window/80">{splitCopy.detail}</div>
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError(undefined);
+                  setComposeMail(true);
+                }}
+                className="rounded-[12px] bg-hh-seasalt px-3 py-3 text-left shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
+              >
+                <div className="font-bold text-[13px] text-ink">Email &amp; park as pending</div>
+                <div className="mt-1 text-[12px] text-ink-68">
+                  Open the mail to the retailer, send it, and park this order. No ORDRSP while it is blocked.
+                </div>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={busy || !by.trim() || !reason.trim()}
+                onClick={() => void decide(true)}
+                className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+              >
+                {sendOffLabel}
+              </button>
+              {priceCase || manualEdiCase ? (
                 <button
                   type="button"
                   disabled={busy}
@@ -262,32 +405,13 @@ export function SignoffCard({
                   }}
                   className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
                 >
-                  Mail…
+                  Mail &amp; park…
                 </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={busy || !by.trim() || !reason.trim()}
-                onClick={() => void decide(true)}
-                className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-              >
-                {sendOffLabel}
-              </button>
-            )}
-            {priceCase ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setError(undefined);
-                  setComposeMail(true);
-                }}
-                className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
-              >
-                Mail &amp; park…
-              </button>
-            ) : null}
+              ) : null}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={busy || !by.trim() || !reason.trim()}
@@ -314,12 +438,11 @@ export function SignoffCard({
               Sent to Shipping as <b>{String(result.shipping_ref)}</b> (ready to ship).
             </p>
           ) : null}
-          <pre className="mt-2 max-h-60 overflow-auto rounded-lg bg-hh-honeydew p-3 font-mono text-[11px] text-ink-78">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          {result.status === "parked" ? (
+            <p className="mt-2 rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] text-ink">Order parked as pending.</p>
+          ) : null}
         </details>
       ) : null}
-
     </div>
   );
 

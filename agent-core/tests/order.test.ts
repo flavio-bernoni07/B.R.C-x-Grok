@@ -8,6 +8,7 @@ import { StubAvailabilityProvider } from "../agent/lib/order/availability";
 import { checkPrices, loadContract } from "../agent/lib/order/contract";
 import { decideSignoff } from "../agent/lib/order/decide";
 import * as grokbot from "../agent/lib/order/grokbot";
+import { codeParseFix } from "../agent/lib/order/grokbot";
 import { parseOrdersEdi, parseOrdersFile } from "../agent/lib/order/parser";
 import { PipelineStatus, runOrderFile } from "../agent/lib/order/pipeline";
 import {
@@ -257,10 +258,25 @@ describe("order service on the Mini ERP", () => {
     expect("step" in again && again.step).toBe("confirm");
   });
 
-  it("unreadable EDI without Grok goes to a person", async () => {
+  it("codeParseFix repairs DTM ISO dates and Italian thousands QTY", () => {
+    const messy = edi("ordine_ess_messy.edi");
+    const fix = codeParseFix(messy, [
+      { code: "dtm_bad_format", message: "bad date", segment: "DTM" },
+      { code: "qty_ambiguous_it_thousands", message: "IT thousands", segment: "QTY" },
+    ]);
+    expect(fix).not.toBeNull();
+    expect(fix!.corrected_edi).toContain("20261104");
+    expect(fix!.corrected_edi).toContain("QTY+21:20000");
+    expect(fix!.corrected_edi).not.toContain("20.000");
+  });
+
+  it("messy EDI is auto-fixed by offline Grokbot (date + IT thousands) without a person", async () => {
     const erp = freshErp();
     const r = await receiveOrder(erp, edi("ordine_ess_messy.edi"));
-    expect(r.step).toBe("manual_edi");
+    // No live key: codeParseFix applies the same safe repairs Grokbot would.
+    expect(r.step).toBe("confirm");
+    expect(r.status).toBe("awaiting_person");
+    expect(erp.auditLog().some((a) => a.actor === "grok" && a.action === "order.parse_fix")).toBe(true);
   });
 
   it("Grok's parse fix is parsed again and shown to the person", async () => {
@@ -274,7 +290,7 @@ describe("order service on the Mini ERP", () => {
     });
     const r = await receiveOrder(erp, messy, { caller });
     expect(r.step).toBe("confirm");
-    expect(erp.signoff(r.case_id)!.reasons!.some((x) => x.includes("Grok corrected the EDI: QTY: 20.000 -> 20000"))).toBe(true);
+    expect(erp.signoff(r.case_id)!.reasons!.some((x) => /Grokbot corrected the EDI:.*QTY: 20\.000/.test(x))).toBe(true);
   });
 
   it("Grok cannot put new figures in the qty message", async () => {

@@ -200,8 +200,8 @@ export function SignoffView() {
       ) : null}
       {tab === "quantity" ? (
         <p className="mb-3 text-[13px] text-ink-78">
-          Stock is short. Open a case: <b>Split available qty</b> (continue toward ORDRSP) or <b>Mail</b> (compose and
-          park — no ORDRSP while blocked).
+          Stock is short. Open a case and choose: <b>Split</b> (ship available now, remainder as a later order) or{" "}
+          <b>Email &amp; park</b> (mail the retailer, order stays pending — no ORDRSP).
         </p>
       ) : null}
 

@@ -146,10 +146,13 @@ export async function receiveOrder(
       lastFlags = result.parse ? result.parse.flags.map((f) => ({ ...f })) : [];
       const fix = await proposeParseFix(edi, lastFlags, { caller });
       if (fix && round < MAX_ROUNDS) {
+        // Live Grok or the offline Grokbot rules (date / IT thousands) — same apply path.
         erp.log("grok", "order.parse_fix", ref, { sourceDoc: docId, detail: fix.changes ?? null });
-        const changed = (fix.changes || []).map((c) => `${pyStr(c.segment)}: ${pyStr(c.before)} -> ${pyStr(c.after)}`).join(", ");
-        notes.push(`Grok corrected the EDI (${changed}); the parser read it again.`);
-        personReasons.push(`Grok corrected the EDI: ${changed || "see changes"}`);
+        const changed = (fix.changes || [])
+          .map((c) => `${pyStr(c.segment)}: ${pyStr(c.before)} → ${pyStr(c.after)}`)
+          .join(", ");
+        notes.push(`Grokbot corrected the EDI (${changed}); the parser read it again.`);
+        personReasons.push(`Grokbot corrected the EDI: ${changed || "see changes"}`);
         edi = fix.corrected_edi;
         continue;
       }
@@ -158,8 +161,17 @@ export async function receiveOrder(
         kind: "manual_edi",
         subjectRef: ref || docId,
         title: `Order ${ref || "(no number)"}: the EDI cannot be read safely`,
-        proposal: { flags: lastFlags, edi, options: ["manual_edi", "park_pending"] },
-        reasons: [`the parser could not read the EDI and Grok had no safe fix: ${lastFlags.map((f) => f.message).join("; ")}`],
+        proposal: {
+          flags: lastFlags.map((f) => ({
+            what: f.message,
+            where: f.segment || null,
+            code: f.code,
+          })),
+          options: ["manual_edi", "park_pending"],
+        },
+        reasons: [
+          `The order file could not be read safely and Grokbot had no automatic fix: ${lastFlags.map((f) => f.message).join("; ")}`,
+        ],
       });
       if (ref && parsed) {
         erp.saveOrder({
@@ -209,8 +221,17 @@ export async function receiveOrder(
           kind: "stock_short",
           subjectRef: ref || docId,
           title: `Order ${pyStr(ref)}: not enough stock and no split is possible`,
-          proposal: { availability: result.availability.map((a) => ({ ...a })), edi },
-          reasons: ["stock is short and code found no quantity available to ship now"],
+          proposal: {
+            edi,
+            summary: "Nothing can ship now — stock is too short for a partial delivery.",
+            availability: result.availability.map((a) => ({
+              product: erp.product({ gtin: a.gtin })?.name || a.gtin,
+              ordered: a.ordered_qty,
+              available: a.available_qty,
+              ok: a.ok,
+            })),
+          },
+          reasons: ["Stock is short and there is no quantity available to ship now."],
         });
         if (ref) {
           erp.saveOrder({
@@ -263,23 +284,36 @@ export async function receiveOrder(
         subjectRef: ref || docId,
         title: `Order ${pyStr(ref)}: stock short — split available qty or mail the retailer`,
         proposal: {
+          // Kept for split rebuild; the UI does not show raw EDI on this gate.
           edi,
-          availability: result.availability.map((a) => ({ ...a })),
-          lines,
+          lines: lines.map((l) => ({
+            product: l.product,
+            ordered: l.ordered_qty,
+            ship_now: l.now_qty,
+            later: l.later_qty,
+            later_date: l.later_date,
+            line_no: l.line_no,
+            gtin: l.gtin,
+            ordered_qty: l.ordered_qty,
+            available_qty: l.available_qty,
+            now_qty: l.now_qty,
+            later_qty: l.later_qty,
+          })),
           draft_mail: draftMail,
           grokbot: notes,
           options: ["split", "mail"],
-          atp_hint:
-            short.gtin != null
-              ? `erp ATP for ${short.gtin}: ${pyG(short.available_qty)} now` +
-                (short.later_date ? `; next ready ${short.later_date}` : "")
-              : null,
+          summary:
+            short.later_date && short.later_qty > 0
+              ? `Ship ${pyG(short.now_qty)} now; ${pyG(short.later_qty)} later (${short.later_date}). Or email the retailer and park.`
+              : `Ship ${pyG(short.now_qty)} of ${pyG(short.ordered_qty)} now. Or email the retailer and park.`,
         },
-        reasons: lines.map(
-          (l) =>
-            `GTIN ${pyStr(l.gtin)}: ordered ${pyG(l.ordered_qty)}, available now ${pyG(l.available_qty)}` +
-            (l.later_date ? ` (remainder ${pyG(l.later_qty)} tentatively ${l.later_date})` : ""),
-        ),
+        reasons: lines.map((l) => {
+          const name = l.product || pyStr(l.gtin);
+          const base = `${name}: ordered ${pyG(l.ordered_qty)}, only ${pyG(l.available_qty)} available now`;
+          return l.later_date && l.later_qty > 0
+            ? `${base}; remainder ${pyG(l.later_qty)} can ship later (${l.later_date})`
+            : base;
+        }),
       });
       erp.log("code", "order.qty_short", ref, {
         sourceDoc: docId,
@@ -314,8 +348,11 @@ export async function receiveOrder(
           grokbot: notes,
           price_check: result.price_check ? result.price_check.toDict() : null,
           options: ["manual_edi", "park_pending"],
+          summary: `Unit price on the ORDERS does not match contract ${contract.id}. Mail the retailer or paste a corrected ORDERS.`,
         },
-        reasons: reasons.length ? reasons : ["the price check failed"],
+        reasons: reasons.length
+          ? reasons.map((r) => r.replace(/^GTIN /, "Product "))
+          : ["The price on the order does not match the supply contract."],
       });
       erp.log("code", "order.price_mismatch", ref, { sourceDoc: docId, detail: { case: caseId } });
       return { status: "awaiting_person", case_id: caseId, order_ref: ref, step: "price_fix" };

@@ -26,12 +26,61 @@ export type ParseFix = {
   [k: string]: unknown;
 };
 
+/**
+ * Deterministic Grokbot repairs for the well-known parse flags (date ISO → YYYYMMDD,
+ * Italian thousands in QTY). Used offline when there is no key, and as a fallback when
+ * chat is unavailable or low-confidence — so fixable EDI never sits in manual_edi / Other.
+ */
+export function codeParseFix(
+  rawEdi: string,
+  flags: Pick<ParseFlag, "code" | "message" | "segment">[],
+): ParseFix | null {
+  let edi = rawEdi;
+  const changes: ParseFix["changes"] = [];
+  const codes = new Set(flags.map((f) => f.code));
+
+  if (codes.has("dtm_bad_format")) {
+    edi = edi.replace(/DTM\+([^+:]+):(\d{4})-(\d{2})-(\d{2}):(\d+)/g, (_m, qual, y, mo, d, fmt) => {
+      const before = `${y}-${mo}-${d}`;
+      const after = `${y}${mo}${d}`;
+      changes.push({
+        segment: "DTM",
+        before,
+        after,
+        why: "Order dates in ORDERS must be YYYYMMDD",
+      });
+      return `DTM+${qual}:${after}:${fmt}`;
+    });
+  }
+
+  if (codes.has("qty_ambiguous_it_thousands") || codes.has("qty_ambiguous_dot")) {
+    edi = edi.replace(/QTY\+(\d+):(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+\.\d{3})/g, (full, qual, raw) => {
+      let normalized = String(raw).replace(/\./g, "");
+      if (normalized.includes(",")) normalized = normalized.replace(/,/g, ".");
+      if (!/^\d+(\.\d+)?$/.test(normalized)) return full;
+      changes.push({
+        segment: "QTY",
+        before: String(raw),
+        after: normalized,
+        why: "Italian thousands grouping in the quantity",
+      });
+      return `QTY+${qual}:${normalized}`;
+    });
+  }
+
+  if (!changes.length || edi === rawEdi) return null;
+  return { corrected_edi: edi, changes, confidence: 0.9 };
+}
+
 export async function proposeParseFix(
   rawEdi: string,
-  flags: Pick<ParseFlag, "code" | "message">[],
+  flags: Pick<ParseFlag, "code" | "message" | "segment">[],
   opts: { caller?: Caller | null } = {},
 ): Promise<ParseFix | null> {
-  if (!live(opts.caller)) return null;
+  const offline = () => codeParseFix(rawEdi, flags);
+
+  if (!live(opts.caller)) return offline();
+
   const messages: Message[] = [
     {
       role: "system",
@@ -64,9 +113,9 @@ export async function proposeParseFix(
   try {
     payload = await chatJson(messages, { task: "order.fix_parse", validate, caller: opts.caller });
   } catch {
-    return null;
+    return offline();
   }
-  if (Number(payload.confidence || 0) < 0.5) return null;
+  if (Number(payload.confidence || 0) < 0.5) return offline();
   return payload as ParseFix;
 }
 
