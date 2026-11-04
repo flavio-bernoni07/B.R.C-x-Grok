@@ -7,7 +7,7 @@ Design for the **Grok decides** column of the process map, shared by all three r
 - **One agent for every lane.** Today each lane calls Grok on its own. Dispute has two copies of `call_grok`, Order has its Grokbot steps, and Shipping has a case package nobody sends. They become one client, one contract and one Playbook.
 - **Grok proposes, code checks, a person decides when it is unclear.** Grok never writes an amount or a document. Every number it uses must come from the facts it was given.
 - **It learns from every human decision.** Each sign-off is saved with its reason. Similar cases then reuse it as a precedent. When the same decision repeats, it becomes a Playbook rule, after a person approves the rule.
-- **The case curve.** Week after week, a smaller share of cases needs a person. The curve flattens at a floor: some cases always need sign-off, such as anything over €500.
+- **The case curve.** Week after week, a smaller share of cases needs a person. The curve flattens at a floor: some cases always need sign-off, such as every Order confirmation and every Shipping exception resolution.
 - **Efficiency on top of the loop:**
   - cases that match an approved rule exactly skip the Grok call
   - similar open questions go to a person together
@@ -34,7 +34,8 @@ These are the white boxes in the **Grok decides** column of the map, plus the tw
 
 The sign-off rules stay as each lane decided them:
 - **Order:** a person always signs before ORDRSP (`order-dec.md`).
-- **Shipping and Dispute:** a person signs over €500, or when Grok is unsure or has no source.
+- **Shipping:** an employee in the case's role approves every exception resolution.
+- **Dispute:** a person signs whenever the case is ambiguous: Grok is unsure, a point has no source, the claim type is not in the Playbook, or a document is missing. There is no euro threshold (DECISIONS.md, 4 Nov).
 
 ## One contract for every call
 
@@ -53,7 +54,7 @@ Every lane sends the same kind of request and gets the same kind of answer. The 
   "rules": ["R-DSP-007"],
   "precedents": ["CASE-00017", "CASE-00031"],
   "allowed_actions": ["accept", "partial", "reject"],
-  "sign_off_over_eur": 500
+  "sign_off": "when anything is ambiguous"
 }
 ```
 
@@ -81,7 +82,7 @@ A rejected answer is sent back to Grok once, with the reason. If it fails again,
 ## When it asks a person
 
 A case goes to the sign-off desk when any of these is true:
-- the lane's own rule says so (Order: always; others: over €500)
+- the lane's own rule says so (Order: always; Shipping: every exception resolution). There is no euro threshold
 - Grok's confidence is under the threshold for that task (starting at 0.7, then tuned, see below)
 - Grok listed an open question
 - facts are missing or conflict, for example two invoices match one claim
@@ -98,7 +99,7 @@ flowchart LR
   rule -->|yes| apply[Apply the rule, no Grok call]
   rule -->|no| grok[Grok with rules + 3 closest precedents]
   grok --> check[Code checks the answer]
-  apply --> gate{Ambiguous or over the threshold?}
+  apply --> gate{Ambiguous, or the lane always asks?}
   check --> gate
   gate -->|no| run[Code runs the action]
   gate -->|yes| human[Person approves, edits or rejects, with a reason]
