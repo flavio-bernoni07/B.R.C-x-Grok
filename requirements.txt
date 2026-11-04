@@ -1,0 +1,3 @@
+# Runtime uses the stdlib only (urllib + dataclasses).
+# Dev / CI:
+pytest>=8.0,<9
