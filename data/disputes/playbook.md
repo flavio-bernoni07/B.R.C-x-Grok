@@ -64,4 +64,4 @@ Code checks the same list and sends the case to a person even if you say false.
 
 | Date | Order | Type | Decision | Amount € | Notes |
 |------|-------|------|----------|----------|-------|
-| — | — | — | — | — | No past cases yet |
+| 2026-11-04 | ESS-AMB-001 | damage | accept (approved) | 444.00 | Sara, credit desk: Crushed pallet is on the signed DDT and the RECADV |

@@ -1,0 +1,67 @@
+{
+  "_comment": "Recorded Grok answers for the ambiguous-order scenario, used when no key is set. They go through exactly the same code checks as a live answer. Run with a key (XAI_API_KEY, or .env.local) to call Grok for real.",
+  "fix_parse": {
+    "corrected_edi": "UNH+1+ORDERS:D:96A:UN'\nBGM+220+ESS-AMB-001+9'\nDTM+137:20261104:102'\nNAD+BY+BUYER001::9'\nNAD+SU+SUPPLIER001::9'\nLIN+1++8000000000000:EN'\nQTY+21:6000'\nPRI+AAA:1.85:CT'\nUNS+S'\nUNT+10+1'\n",
+    "confidence": 0.86,
+    "changes": [
+      {
+        "segment": "DTM",
+        "before": "04/11/2026",
+        "after": "20261104",
+        "why": "dd/mm/yyyy written instead of CCYYMMDD"
+      },
+      {
+        "segment": "QTY",
+        "before": "6.000",
+        "after": "6000",
+        "why": "Italian thousands separator: six thousand packs, not six"
+      }
+    ]
+  },
+  "read_claim": {
+    "order_ref": "ESS-AMB-001",
+    "invoice_ref": "FT-2026/0001",
+    "product": "Arborio 1 kg",
+    "quantity": 240,
+    "amount": 444.0,
+    "claim_type": "damage",
+    "confidence": 0.91,
+    "raw_notes": "Order written with spaces (ESS AMB 001); last pallet crushed at unloading, reservation on the DDT"
+  },
+  "verdict": {
+    "decision": "accept",
+    "amount": 444.0,
+    "confidence": 0.88,
+    "needs_sign_off": false,
+    "summary": "The signed DDT carries a reservation for 240 crushed packs and the retailer's RECADV refuses the same 240. Credit 240 x 1.85.",
+    "points": [
+      {
+        "text": "DDT signed at unloading with a reservation: 240 packs crushed",
+        "amount": 444.0,
+        "source": {
+          "kind": "pod",
+          "ref": "DDT-ESS-AMB-001-1",
+          "detail": "POD-DESADV-ESS-AMB-001-1"
+        }
+      },
+      {
+        "text": "RECADV REC-ESS-90117 accepts 5760 of 6000 and refuses 240",
+        "amount": null,
+        "source": {
+          "kind": "other",
+          "ref": "REC-ESS-90117",
+          "detail": "retailer receiving advice"
+        }
+      },
+      {
+        "text": "Playbook damage rule: accept the damaged quantity at the order price when a signed DDT supports it",
+        "amount": null,
+        "source": {
+          "kind": "playbook",
+          "ref": "Damage",
+          "detail": "signed DDT annotation"
+        }
+      }
+    ]
+  }
+}
