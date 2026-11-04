@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR]" >&2
+  echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME]" >&2
   exit 2
 fi
 
@@ -24,6 +24,8 @@ CLAIM=""
 OFFLINE=0
 OUT_DIR="${OUT_DIR:-}"
 ISSUE_DATE="${ISSUE_DATE:-2026-11-04}"
+# Demo default: auto-approve ambiguous verdicts so reject replies / TD04 emit.
+APPROVED_BY="${APPROVED_BY:-demo}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,8 +38,16 @@ while [[ $# -gt 0 ]]; do
       OUT_DIR="${1#*=}"
       shift
       ;;
+    --approved-by)
+      APPROVED_BY="$2"
+      shift 2
+      ;;
+    --approved-by=*)
+      APPROVED_BY="${1#*=}"
+      shift
+      ;;
     -h|--help)
-      echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR]"
+      echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME]"
       exit 0
       ;;
     *)
@@ -119,12 +129,18 @@ else
   VERDICT="$OUT_DIR/03_verdict.json"
 fi
 
-python3 -m dispute.outcome \
-  --verdict "$VERDICT" \
-  --facts "$OUT_DIR/02_facts.json" \
-  --out-dir "$OUT_DIR/outcome" \
-  --issue-date "$ISSUE_DATE" \
-  >"$OUT_DIR/04_outcome.json"
+# Always pass --approved-by for mentor demos: verdicts with needs_sign_off
+# (e.g. claim 05 ambiguous reject) otherwise stop at awaiting_sign_off.
+OUTCOME_ARGS=(
+  --verdict "$VERDICT"
+  --facts "$OUT_DIR/02_facts.json"
+  --out-dir "$OUT_DIR/outcome"
+  --issue-date "$ISSUE_DATE"
+)
+if [[ -n "$APPROVED_BY" ]]; then
+  OUTCOME_ARGS+=(--approved-by "$APPROVED_BY")
+fi
+python3 -m dispute.outcome "${OUTCOME_ARGS[@]}" >"$OUT_DIR/04_outcome.json"
 
 python3 - <<PY
 import json
