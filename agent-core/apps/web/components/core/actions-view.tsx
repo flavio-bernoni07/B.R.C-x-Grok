@@ -466,7 +466,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
       {takesEdi ? (
         <textarea
           className="h-24 w-full rounded-lg border bg-hh-seasalt p-2 font-mono text-[11px] outline-none focus:border-hh-asparagus"
-          placeholder="Optional: paste the corrected ORDERS EDI. Approving without it parks the order as pending until a new ORDERS arrives."
+          placeholder="Optional: paste the corrected ORDERS EDI. Approving without it leaves the order Pending until a new ORDERS arrives."
           value={manualEdi}
           onChange={(e) => setManualEdi(e.target.value)}
         />

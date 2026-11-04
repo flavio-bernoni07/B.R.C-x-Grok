@@ -125,15 +125,15 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
     return { pill: { tone: "attention", label: "Needs a person" }, check: "All checks passed; a person confirms before ORDRSP" };
   }
   if (status === "pending_price" || status === "price_fix") {
-    return { pill: { tone: "attention", label: "Needs a person" }, check: "Price does not match the contract; manual EDI or park" };
+    return { pill: { tone: "attention", label: "Needs a person" }, check: "Price does not match the contract; manual EDI or Pending" };
   }
   if (status === "pending_manual_edi" || status === "manual_edi") {
-    return { pill: { tone: "attention", label: "Needs a person" }, check: "EDI cannot be read safely; manual EDI or park" };
+    return { pill: { tone: "attention", label: "Needs a person" }, check: "EDI cannot be read safely; manual EDI or Pending" };
   }
   if (status === "pending_qty" || status === "qty_choice") {
     return {
       pill: { tone: "attention", label: "Needs a person" },
-      check: "Stock short: choose split (ORDRSP for available qty) or mail (park, no ORDRSP)",
+      check: "Stock short: choose split (ORDRSP for available qty) or mail (Pending, no ORDRSP)",
     };
   }
   if (status === "stock_short") {
@@ -141,7 +141,7 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
   }
   if (status === "pending") {
     const why = last?.kind === "qty_choice" ? "Stock short (mail)" : "Price mismatch";
-    return { pill: { tone: "quiet", label: "Parked" }, check: `${why}: parked${decidedBy(last)} until a new ORDERS` };
+    return { pill: { tone: "quiet", label: "Pending" }, check: `${why}: Pending${decidedBy(last)} until a new ORDERS` };
   }
   if (status === "rejected") return { pill: { tone: "quiet", label: "Rejected" }, check: `Rejected${decidedBy(last)}` };
   return { pill: { tone: "wait", label: "Checking" }, check: "Checks running" };

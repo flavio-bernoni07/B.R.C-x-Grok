@@ -194,17 +194,19 @@ describe("order service on the Mini ERP", () => {
     expect(c.reasons!.some((x) => x.includes("operator split to 10800"))).toBe(true);
   });
 
-  it("short stock: operator mail parks with no ORDRSP", async () => {
+  it("short stock: operator mail → Pending with no ORDRSP", async () => {
     const erp = freshErp();
     recordEvent(erp, "quality_hold", { batch: "LOT-C-0418", qty: 1200 });
     const r = await receiveOrder(erp, ediFor("ESS-MAIL", "8000000000001", 12000, 2.2));
     expect(r.step).toBe("qty_choice");
-    const parked = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ask Esselunga first", action: "mail" });
-    expect(parked.status).toBe("parked");
+    const held = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ask Esselunga first", action: "mail" });
+    expect(held.status).toBe("pending");
     expect(erp.order("ESS-MAIL")!.status).toBe("pending");
     expect(erp.documents({ ref: "ESS-MAIL", kind: "ORDRSP" })).toHaveLength(0);
     expect(String(erp.signoff(r.case_id)!.proposal!.draft_mail)).toContain("partial availability");
-    expect(erp.signoff(r.case_id)!.status).toBe("parked");
+    const so = erp.signoff(r.case_id)!;
+    expect(so.status).toBe("pending");
+    expect(so.decidedAt).toBeTruthy();
   });
 
   it("simulate feed keeps the 22 bench POs and never stops on the first human gate", async () => {
@@ -263,11 +265,13 @@ describe("order service on the Mini ERP", () => {
     expect(r.step).toBe("price_fix");
     expect(erp.order(r.order_ref!)!.status).toBe("pending_price");
     expect(erp.signoff(r.case_id)!.reasons![0]).toContain("€2.5");
-    const parked = await resolvePriceCase(erp, r.case_id, { by: "Giulia", reason: "wait for Esselunga" });
-    expect(parked.status).toBe("parked");
+    const held = await resolvePriceCase(erp, r.case_id, { by: "Giulia", reason: "wait for Esselunga" });
+    expect(held.status).toBe("pending");
     expect(erp.order(r.order_ref!)!.status).toBe("pending");
     // Desk: Pending scheda, not Decided.
-    expect(erp.signoff(r.case_id)!.status).toBe("parked");
+    const so = erp.signoff(r.case_id)!;
+    expect(so.status).toBe("pending");
+    expect(so.decidedAt).toBeTruthy();
   });
 
   it("manual EDI goes back to parse", async () => {

@@ -250,7 +250,7 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
   // exceptions: open sign-offs and shipping cases (people decide in Actions)
   const exceptions: WorkspaceException[] = [];
   const claimIds = new Set(c.claims.map((cl) => cl.claim_id));
-  for (const s of erp.signoffs({ status: "pending" })) {
+  for (const s of erp.signoffs({ status: "pending" }).filter((x) => !x.decidedAt)) {
     if (s.subjectRef === ref || (order.sourceDoc && s.subjectRef === order.sourceDoc) || claimIds.has(s.subjectRef ?? "")) {
       exceptions.push({ caseId: s.caseId, text: s.title || (s.reasons ?? []).join("; ") || "Waiting for a person", href: `/actions?case=${encodeURIComponent(s.caseId)}` });
     }

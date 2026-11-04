@@ -10,7 +10,7 @@ function splitDraft(draft: string): { subject: string; body: string } {
   return { subject: "", body: text.replace(/\n?— Draft — review and send manually —\s*$/i, "").trim() };
 }
 
-/** Simulated outbound mail: edit To / Subject / Body, then Send parks the order with the text. */
+/** Simulated outbound mail: edit To / Subject / Body, then Send moves the order to Pending. */
 export function MailCompose({
   title,
   defaultTo,
@@ -48,7 +48,7 @@ export function MailCompose({
     <div className="space-y-3 text-[13px]">
       <p className="text-[12.5px] text-ink-68">
         Review Grok’s draft{title ? <> for <b className="text-ink">{title}</b></> : null}, then send. Delivery is
-        simulated — the order parks with no ORDRSP.
+        simulated — the order goes to Pending with no ORDRSP.
       </p>
       <label className="block space-y-1">
         <span className="text-[12px] text-ink-68">Your name</span>
@@ -111,7 +111,7 @@ export function MailCompose({
   return (
     <DeskModal
       title={title}
-      aside="Review Grok’s draft, then send. Delivery is simulated — the order parks with no ORDRSP."
+      aside="Review Grok’s draft, then send. Delivery is simulated — the order goes to Pending with no ORDRSP."
       onClose={onCancel}
       wide
     >

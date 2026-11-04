@@ -17,16 +17,22 @@ export function signoffTone(status: string): PillTone {
   return status === "pending" ? "attention" : status === "approved" ? "ok" : "wait";
 }
 
-export function SignoffStatus({ status }: { readonly status: string }) {
-  const label =
-    status === "pending"
+export function SignoffStatus({
+  status,
+  decidedAt,
+}: {
+  readonly status: string;
+  readonly decidedAt?: string | null;
+}) {
+  const holdPending = (status === "pending" && !!decidedAt) || status === "parked";
+  const label = holdPending
+    ? "Pending"
+    : status === "pending"
       ? "Needs a person"
-      : status === "parked"
-        ? "Pending (parked)"
-        : status === "approved"
-          ? "Approved"
-          : "Rejected";
-  return <Pill tone={status === "parked" ? "quiet" : signoffTone(status)}>{label}</Pill>;
+      : status === "approved"
+        ? "Approved"
+        : "Rejected";
+  return <Pill tone={holdPending ? "quiet" : signoffTone(status)}>{label}</Pill>;
 }
 
 const EdiBox = ({ title, text }: { readonly title: string; readonly text: string }) => (
@@ -283,7 +289,8 @@ export function SignoffCard({
     onDecided?.(data);
   };
 
-  const open = c.status === "pending";
+  const open = c.status === "pending" && !c.decidedAt;
+  const holdPending = (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
   const sendOffLabel = confirmLabel ?? (c.kind === "confirm" ? "Send off" : "Approve");
 
   if (composeMail && open) {
@@ -319,7 +326,10 @@ export function SignoffCard({
     );
     if (embedded) return mailUi;
     return (
-      <Panel title={<span className="flex items-center gap-2">{c.title ?? c.kind}</span>} aside={<SignoffStatus status={c.status} />}>
+      <Panel
+        title={<span className="flex items-center gap-2">{c.title ?? c.kind}</span>}
+        aside={<SignoffStatus status={c.status} decidedAt={c.decidedAt} />}
+      >
         {mailUi}
       </Panel>
     );
@@ -365,7 +375,7 @@ export function SignoffCard({
           {takesEdi ? (
             <textarea
               className="h-24 w-full rounded-lg border bg-hh-seasalt p-2 font-mono text-[11px] outline-none focus:border-hh-asparagus"
-              placeholder="Optional: paste the corrected ORDERS EDI. Approving without it parks the order as pending until a new ORDERS arrives."
+              placeholder="Optional: paste the corrected ORDERS EDI. Approving without it leaves the order Pending until a new ORDERS arrives."
               value={manualEdi}
               onChange={(e) => setManualEdi(e.target.value)}
             />
@@ -391,9 +401,9 @@ export function SignoffCard({
                 }}
                 className="rounded-[12px] bg-hh-seasalt px-3 py-3 text-left shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
               >
-                <div className="font-bold text-[13px] text-ink">Email &amp; park as pending</div>
+                <div className="font-bold text-[13px] text-ink">Email &amp; Pending</div>
                 <div className="mt-1 text-[12px] text-ink-68">
-                  Open the mail to the retailer, send it, and park this order. No ORDRSP while it is blocked.
+                  Open the mail to the retailer, send it, and move this order to Pending. No ORDRSP while it is blocked.
                 </div>
               </button>
             </div>
@@ -417,7 +427,7 @@ export function SignoffCard({
                   }}
                   className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
                 >
-                  Mail &amp; park…
+                  Mail → Pending…
                 </button>
               ) : null}
             </div>
@@ -438,12 +448,11 @@ export function SignoffCard({
         </div>
       ) : (
         <p className="text-ink-78">
-          {c.status === "parked" ? "Parked (pending)" : c.status === "approved" ? "Approved" : "Rejected"} by{" "}
-          <b>{c.decidedBy}</b>
+          {holdPending ? "Pending" : c.status === "approved" ? "Approved" : "Rejected"} by <b>{c.decidedBy}</b>
           {c.decisionReason ? `: “${c.decisionReason}”` : ""} {c.decidedAt ? `· ${day(c.decidedAt)}` : ""}
         </p>
       )}
-      {c.status === "parked" ? (
+      {holdPending ? (
         <p className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] text-ink">
           Waiting on the retailer (or a new ORDERS). This case stays under <b>Pending</b>, not Decided.
         </p>
@@ -456,8 +465,8 @@ export function SignoffCard({
               Sent to Shipping as <b>{String(result.shipping_ref)}</b> (ready to ship).
             </p>
           ) : null}
-          {result.status === "parked" ? (
-            <p className="mt-2 rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] text-ink">Order parked as pending.</p>
+          {result.status === "pending" || result.status === "parked" ? (
+            <p className="mt-2 rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] text-ink">Order moved to Pending.</p>
           ) : null}
         </details>
       ) : null}
@@ -473,7 +482,7 @@ export function SignoffCard({
         <span className="flex items-center gap-2">
           <SourceTag>{c.caseId}</SourceTag>
           <span>{ROW_LABEL[c.row] ?? c.row}</span>
-          <SignoffStatus status={c.status} />
+          <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
         </span>
       }
     >
@@ -498,7 +507,7 @@ export function SignoffQueue({ cases, compact = false }: { readonly cases: Signo
             <span className="w-[72px] shrink-0 font-bold text-[13px]">{c.caseId}</span>
             <span className="w-[64px] shrink-0 text-[12px] text-ink-68">{ROW_LABEL[c.row] ?? c.row}</span>
             <span className={cn("min-w-0 flex-1 truncate text-[13px]", compact && "text-ink-78")}>{c.title ?? c.kind}</span>
-            <SignoffStatus status={c.status} />
+            <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
           </button>
           {openId === c.caseId ? (
             <div className="mt-2">

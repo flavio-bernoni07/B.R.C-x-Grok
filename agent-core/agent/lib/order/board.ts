@@ -10,7 +10,7 @@ export type OrderBoardStage =
   | "signoff_price"
   | "signoff_qty"
   | "signoff_sendoff"
-  | "parked"
+  | "pending"
   | "assigned"
   | "ready_wms"
   | "preparing"
@@ -23,7 +23,7 @@ export const BOARD_STAGE_LABEL: Record<OrderBoardStage, string> = {
   signoff_price: "Sign-off · Price",
   signoff_qty: "Sign-off · Quantity",
   signoff_sendoff: "Sign-off · Send-off",
-  parked: "Parked (pending)",
+  pending: "Pending",
   assigned: "Assigned to shipping",
   ready_wms: "Sent to WMS",
   preparing: "Preparing",
@@ -55,7 +55,7 @@ function stageFor(erp: Erp, orderRef: string, status: string, caseKind: string |
     return "ready_wms";
   }
   if (status === "confirmed") return "assigned";
-  if (status === "pending") return "parked";
+  if (status === "pending") return "pending";
   if (status === "awaiting_confirmation" || caseKind === "confirm") return "signoff_sendoff";
   if (status === "pending_price" || status === "price_fix" || caseKind === "price_fix") return "signoff_price";
   if (

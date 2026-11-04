@@ -42,8 +42,8 @@ export function caseAmount(c: Pick<Signoff, "proposal">): { eur: number; label: 
 
 export type Autonomy = "Approval required" | "Blocked" | "Done";
 
-export function caseAutonomy(c: Pick<Signoff, "status" | "reasons">): Autonomy {
-  if (c.status !== "pending") return "Done";
+export function caseAutonomy(c: Pick<Signoff, "status" | "reasons" | "decidedAt">): Autonomy {
+  if (c.status !== "pending" || c.decidedAt) return "Done";
   const text = (c.reasons ?? []).join(" ").toLowerCase();
   return /missing|no source|not found/.test(text) ? "Blocked" : "Approval required";
 }
@@ -65,8 +65,8 @@ export function caseNextStep(c: Pick<Signoff, "row" | "kind" | "proposal">): str
 }
 
 /** Urgency: blocked and money cases first, then by age. */
-export function caseUrgency(c: Pick<Signoff, "status" | "reasons" | "proposal" | "row">): "High" | "Normal" | "None" {
-  if (c.status !== "pending") return "None";
+export function caseUrgency(c: Pick<Signoff, "status" | "reasons" | "proposal" | "row" | "decidedAt">): "High" | "Normal" | "None" {
+  if (c.status !== "pending" || c.decidedAt) return "None";
   if (caseAutonomy(c) === "Blocked" || c.row === "order" || c.row === "shipping") return "High";
   return "Normal";
 }

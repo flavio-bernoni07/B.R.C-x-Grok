@@ -8,15 +8,23 @@ import { Page } from "@/components/shell/app-shell";
 import { DeskModal } from "./desk-modal";
 import { SignoffCard, SignoffStatus } from "./signoff";
 
-/** Desk tabs: board + gates + Pending (mail/park) + Decided (true close). */
+/** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
 type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
 
 const SEND_OFF_KINDS = new Set(["confirm"]);
 const PRICE_KINDS = new Set(["price_fix"]);
 const QTY_KINDS = new Set(["qty_choice", "stock_short"]);
 
+function isOpenCase(c: Signoff) {
+  return c.status === "pending" && !c.decidedAt;
+}
+
+function isPendingCase(c: Signoff) {
+  return (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
+}
+
 function tabFor(c: Signoff): Exclude<DeskTab, "decided" | "board" | "pending"> {
-  if (c.status !== "pending") return "other";
+  if (!isOpenCase(c)) return "other";
   if (c.row === "order" && SEND_OFF_KINDS.has(c.kind)) return "sendoff";
   if (c.row === "order" && PRICE_KINDS.has(c.kind)) return "price";
   if (c.row === "order" && QTY_KINDS.has(c.kind)) return "quantity";
@@ -29,7 +37,7 @@ function countLabel(n: number) {
 
 function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" {
   if (stage.startsWith("signoff_")) return "attention";
-  if (stage === "parked" || stage === "rejected") return "quiet";
+  if (stage === "pending" || stage === "parked" || stage === "rejected") return "quiet";
   if (stage === "done" || stage === "shipped") return "ok";
   return "wait";
 }
@@ -65,24 +73,24 @@ export function SignoffView() {
     }
   }, []);
 
-  const waiting = useMemo(() => cases.filter((c) => c.status === "pending"), [cases]);
+  const waiting = useMemo(() => cases.filter(isOpenCase), [cases]);
   const sendoff = useMemo(() => waiting.filter((c) => tabFor(c) === "sendoff"), [waiting]);
   const price = useMemo(() => waiting.filter((c) => tabFor(c) === "price"), [waiting]);
   const quantity = useMemo(() => waiting.filter((c) => tabFor(c) === "quantity"), [waiting]);
   const other = useMemo(() => waiting.filter((c) => tabFor(c) === "other"), [waiting]);
-  /** Mail sent / parked — waiting on the retailer, not a closed decision. */
-  const parked = useMemo(() => cases.filter((c) => c.status === "parked"), [cases]);
+  /** Mail sent / held — waiting on the retailer, not a closed decision. */
+  const pendingHold = useMemo(() => cases.filter(isPendingCase), [cases]);
   const decided = useMemo(() => cases.filter((c) => c.status === "approved" || c.status === "rejected"), [cases]);
 
   const rows = useMemo(() => {
     if (tab === "sendoff") return sendoff;
     if (tab === "price") return price;
     if (tab === "quantity") return quantity;
-    if (tab === "pending") return parked;
+    if (tab === "pending") return pendingHold;
     if (tab === "other") return other;
     if (tab === "decided") return decided;
     return [];
-  }, [tab, sendoff, price, quantity, parked, other, decided]);
+  }, [tab, sendoff, price, quantity, pendingHold, other, decided]);
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
 
@@ -93,10 +101,10 @@ export function SignoffView() {
       setSelected(undefined);
       return;
     }
-    if (tab === "pending" && c.status === "parked") return;
+    if (tab === "pending" && isPendingCase(c)) return;
     if (tab === "decided" && (c.status === "approved" || c.status === "rejected")) return;
-    if (c.status === "pending" && tabFor(c) === tab) return;
-    if (c.status !== "pending") setSelected(undefined);
+    if (isOpenCase(c) && tabFor(c) === tab) return;
+    if (!isOpenCase(c)) setSelected(undefined);
   }, [cases, selected, tab]);
 
   const sendOffAll = async () => {
@@ -156,7 +164,7 @@ export function SignoffView() {
         : tab === "quantity"
           ? "No quantity errors waiting."
           : tab === "pending"
-            ? "No parked orders waiting on the retailer."
+            ? "No Pending orders waiting on the retailer."
             : tab === "other"
               ? "No other cases waiting."
               : "No decisions yet.";
@@ -180,7 +188,7 @@ export function SignoffView() {
             { value: "sendoff", label: `Send-off${countLabel(sendoff.length)}` },
             { value: "price", label: `Price error${countLabel(price.length)}` },
             { value: "quantity", label: `Quantity error${countLabel(quantity.length)}` },
-            { value: "pending", label: `Pending${countLabel(parked.length)}` },
+            { value: "pending", label: `Pending${countLabel(pendingHold.length)}` },
             ...(other.length ? [{ value: "other" as const, label: `Other${countLabel(other.length)}` }] : []),
             { value: "decided", label: `Decided${countLabel(decided.length)}` },
           ]}
@@ -190,7 +198,7 @@ export function SignoffView() {
       {tab === "board" ? (
         <Panel title="Order board" aside={`${board.length} orders`}>
           <p className="mb-3 text-[13px] text-ink-78">
-            Pipeline for every order: sign-off gates, parked, assigned to shipping, sent to WMS, preparing, shipped, done.
+            Pipeline for every order: sign-off gates, Pending, assigned to shipping, sent to WMS, preparing, shipped, done.
           </p>
           <DataTable
             rows={board}
@@ -258,19 +266,19 @@ export function SignoffView() {
 
       {tab === "price" ? (
         <p className="mb-3 text-[13px] text-ink-78">
-          Price does not match the contract. Open a case: paste a corrected ORDERS, send the price mail, or park (no
-          ORDRSP while blocked).
+          Price does not match the contract. Open a case: paste a corrected ORDERS, send the price mail, or leave as
+          Pending (no ORDRSP while blocked).
         </p>
       ) : null}
       {tab === "quantity" ? (
         <p className="mb-3 text-[13px] text-ink-78">
           Stock is short. Open a case and choose: <b>Split</b> (ship available now, remainder as a later order) or{" "}
-          <b>Email &amp; park</b> (mail the retailer, order stays pending — no ORDRSP).
+          <b>Email &amp; Pending</b> (mail the retailer, order stays Pending — no ORDRSP).
         </p>
       ) : null}
       {tab === "pending" ? (
         <p className="mb-3 text-[13px] text-ink-78">
-          Mail sent or order parked: waiting on the retailer (or a new ORDERS). These are not closed decisions — they
+          Mail sent or held as Pending: waiting on the retailer (or a new ORDERS). These are not closed decisions — they
           stay here until a new message arrives.
         </p>
       ) : null}
@@ -285,7 +293,7 @@ export function SignoffView() {
                 : tab === "quantity"
                   ? "Quantity errors"
                   : tab === "pending"
-                    ? "Pending (parked)"
+                    ? "Pending"
                     : tab === "other"
                       ? "Other"
                       : "Decided"
@@ -312,7 +320,11 @@ export function SignoffView() {
                 ),
               },
               { key: "kind", header: "Gate", cell: (c) => c.kind.replace(/_/g, " ") },
-              { key: "status", header: "Status", cell: (c) => <SignoffStatus status={c.status} /> },
+              {
+                key: "status",
+                header: "Status",
+                cell: (c) => <SignoffStatus status={c.status} decidedAt={c.decidedAt} />,
+              },
             ]}
           />
         </Panel>
