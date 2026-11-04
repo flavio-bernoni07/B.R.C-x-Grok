@@ -9,7 +9,7 @@ import type { PriceCheckDict } from "./contract";
 import type { AvailabilityLineCheck } from "./pipeline";
 import type { Backorder } from "./service";
 
-export type OrderPillTone = "ok" | "grok" | "attention" | "wait" | "quiet";
+export type OrderPillTone = "ok" | "grok" | "attention" | "wait" | "quiet" | "pending" | "reject";
 export type OrderPill = { tone: OrderPillTone; label: string };
 
 export type OrderSummary = {
@@ -141,9 +141,9 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
   }
   if (status === "pending") {
     const why = last?.kind === "qty_choice" ? "Stock short (mail)" : "Price mismatch";
-    return { pill: { tone: "quiet", label: "Pending" }, check: `${why}: Pending${decidedBy(last)} until a new ORDERS` };
+    return { pill: { tone: "pending", label: "Pending" }, check: `${why}: Pending${decidedBy(last)} until a new ORDERS` };
   }
-  if (status === "rejected") return { pill: { tone: "quiet", label: "Rejected" }, check: `Rejected${decidedBy(last)}` };
+  if (status === "rejected") return { pill: { tone: "reject", label: "Rejected" }, check: `Rejected${decidedBy(last)}` };
   return { pill: { tone: "wait", label: "Checking" }, check: "Checks running" };
 }
 
@@ -239,7 +239,13 @@ function orphanCases(erp: Erp): Signoff[] {
 
 function summarizeCase(erp: Erp, c: Signoff): OrderSummary {
   const avail = (c.proposal?.availability as AvailabilityLineCheck[] | undefined) ?? [];
-  const { pill, check } = c.status === "pending" ? judge(undefined, c.kind, [c], []) : { pill: { tone: "quiet" as const, label: c.status === "rejected" ? "Rejected" : "Decided" }, check: `${c.kind} case ${c.status}${decidedBy(c)}` };
+  const holdPending = (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
+  const closedTone: OrderPillTone = c.status === "rejected" ? "reject" : holdPending ? "pending" : "quiet";
+  const closedLabel = c.status === "rejected" ? "Rejected" : holdPending ? "Pending" : "Decided";
+  const { pill, check } =
+    c.status === "pending" && !c.decidedAt
+      ? judge(undefined, c.kind, [c], [])
+      : { pill: { tone: closedTone, label: closedLabel }, check: `${c.kind} case ${c.status}${decidedBy(c)}` };
   return {
     orderRef: c.subjectRef ?? c.caseId,
     retailer: "–",

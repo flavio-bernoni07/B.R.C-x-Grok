@@ -35,9 +35,10 @@ function countLabel(n: number) {
   return n > 0 ? ` (${n})` : "";
 }
 
-function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" {
+function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" | "pending" | "reject" {
   if (stage.startsWith("signoff_")) return "attention";
-  if (stage === "pending" || stage === "parked" || stage === "rejected") return "quiet";
+  if (stage === "pending" || stage === "parked") return "pending";
+  if (stage === "rejected") return "reject";
   if (stage === "done" || stage === "shipped") return "ok";
   return "wait";
 }

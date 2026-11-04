@@ -13,8 +13,12 @@ import { MailCompose } from "./mail-compose";
 
 const ROW_LABEL: Record<string, string> = { order: "Order", shipping: "Shipping", dispute: "Dispute" };
 
-export function signoffTone(status: string): PillTone {
-  return status === "pending" ? "attention" : status === "approved" ? "ok" : "wait";
+export function signoffTone(status: string, decidedAt?: string | null): PillTone {
+  if ((status === "pending" && !!decidedAt) || status === "parked") return "pending";
+  if (status === "pending") return "attention";
+  if (status === "approved") return "ok";
+  if (status === "rejected") return "reject";
+  return "wait";
 }
 
 export function SignoffStatus({
@@ -32,7 +36,7 @@ export function SignoffStatus({
       : status === "approved"
         ? "Approved"
         : "Rejected";
-  return <Pill tone={holdPending ? "quiet" : signoffTone(status)}>{label}</Pill>;
+  return <Pill tone={signoffTone(status, decidedAt)}>{label}</Pill>;
 }
 
 const EdiBox = ({ title, text }: { readonly title: string; readonly text: string }) => (
