@@ -52,7 +52,8 @@
   /* Soft status fills (same recipe as ok/attention: tint bg + darker ink) */
   --color-st-reject: #f4c7c2;
   --color-st-reject-ink: #b4332a;
-  --color-st-pending: #fce9e7;
+  /* Pending: clearly light pastel red, lighter wash than Rejected */
+  --color-st-pending: #ffddd8;
   --color-st-pending-ink: #d2473b;
   /* Dark Green at the kit's ink levels */
   --color-ink: #203119;
