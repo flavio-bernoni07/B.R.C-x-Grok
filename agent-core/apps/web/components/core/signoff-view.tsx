@@ -27,7 +27,10 @@ export function SignoffView() {
 
   return (
     <Page>
-      <PageHeader title="Sign-off" sub="A person decides when a case is unclear, and writes one line on why. Grok and code never decide here.">
+      <PageHeader
+        title="Sign-off Pending"
+        sub="Orders that need a person (price mail, qty split or mail, confirm before ORDRSP) land here one by one. The feed never stops on the first gate. Write one line on why; Grok and code never decide here."
+      >
         <Segmented
           value={filter}
           onChange={setFilter}

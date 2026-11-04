@@ -10,7 +10,14 @@ import { decideSignoff } from "../agent/lib/order/decide";
 import * as grokbot from "../agent/lib/order/grokbot";
 import { parseOrdersEdi, parseOrdersFile } from "../agent/lib/order/parser";
 import { PipelineStatus, runOrderFile } from "../agent/lib/order/pipeline";
-import { confirmOrder, receiveOrder, rejectOrder, resolvePriceCase } from "../agent/lib/order/service";
+import {
+  confirmOrder,
+  receiveOrder,
+  rejectOrder,
+  resolvePriceCase,
+  resolveQtyCase,
+  simulateOrderFeed,
+} from "../agent/lib/order/service";
 import { listOrders, orderDetail } from "../agent/lib/order/views";
 import { dataPath } from "../agent/lib/paths";
 
@@ -166,15 +173,47 @@ describe("order service on the Mini ERP", () => {
     expect(r2.step).not.toBe("confirm"); // the first order took the released stock
   });
 
-  it("short stock: split on the planned batch re-enters the stock check", async () => {
+  it("short stock: operator split re-enters the stock check toward confirm", async () => {
     const erp = freshErp();
     recordEvent(erp, "quality_hold", { batch: "LOT-C-0418", qty: 1200 });
     const r = await receiveOrder(erp, ediFor("ESS-SPLIT", "8000000000001", 12000, 2.2));
-    expect(r.step).toBe("confirm");
-    const c = erp.signoff(r.case_id)!;
+    expect(r.step).toBe("qty_choice");
+    const choice = erp.signoff(r.case_id)!;
+    expect(choice.kind).toBe("qty_choice");
+    expect((choice.proposal!.lines as { now_qty: number; later_qty: number }[])[0]).toMatchObject({
+      now_qty: 10800,
+      later_qty: 1200,
+    });
+    const again = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ship what we have", action: "split" });
+    expect("step" in again && again.step).toBe("confirm");
+    const c = erp.signoff(again.case_id)!;
     expect(c.proposal!.backorders).toEqual([{ line_no: 1, gtin: "8000000000001", qty: 1200, date: "2026-11-09" }]);
     expect((c.proposal!.lines as { qty_confirmed: number }[])[0].qty_confirmed).toBe(10800);
-    expect(c.reasons!.some((x) => x.includes("stock was short on line 1: split proposed by code"))).toBe(true);
+    expect(c.reasons!.some((x) => x.includes("operator split to 10800"))).toBe(true);
+  });
+
+  it("short stock: operator mail parks with no ORDRSP", async () => {
+    const erp = freshErp();
+    recordEvent(erp, "quality_hold", { batch: "LOT-C-0418", qty: 1200 });
+    const r = await receiveOrder(erp, ediFor("ESS-MAIL", "8000000000001", 12000, 2.2));
+    expect(r.step).toBe("qty_choice");
+    const parked = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ask Esselunga first", action: "mail" });
+    expect(parked.status).toBe("parked");
+    expect(erp.order("ESS-MAIL")!.status).toBe("pending");
+    expect(erp.documents({ ref: "ESS-MAIL", kind: "ORDRSP" })).toHaveLength(0);
+    expect(String(erp.signoff(r.case_id)!.proposal!.draft_mail)).toContain("partial availability");
+  });
+
+  it("simulate feed never stops on the first human gate", async () => {
+    const erp = freshErp();
+    const { results } = await simulateOrderFeed(erp);
+    expect(results.length).toBeGreaterThanOrEqual(6); // golden + 5 feed items
+    expect(results.every((r) => r.ok)).toBe(true);
+    const steps = new Set(results.map((r) => r.result!.step));
+    expect(steps.has("confirm") || steps.has("qty_choice") || steps.has("price_fix") || steps.has("manual_edi")).toBe(true);
+    expect(results.filter((r) => r.result?.status === "awaiting_person").length).toBe(results.length);
+    // A later feed item still ran even though earlier ones needed a person.
+    expect(results.at(-1)!.id).toBe("wave-5");
   });
 
   it("wrong price goes to the price step, not the confirm step", async () => {

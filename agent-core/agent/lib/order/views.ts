@@ -42,12 +42,26 @@ export type OrderDetailLine = {
 
 export type OrderDocument = { docId: string; kind: string; ref: string | null; path: string | null; createdAt: string; body: string | null };
 
+export type OrderStockPromise = {
+  gtin: string;
+  product: string | null;
+  atp: number;
+  released: number;
+  planned: number;
+  committed: number;
+  held: number;
+  nextReadyDate: string | null;
+  source: string;
+};
+
 export type OrderDetail = OrderSummary & {
   contractId: string | null;
   ordrspRef: string | null;
   lines: OrderDetailLine[];
   checks: OrderCheck[];
   availability: AvailabilityLineCheck[] | null;
+  /** Live available-to-promise from Mini ERP stock (prediction of what can ship). */
+  stockPromise: OrderStockPromise[];
   priceCheck: PriceCheckDict | null;
   backorders: Backorder[];
   grokbot: string[];
@@ -89,16 +103,19 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
   const codeSplit = qtyShort.find((a) => a.actor === "code");
   const status = order?.status ?? kind ?? "";
 
+  const personSplit = audit.some((a) => a.action === "order.qty_split");
   if (DONE_STATUSES.has(status)) {
-    const via = grokFix ? "Grok corrected the EDI, checks passed" : grokSplit ? "Grok split the delivery, checks passed" : "All checks passed";
+    const via = grokFix
+      ? "Grok corrected the EDI, checks passed"
+      : personSplit || grokSplit || codeSplit
+        ? "Stock short: split accepted, checks passed"
+        : "All checks passed";
     return { pill: { tone: "ok", label: "Confirmed" }, check: `${via}; confirmed${decidedBy(last)}` };
   }
   if (status === "awaiting_confirmation") {
     if (grokFix) return { pill: { tone: "grok", label: "Grok: fixed" }, check: "EDI corrected by Grok and parsed again; a person confirms" };
-    if (grokSplit) return { pill: { tone: "grok", label: "Grok: split" }, check: "Stock short: Grok split the delivery; a person confirms" };
-    if (codeSplit) {
-      const d = codeSplit.detail as { action?: string } | null;
-      return { pill: { tone: "attention", label: "Needs a person" }, check: `Stock short: ${d?.action ?? "split"} proposed by code; a person confirms` };
+    if (personSplit || grokSplit || codeSplit) {
+      return { pill: { tone: "attention", label: "Needs a person" }, check: "Stock short: available qty accepted; a person confirms before ORDRSP" };
     }
     return { pill: { tone: "attention", label: "Needs a person" }, check: "All checks passed; a person confirms before ORDRSP" };
   }
@@ -108,10 +125,19 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
   if (status === "pending_manual_edi" || status === "manual_edi") {
     return { pill: { tone: "attention", label: "Needs a person" }, check: "EDI cannot be read safely; manual EDI or park" };
   }
+  if (status === "pending_qty" || status === "qty_choice") {
+    return {
+      pill: { tone: "attention", label: "Needs a person" },
+      check: "Stock short: choose split (ORDRSP for available qty) or mail (park, no ORDRSP)",
+    };
+  }
   if (status === "stock_short") {
     return { pill: { tone: "attention", label: "Needs a person" }, check: "Not enough stock and no split possible" };
   }
-  if (status === "pending") return { pill: { tone: "quiet", label: "Parked" }, check: `Price mismatch: parked${decidedBy(last)} until a new ORDERS` };
+  if (status === "pending") {
+    const why = last?.kind === "qty_choice" ? "Stock short (mail)" : "Price mismatch";
+    return { pill: { tone: "quiet", label: "Parked" }, check: `${why}: parked${decidedBy(last)} until a new ORDERS` };
+  }
   if (status === "rejected") return { pill: { tone: "quiet", label: "Rejected" }, check: `Rejected${decidedBy(last)}` };
   return { pill: { tone: "wait", label: "Checking" }, check: "Checks running" };
 }
@@ -148,7 +174,12 @@ function summarize(erp: Erp, order: Order): OrderSummary {
 function orphanCases(erp: Erp): Signoff[] {
   return erp
     .signoffs({ row: "order" })
-    .filter((c) => (c.kind === "stock_short" || c.kind === "manual_edi") && c.subjectRef && !erp.order(c.subjectRef));
+    .filter(
+      (c) =>
+        (c.kind === "stock_short" || c.kind === "manual_edi" || c.kind === "qty_choice") &&
+        c.subjectRef &&
+        !erp.order(c.subjectRef),
+    );
 }
 
 function summarizeCase(erp: Erp, c: Signoff): OrderSummary {
@@ -252,10 +283,17 @@ export function orderDetail(erp: Erp, ref: string): OrderDetail | null {
     const parts = availability.map((a) => `${a.gtin}: ordered ${a.ordered_qty ?? "–"}, available ${a.available_qty ?? "–"}`);
     for (const b of backorders) parts.push(`line ${b.line_no}: ${b.qty} later on ${b.date}`);
     checks.push({ name: "Stock", ok: !short, detail: parts.join("; "), source: [...new Set(availability.map((a) => a.source))].join("; ") });
-  } else if (status === "pending_price" || status === "pending") {
-    const short = audit.filter((a) => a.action === "order.qty_short");
+  } else if (status === "pending_qty" || status === "qty_choice") {
+    checks.push({
+      name: "Stock",
+      ok: false,
+      detail: "Short versus available to promise; waiting for split or mail in Sign-off Pending",
+      source: "Mini ERP stock (available to promise)",
+    });
+  } else if (status === "pending_price" || status === "pending" || status === "awaiting_confirmation" || DONE_STATUSES.has(status)) {
+    const short = audit.filter((a) => a.action === "order.qty_short" || a.action === "order.qty_split");
     const detail = short.length
-      ? `Stock was short: ${short.map((a) => `${(a.detail as { action?: string } | null)?.action ?? "change"} proposed by ${a.actor}`).join("; ")}; the revised quantity passed the stock check`
+      ? `Stock was short; operator ${audit.some((a) => a.action === "order.qty_split") ? "split" : "change"} then the revised quantity passed available-to-promise`
       : "Within available to promise";
     checks.push({ name: "Stock", ok: true, detail, source: "Mini ERP stock (available to promise)" });
   } else {
@@ -291,6 +329,21 @@ export function orderDetail(erp: Erp, ref: string): OrderDetail | null {
   }
 
   const ordrspDoc = order?.ordrspRef ? erp.document(order.ordrspRef) : undefined;
+  const gtins = [...new Set(lines.map((l) => l.gtin).filter((g): g is string => !!g))];
+  const stockPromise: OrderStockPromise[] = gtins.map((gtin) => {
+    const atp = availableToPromise(erp, gtin, order?.orderDate ?? null);
+    return {
+      gtin,
+      product: erp.product({ gtin })?.name ?? null,
+      atp: atp.atp,
+      released: atp.released,
+      planned: atp.planned,
+      committed: atp.committed,
+      held: atp.held,
+      nextReadyDate: nextReadyDate(erp, gtin),
+      source: `erp_atp(released ${atp.released} + planned ${atp.planned} - committed ${atp.committed})`,
+    };
+  });
   return {
     ...summary,
     contractId: order?.contractId ?? null,
@@ -298,6 +351,7 @@ export function orderDetail(erp: Erp, ref: string): OrderDetail | null {
     lines,
     checks,
     availability,
+    stockPromise,
     priceCheck,
     backorders: notes.backorders ?? lastWith<Backorder[]>(cases, "backorders") ?? [],
     grokbot: notes.grokbot ?? lastWith<string[]>(cases, "grokbot") ?? [],

@@ -7,13 +7,16 @@
  *   manual_edi              goes back to Parse; without it the order is parked as "pending"
  *                           (DECISIONS.md: a separate human step, never the confirm sign-off)
  *                reject  -> rejectOrder
- *   stock_short  the Python row has no action here: the decision is recorded, nothing else runs
+ *   qty_choice   approve -> resolveQtyCase: `edits.qty_action` = "split" (re-enter checks with
+ *                           available qty → confirm → ORDRSP for that qty) or "mail" (park, no
+ *                           ORDRSP). Reject records the decision only.
+ *   stock_short  the decision is recorded; nothing else runs (no qty available to ship)
  *
  * No agent tool calls this; the sign-off card in the UI does, through the generic route.
  */
 import type { Erp } from "../core/erp";
 import { decide } from "../core/signoff";
-import { confirmOrder, rejectOrder, resolvePriceCase } from "./service";
+import { confirmOrder, rejectOrder, resolvePriceCase, resolveQtyCase } from "./service";
 
 export async function decideSignoff(
   erp: Erp,
@@ -45,6 +48,16 @@ export async function decideSignoff(
       manualEdi: typeof manual === "string" && manual.trim() ? manual : null,
     });
     return { ...base, status: result.status, result };
+  }
+
+  if (c.kind === "qty_choice") {
+    if (!d.approve) {
+      rejectOrder(erp, caseId, d);
+      return { ...base, status: "rejected" };
+    }
+    const action = d.edits?.qty_action === "mail" ? "mail" : "split";
+    const result = await resolveQtyCase(erp, caseId, { by: d.by, reason: d.reason, action });
+    return { ...base, status: result.status, qty_action: action, result };
   }
 
   const decided = decide(erp, caseId, d);

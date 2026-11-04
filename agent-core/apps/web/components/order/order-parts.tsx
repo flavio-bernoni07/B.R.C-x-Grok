@@ -142,13 +142,36 @@ export function OrderDetailBody({ order, compact = false }: { readonly order: Or
           ["Status", order.status.replace(/_/g, " ")],
           ["Deciding check", order.check],
           ...(order.contractId ? ([["Contract", <SourceTag key="c">{order.contractId}</SourceTag>]] as [ReactNode, ReactNode][]) : []),
-          ...(order.caseId ? ([["Sign-off", `${order.caseId} (${order.caseStatus})`]] as [ReactNode, ReactNode][]) : []),
+          ...(order.caseId ? ([["Sign-off Pending", `${order.caseId} (${order.caseStatus})`]] as [ReactNode, ReactNode][]) : []),
         ]}
       />
 
       <Section title="Lines">
         <OrderLines order={order} />
       </Section>
+
+      {order.stockPromise?.length ? (
+        <Section title="Available to promise" aside="Mini ERP stock + planned batches">
+          <ul className="space-y-2 text-[13px]">
+            {order.stockPromise.map((s) => (
+              <li key={s.gtin} className="rounded-[10px] bg-hh-honeydew px-3 py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-bold">{s.product ?? s.gtin}</span>
+                  <span className="tabular-nums">{qty(s.atp)} can ship</span>
+                </div>
+                <div className="mt-1 text-[12px] text-ink-68">
+                  released {qty(s.released)} + planned {qty(s.planned)} − committed {qty(s.committed)}
+                  {s.held ? ` · ${qty(s.held)} on hold (never counts)` : ""}
+                  {s.nextReadyDate ? ` · next batch ${day(s.nextReadyDate)}` : ""}
+                </div>
+                <div className="mt-1">
+                  <SourceTag title="ATP source">{s.source}</SourceTag>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
 
       <Section title="Checks" aside="code first, Grok on exceptions, a person confirms">
         <OrderChecks checks={order.checks} />

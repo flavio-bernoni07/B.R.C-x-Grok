@@ -50,6 +50,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
   const [manualEdi, setManualEdi] = useState("");
   // Order price cases: the person can paste the corrected EDI; it goes back to Parse (DECISIONS.md, Order).
   const takesEdi = c.row === "order" && (c.kind === "price_fix" || c.kind === "manual_edi");
+  const qtyChoice = c.row === "order" && c.kind === "qty_choice";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [result, setResult] = useState<Record<string, unknown>>();
@@ -62,7 +63,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
     }
   }, []);
 
-  const decide = async (approve: boolean) => {
+  const decide = async (approve: boolean, edits?: Record<string, unknown>) => {
     setBusy(true);
     setError(undefined);
     try {
@@ -70,10 +71,11 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
     } catch {
       /* ignore */
     }
+    const payloadEdits = edits ?? (takesEdi && manualEdi.trim() ? { manual_edi: manualEdi } : undefined);
     const res = await fetch(`/api/signoffs/${encodeURIComponent(c.caseId)}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approve, by, reason, edits: takesEdi && manualEdi.trim() ? { manual_edi: manualEdi } : undefined }),
+      body: JSON.stringify({ approve, by, reason, edits: payloadEdits }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
@@ -141,15 +143,41 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
                 onChange={(e) => setManualEdi(e.target.value)}
               />
             ) : null}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={busy || !by.trim() || !reason.trim()}
-                onClick={() => void decide(true)}
-                className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-              >
-                Approve
-              </button>
+            {qtyChoice ? (
+              <p className="text-[12px] text-ink-68">
+                Split continues toward ORDRSP for the available quantity only. Mail parks the order with the draft — no ORDRSP while blocked.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {qtyChoice ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy || !by.trim() || !reason.trim()}
+                    onClick={() => void decide(true, { qty_action: "split" })}
+                    className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+                  >
+                    Split available qty
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !by.trim() || !reason.trim()}
+                    onClick={() => void decide(true, { qty_action: "mail" })}
+                    className="h-8 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
+                  >
+                    Mail &amp; park
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy || !by.trim() || !reason.trim()}
+                  onClick={() => void decide(true)}
+                  className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+                >
+                  Approve
+                </button>
+              )}
               <button
                 type="button"
                 disabled={busy || !by.trim() || !reason.trim()}

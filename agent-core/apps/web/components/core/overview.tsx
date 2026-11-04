@@ -48,7 +48,7 @@ export function OverviewWidgets({ snapshot, market, waiting }: { readonly snapsh
         />
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Waiting for a person" aside={<a href="/signoff" className="underline underline-offset-2">Sign-off</a>}>
+        <Panel title="Waiting for a person" aside={<a href="/signoff" className="underline underline-offset-2">Sign-off Pending</a>}>
           <SignoffQueue cases={(waiting ?? snapshot.waiting) as Signoff[]} compact />
         </Panel>
         <Panel title="Latest actions" aside={`${c.auditEvents} in the audit log`}>
