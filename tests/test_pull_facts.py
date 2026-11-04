@@ -155,6 +155,7 @@ def test_catalog_covers_all_claim_order_refs() -> None:
         "RS-ORD-99102",
         "RS2026/771",
         "RS26112",
+        "RS26113",
     }
     found = {o["order_ref"] for o in store.orders}
     assert expected <= found

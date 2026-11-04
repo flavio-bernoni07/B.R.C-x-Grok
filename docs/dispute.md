@@ -25,13 +25,20 @@
 - **Sign-off desk** (`python -m dispute.desk --db …`): list / show / approve / reject pending dispute cases on `core.signoff`. Shared CRM can replace this later.
 - **Jury Mini-ERP path:** `python -m dispute.service --db data/demo.sqlite claim.txt --out-dir …` (default **no** fixture merge). Same via `./scripts/run_dispute_claim.sh … --erp-db data/demo.sqlite`.
 
+## Learning beat (hand-off → fewer hand-offs)
+
+1. Ambiguous claim A goes to a person (desk / Sara).
+2. Their approve **activates a rule** for that case fingerprint (claim type + threeway + reconcile causes + proofs + flags).
+3. Claim B of the same kind closes alone, citing the rule — no Grok, no person.
+4. Shown in `demo.py` (RS26112 → Sara → RS26113) and `tests/test_learning.py::test_person_signoff_teaches_the_next_similar_claim`.
+
 ## Current work (after the pipeline)
 
-1. Prefer Shipping reconcile citations in live verdicts / Playbook past cases (facts already carry them).
+1. Prefer Shipping reconcile citations in live verdicts (facts already carry them; learning signature uses them).
 2. Keep the desk CLI as the person path until the shared CRM screen is the default demo surface.
 3. Use `--erp-db` (no fixtures) for any jury-picked claim against an order already in the Mini ERP.
 
-Still later / not blocking the demo: quality-lot evidence handoff, shared contract file, full EANCOM INVOIC 381.
+Still later / not blocking the demo: richer case pack on the desk, quality-lot evidence handoff, shared contract file.
 
 ## What I need from others
 

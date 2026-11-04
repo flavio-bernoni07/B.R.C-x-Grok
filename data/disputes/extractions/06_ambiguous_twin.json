@@ -1,0 +1,10 @@
+{
+  "order_ref": "RS26113",
+  "invoice_ref": null,
+  "product": null,
+  "quantity": null,
+  "amount": null,
+  "claim_type": "other",
+  "confidence": 0.4,
+  "raw_notes": "Ambiguous shortage vs late_delivery; twin of 05 for learning demo"
+}

@@ -61,9 +61,10 @@ flowchart TD
 - Importi solo da claim / docs / threeway / reconcile eur — codice clampa/droppa euro inventati.
 - `needs_sign_off`: **nessuna soglia in euro**. True se qualcosa è ambiguo: Grok unsure o confidence < **0.55**, un punto senza source, tipo fuori Playbook (`other`), claim letto con confidence < 0.55, documento non trovato, importo non presente nei documenti.
 
-### 5. Sign-off (condizionale)
+### 5. Sign-off (condizionale) + learning
 
-- Se `needs_sign_off` → persona approva/modifica; caso approvato può entrare nel Playbook “past cases”.
+- Se `needs_sign_off` → persona approva/modifica; caso approvato entra nel Playbook “past cases”.
+- **`approve_verdict` attiva una regola** sul fingerprint del caso (`activate_from_person`): il prossimo claim dello stesso tipo chiude da solo citando la regola (demo: RS26112 → Sara → RS26113).
 - Desk CLI: `python -m dispute.desk --db data/demo.sqlite list|show|approve|reject`.
 - Finché una persona non approva, niente TD04/reply (`awaiting_sign_off`). Web UI CRM: ancora da fare; il desk usa la stessa coda.
 
