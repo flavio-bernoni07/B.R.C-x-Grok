@@ -115,11 +115,4 @@ Forecast and quality: `python -m forecast_quality.data`, then `.advisor`, `.qual
 
 ## Known limitations
 
-- All data is synthetic; nothing is sent to a retailer or to SdI. The case curve and the demand forecast run on invented history.
-- One loss we can't prevent yet: Esselunga says a 240-pack pallet (€528) never arrived, while our scans put it on the truck. We credit it with three sources, but only a scan at the retailer's dock would show where it went.
-- Logistics: road km come from OSRM's car profile, slowed to the 80 km/h truck limit; no traffic, delivery slots or tolls. CO2 is an estimate (2.65 kg per litre).
-- `shipping/` is rebuilt from Nicola's v0.5.0 write-up; his code replaces ours when it arrives.
-- Grok's live calls are tested with recorded answers only. Default model `grok-4-latest`; set `XAI_MODEL` or `GROK_MODEL` to override.
-- Buy-or-wait shows no proven saving yet (+0.38% against even buying, better in 32 of 64 campaigns), so we pitch it as signals, not savings ([docs/forecast-results.md](docs/forecast-results.md)).
-
-Team, how we work and what we deliver: [docs/team.md](docs/team.md).
+- All data is synthetic, nothing is sent to a retailer or to SdI.
