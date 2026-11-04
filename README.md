@@ -2,7 +2,9 @@
 
 ![B.R.C x Grok dashboard: orders checked by code, invoices matched against what shipped, claims answered with sources](docs/img/banner.gif)
 
-Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a person. Built on synthetic data, with an architecture for how data flows from the factory to the administration.
+A zero-touch back office on synthetic data + an architectural concept of how data flows from the factory to the administration.
+
+Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a person.
 
 ## The problem
 
@@ -16,7 +18,7 @@ The only automatic check is an exact text match. threeway, the track's baseline,
 
 We are in 2026... we can have better checks than a text matcher.
 
-## Case study: one order, without us and with us
+## Case study: an invisible error without Grok
 
 Esselunga orders 12,000 packs of Carnaroli 1 kg at €2.20 (contract CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
