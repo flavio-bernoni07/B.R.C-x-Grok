@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader, Panel, Pill } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { rowPill } from "./format";
+import { RoutePlanPanel } from "./route-plan";
 import { BenchSummary, BenchTable, ShippingSteps, ShippingTable } from "./shipping-parts";
 
 /**
@@ -90,6 +91,7 @@ export function ShippingView() {
             : "Loading shipments…"
         }
       />
+      <RoutePlanPanel />
       {bench ? (
         <Panel
           title="Against the threeway baseline"

@@ -16,6 +16,7 @@
 import type { Erp } from "../core/erp";
 import { decide } from "../core/signoff";
 import { decideResolution, executeResolution, recheckExceptionCase, viewExceptionCase } from "./cases";
+import { applyDispatchPlan } from "./routes";
 
 export async function decideSignoff(
   erp: Erp,
@@ -72,6 +73,14 @@ export async function decideSignoff(
     }
     erp.log(actor, "shipping.invoice_held", orderRef, { sourceDoc: caseId, detail: { invoices: invoiceRefs, next: "correct the invoice and reconcile again" } });
     return { row: "shipping", kind: so.kind, case_id: caseId, order_ref: orderRef, status: "held", invoices: invoiceRefs };
+  }
+
+  if (so.kind === "dispatch_plan") {
+    // The transport planner approves the route agent's plan: only then are trucks booked.
+    const decided = decide(erp, caseId, { approve: d.approve, by: d.by, reason: d.reason, edits: d.edits ?? null });
+    if (!d.approve) return { row: "shipping", kind: so.kind, case_id: caseId, status: decided.status };
+    const booked = applyDispatchPlan(erp, caseId, d.by.trim());
+    return { row: "shipping", kind: so.kind, case_id: caseId, status: "planned", ...booked };
   }
 
   // Any other shipping sign-off: record the decision only.

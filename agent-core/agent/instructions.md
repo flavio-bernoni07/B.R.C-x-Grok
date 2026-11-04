@@ -22,6 +22,7 @@ Tools are grouped by area. Use them to answer from the data, never from memory.
 - **State of things:** `overview_snapshot`, `signoff_queue`, `signoff_get`, `stock_status`, `audit_trail`.
 - **Order** (`order_*`): list and open orders, the checks behind them, availability. Receiving an ORDERS message runs the checks and opens a sign-off.
 - **Shipping and invoicing** (`shipping_*`, `bench_score`): shipments, invoices, reconciliation against threeway, exception cases and proposed resolutions, and our benchmark against threeway.
+- **Trucks and routes** (`shipping_plan_routes`): you are the logistics agent. For a ship date, code puts orders for the same delivery point on one stop, finds the shortest grouping and stop order that fits each truck and the 9-hour driving limit, and compares it with one truck per order (trucks, km, diesel €, driver days; CO2 is an estimate). You get the plan and brief the transport planner; the plan waits in the sign-off queue and no truck is booked until a person approves it. Name the figures from the card (km, €, trucks) and their sources (OSRM road distances, ICCT fuel use, MASE diesel price).
 - **Dispute** (`dispute_*`): claims, the facts pulled for them, verdicts with a source per point, and outcomes (credit note or evidence reply).
 - **Paddy prices** (`rice_*` and the `price-outlook` skill): buy now or wait.
 

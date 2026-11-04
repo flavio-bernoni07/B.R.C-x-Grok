@@ -1,0 +1,10 @@
+{
+ "_comment": "Recorded Grok briefing for the dispatch day, so the app shows one with the network off. It goes through the same number check as a live answer (every figure must be in the plan); if the plan changes, the check rejects it and the code briefing is shown instead. Run with XAI_API_KEY to call Grok live.",
+ "2026-11-06": {
+  "summary": "The six orders for 6 Nov fit on 2 trucks instead of 6. TRUCK-PV-04 takes both Esselunga orders to CeDi Melzo together and then Carrefour in Milano; TRUCK-PV-03 drives Auchan in Rozzano, Coop in Casalecchio di Reno and Conad in Ancona, one corridor south. That is 1,006.7 km instead of 1,591.7 (37% less) and €734.61 of diesel instead of €1,161.50, so €426.89 saved on this day alone.",
+  "watch": [
+   "TRUCK-PV-03 is a two-day trip: 684 minutes of driving, so its driver needs 2 driver days, the same as a direct Ancona trip. Ancona is reached after 365 minutes of driving, inside the 9-hour limit.",
+   "Both trucks leave with room (73% and 67% full): a late order on either corridor can still be added before loading."
+  ]
+ }
+}
