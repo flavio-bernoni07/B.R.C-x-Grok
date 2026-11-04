@@ -2,15 +2,16 @@
 
 import type { Signoff } from "@agent/lib/core/erp";
 import type { OrderBoardRow } from "@agent/lib/order/board";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, PageHeader, Panel, Pill, Segmented, day, qty } from "@/components/kit";
+import { DataTable, PageHeader, Panel, Pill, day, qty } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
+import { cn } from "@/lib/utils";
 import { Page } from "@/components/shell/app-shell";
-import { DeskModal } from "./desk-modal";
 import { SignoffCard, SignoffStatus, signoffUsedGrokbot } from "./signoff";
 
 /** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
-type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
+export type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
 
 const SEND_OFF_KINDS = new Set(["confirm"]);
 const PRICE_KINDS = new Set(["price_fix"]);
@@ -44,21 +45,59 @@ function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" | "pend
   return "wait";
 }
 
+function actionsHref(tab: DeskTab, caseId?: string) {
+  const q = new URLSearchParams();
+  if (tab !== "board") q.set("tab", tab);
+  if (caseId) q.set("case", caseId);
+  const s = q.toString();
+  return s ? `/actions?${s}` : "/actions";
+}
+
+/** Link tabs — work without client JS (full navigation + SSR). */
+function DeskTabs({
+  tab,
+  options,
+}: {
+  readonly tab: DeskTab;
+  readonly options: { value: DeskTab; label: string }[];
+}) {
+  return (
+    <div className="inline-flex h-[34px] flex-wrap items-center gap-0.5 rounded-full bg-white/85 p-1 shadow-[inset_0_1.5px_0.5px_rgb(255_255_255/0.95),inset_0_0_0_1px_rgb(32_49_25/0.07),0_10px_26px_-16px_rgb(32_49_25/0.35),0_2px_6px_rgb(32_49_25/0.06)]">
+      {options.map((o) => (
+        <Link
+          key={o.value}
+          href={actionsHref(o.value)}
+          className={cn(
+            "inline-flex h-[26px] items-center rounded-full px-3 text-[13px] transition-colors",
+            o.value === tab ? "bg-hh-dark font-bold text-hh-window" : "text-ink-68 hover:text-ink",
+          )}
+        >
+          {o.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 /** Actions desk: Board + Send-off / Price / Quantity schede. */
 export function SignoffView({
   initialCases,
   initialBoard,
   simBanner,
+  initialTab = "board",
+  initialCaseId,
 }: {
   readonly initialCases?: Signoff[];
   readonly initialBoard?: OrderBoardRow[];
   readonly simBanner?: string;
+  readonly initialTab?: DeskTab;
+  readonly initialCaseId?: string;
 } = {}) {
   /** SSR seeds the desk so simulation results show even when client fetch/HMR is flaky. */
   const [cases, setCases] = useState<Signoff[]>(() => initialCases ?? []);
   const [board, setBoard] = useState<OrderBoardRow[]>(() => initialBoard ?? []);
-  const [tab, setTab] = useState<DeskTab>("board");
-  const [selected, setSelected] = useState<string>();
+  const tab = initialTab;
+  const selected = initialCaseId;
   const [by, setBy] = useState("");
   const [reason, setReason] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -75,7 +114,6 @@ export function SignoffView({
       .catch(() => {});
   }, []);
   useEffect(load, [load]);
-  // Keep SSR props in sync after a full navigation (e.g. post-simulation).
   useEffect(() => {
     if (initialCases) setCases(initialCases);
   }, [initialCases]);
@@ -96,7 +134,6 @@ export function SignoffView({
   const price = useMemo(() => waiting.filter((c) => tabFor(c) === "price"), [waiting]);
   const quantity = useMemo(() => waiting.filter((c) => tabFor(c) === "quantity"), [waiting]);
   const other = useMemo(() => waiting.filter((c) => tabFor(c) === "other"), [waiting]);
-  /** Mail sent / held — waiting on the retailer, not a closed decision. */
   const pendingHold = useMemo(() => cases.filter(isPendingCase), [cases]);
   const decided = useMemo(() => cases.filter((c) => c.status === "approved" || c.status === "rejected"), [cases]);
 
@@ -111,19 +148,6 @@ export function SignoffView({
   }, [tab, sendoff, price, quantity, pendingHold, other, decided]);
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
-
-  useEffect(() => {
-    if (!selected) return;
-    const c = cases.find((x) => x.caseId === selected);
-    if (!c) {
-      setSelected(undefined);
-      return;
-    }
-    if (tab === "pending" && isPendingCase(c)) return;
-    if (tab === "decided" && (c.status === "approved" || c.status === "rejected")) return;
-    if (isOpenCase(c) && tabFor(c) === tab) return;
-    if (!isOpenCase(c)) setSelected(undefined);
-  }, [cases, selected, tab]);
 
   const sendOffAll = async () => {
     const signer = by.trim();
@@ -165,7 +189,6 @@ export function SignoffView({
       setBulkMsg((err as Error).message);
     }
     setBulkBusy(false);
-    setSelected(undefined);
     try {
       window.dispatchEvent(new Event("brc:changed"));
     } catch {
@@ -188,9 +211,20 @@ export function SignoffView({
               : "No decisions yet.";
 
   const onCaseDecided = () => {
-    setSelected(undefined);
     load();
+    // Full navigation clears ?case= even if client router is flaky.
+    window.location.href = actionsHref(tab);
   };
+
+  const tabOptions: { value: DeskTab; label: string }[] = [
+    { value: "board", label: `Board${countLabel(board.length)}` },
+    { value: "sendoff", label: `Send-off${countLabel(sendoff.length)}` },
+    { value: "price", label: `Price error${countLabel(price.length)}` },
+    { value: "quantity", label: `Quantity error${countLabel(quantity.length)}` },
+    { value: "pending", label: `Pending${countLabel(pendingHold.length)}` },
+    ...(other.length ? [{ value: "other" as const, label: `Other${countLabel(other.length)}` }] : []),
+    { value: "decided", label: `Decided${countLabel(decided.length)}` },
+  ];
 
   return (
     <Page>
@@ -198,19 +232,7 @@ export function SignoffView({
         title="Actions"
         sub="Board shows every order’s stage. After a price/qty mail the case moves to Pending (not Decided). Send-off all releases every ready ORDRSP."
       >
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "board", label: `Board${countLabel(board.length)}` },
-            { value: "sendoff", label: `Send-off${countLabel(sendoff.length)}` },
-            { value: "price", label: `Price error${countLabel(price.length)}` },
-            { value: "quantity", label: `Quantity error${countLabel(quantity.length)}` },
-            { value: "pending", label: `Pending${countLabel(pendingHold.length)}` },
-            ...(other.length ? [{ value: "other" as const, label: `Other${countLabel(other.length)}` }] : []),
-            { value: "decided", label: `Decided${countLabel(decided.length)}` },
-          ]}
-        />
+        <DeskTabs tab={tab} options={tabOptions} />
       </PageHeader>
 
       {simBanner ? (
@@ -277,12 +299,14 @@ export function SignoffView({
               placeholder="Your name"
               value={by}
               onChange={(e) => setBy(e.target.value)}
+              name="by"
             />
             <input
               className="h-9 min-w-[220px] flex-1 rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
               placeholder="Reason for Send-off all (optional)"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              name="reason"
             />
             <button
               type="button"
@@ -293,7 +317,6 @@ export function SignoffView({
               {bulkBusy ? "Sending off…" : `Send-off all (${sendoff.length})`}
             </button>
           </div>
-          {bulkMsg ? <p className="mt-2 text-[12.5px] text-ink-78">{bulkMsg}</p> : null}
         </Panel>
       ) : null}
 
@@ -332,59 +355,56 @@ export function SignoffView({
                       : "Decided"
           }
         >
-          <DataTable
-            rows={rows}
-            rowKey={(c) => c.caseId}
-            selectedKey={selected}
-            onRowClick={(c) => setSelected(c.caseId)}
-            empty={emptyCopy}
-            columns={[
-              {
-                key: "id",
-                header: "Case",
-                main: true,
-                cell: (c) => (
-                  <span className="inline-flex items-center gap-1.5">
-                    {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
-                    <span>{c.caseId}</span>
-                  </span>
-                ),
-              },
-              {
-                key: "about",
-                header: "About",
-                cell: (c) => (
-                  <span className="inline-flex max-w-[230px] flex-col align-middle leading-tight">
-                    <span className="truncate">{c.title ?? c.kind}</span>
-                    <span className="text-[11px] text-ink-68">
-                      {c.subjectRef ?? c.row} · {day(c.createdAt)}
+          {rows.length === 0 ? (
+            <p className="py-6 text-center text-[14px] text-ink-68">{emptyCopy}</p>
+          ) : (
+            <ul className="divide-y divide-[var(--color-hairline)]">
+              {rows.map((c) => (
+                <li key={c.caseId}>
+                  <Link
+                    href={actionsHref(tab, c.caseId)}
+                    className={cn(
+                      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-1 py-2.5 transition-colors hover:bg-hh-honeydew/60",
+                      selected === c.caseId ? "bg-hh-honeydew" : "",
+                    )}
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[14px]">
+                      {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
+                      <b className="tracking-[-0.02em]">{c.caseId}</b>
+                      <span className="truncate text-ink-68">{c.title ?? c.kind}</span>
                     </span>
-                  </span>
-                ),
-              },
-              { key: "kind", header: "Gate", cell: (c) => c.kind.replace(/_/g, " ") },
-              {
-                key: "status",
-                header: "Status",
-                cell: (c) => <SignoffStatus status={c.status} decidedAt={c.decidedAt} />,
-              },
-            ]}
-          />
+                    <span className="justify-self-end">
+                      <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
+                    </span>
+                    <span className="truncate text-[12px] text-ink-68">
+                      {c.subjectRef ?? c.row} · {c.kind.replace(/_/g, " ")} · {day(c.createdAt)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       ) : null}
 
       {current && tab !== "board" ? (
-        <DeskModal
+        <Panel
           title={
             <span className="inline-flex items-center gap-2">
               {signoffUsedGrokbot(current) ? <GrokbotIcon size={16} title="Grokbot worked on this case" /> : null}
               {current.title ?? current.kind}
             </span>
           }
-          aside={`${current.caseId} · ${current.subjectRef ?? current.row}`}
-          onClose={() => setSelected(undefined)}
-          wide
+          aside={
+            <Link href={actionsHref(tab)} className="text-[13px] text-ink-68 hover:text-ink">
+              Close
+            </Link>
+          }
+          className="mt-5"
         >
+          <p className="mb-3 text-[12px] text-ink-68">
+            {current.caseId} · {current.subjectRef ?? current.row}
+          </p>
           <SignoffCard
             key={current.caseId}
             signoff={current}
@@ -392,7 +412,7 @@ export function SignoffView({
             confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
             embedded
           />
-        </DeskModal>
+        </Panel>
       ) : null}
     </Page>
   );
