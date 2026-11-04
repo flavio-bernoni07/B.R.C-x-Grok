@@ -26,6 +26,8 @@ export type OrderSummary = {
   lineCount: number;
   qtyOrdered: number;
   qtyConfirmed: number | null;
+  /** Friendly prose of what Grok did for this order, or null when Grok did not step in. */
+  grokExplain: string | null;
 };
 
 export type OrderCheck = { name: string; ok: boolean | null; detail: string; source: string };
@@ -110,6 +112,9 @@ function judge(order: Order | undefined, kind: string | null, cases: Signoff[], 
       : personSplit || grokSplit || codeSplit
         ? "Stock short: split accepted, checks passed"
         : "All checks passed";
+    if (status === "ready_to_ship") {
+      return { pill: { tone: "ok", label: "In shipping" }, check: `${via}; sent to Shipping${decidedBy(last)}` };
+    }
     return { pill: { tone: "ok", label: "Confirmed" }, check: `${via}; confirmed${decidedBy(last)}` };
   }
   if (status === "awaiting_confirmation") {
@@ -146,10 +151,59 @@ function retailerName(erp: Erp, gln: string | null | undefined): string {
   return erp.retailer(gln)?.name ?? gln ?? "–";
 }
 
+type ParseChange = { segment?: string; before?: string; after?: string; why?: string };
+
+/** Build a short, person-facing explanation of Grok's work on one order (no log jargon). */
+export function grokExplainFor(order: Order | undefined, cases: Signoff[], audit: AuditEntry[]): string | null {
+  const parts: string[] = [];
+  const parseFix = audit.find((a) => a.actor === "grok" && a.action === "order.parse_fix");
+  if (parseFix) {
+    parts.push("Grok cleaned up the EDI so the order could be read safely.");
+    const detail = (parseFix.detail ?? {}) as { changes?: ParseChange[] };
+    for (const ch of detail.changes ?? []) {
+      const seg = ch.segment?.trim();
+      const before = ch.before?.trim();
+      const after = ch.after?.trim();
+      const why = ch.why?.trim();
+      if (seg && before != null && after != null) {
+        parts.push(
+          why
+            ? `On ${seg}, “${before}” became “${after}” (${why}).`
+            : `On ${seg}, “${before}” became “${after}”.`,
+        );
+      }
+    }
+  }
+  const notes = [
+    ...(((order?.notes ?? {}) as { grokbot?: string[] }).grokbot ?? []),
+    ...cases.flatMap((c) => {
+      const g = c.proposal?.grokbot;
+      return Array.isArray(g) ? (g as string[]) : [];
+    }),
+  ];
+  for (const raw of notes) {
+    const line = String(raw ?? "").trim();
+    if (!line) continue;
+    // Drop raw key=value / snake_case log fragments.
+    if (/^[a-z0-9_]+=/.test(line) || /^[a-z]+_[a-z0-9_]+$/.test(line)) continue;
+    if (parts.some((p) => p.includes(line))) continue;
+    if (/^Grok corrected the EDI/i.test(line)) {
+      if (!parseFix) parts.push("Grok corrected the EDI and the order was parsed again.");
+      continue;
+    }
+    parts.push(line.endsWith(".") ? line : `${line}.`);
+  }
+  if (!parts.length && audit.some((a) => a.actor === "grok")) {
+    parts.push("Grok reviewed this order and left a note for the desk.");
+  }
+  return parts.length ? parts.join(" ") : null;
+}
+
 function summarize(erp: Erp, order: Order): OrderSummary {
   const cases = casesFor(erp, order.orderRef, order.sourceDoc);
   const docIds = [order.sourceDoc, order.ordrspRef, ...cases.map((c) => c.caseId)].filter((x): x is string => !!x);
-  const { pill, check } = judge(order, null, cases, auditFor(erp, order.orderRef, docIds));
+  const audit = auditFor(erp, order.orderRef, docIds);
+  const { pill, check } = judge(order, null, cases, audit);
   const last = cases.at(-1);
   const confirmed = order.lines.some((l) => l.qtyConfirmed != null)
     ? order.lines.reduce((a, l) => a + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0)
@@ -167,6 +221,7 @@ function summarize(erp: Erp, order: Order): OrderSummary {
     lineCount: order.lines.length,
     qtyOrdered: order.lines.reduce((a, l) => a + (l.qtyOrdered ?? 0), 0),
     qtyConfirmed: confirmed,
+    grokExplain: grokExplainFor(order, cases, audit),
   };
 }
 
@@ -198,6 +253,7 @@ function summarizeCase(erp: Erp, c: Signoff): OrderSummary {
     lineCount: avail.length,
     qtyOrdered: avail.reduce((a, l) => a + (l.ordered_qty ?? 0), 0),
     qtyConfirmed: null,
+    grokExplain: grokExplainFor(undefined, [c], []),
   };
 }
 

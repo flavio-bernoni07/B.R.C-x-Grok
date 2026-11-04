@@ -8,7 +8,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import { GrokProcessLog } from "@/components/order/grok-process-log";
 import {
   BrandTile,
   DisputesIcon,
@@ -123,7 +122,6 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
 
       <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[16px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">
         {children}
-        <GrokProcessLog />
       </main>
     </div>
   );

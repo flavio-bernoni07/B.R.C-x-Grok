@@ -87,9 +87,10 @@ export function OrdersView() {
           aside={`${simSummary.ok}/${simSummary.total} processed · ${simSummary.awaiting_person} in Sign-off Pending`}
         >
           <p className="mb-2 text-[13px] text-ink-78">
-            The <b>22 labelled bench POs</b> already in <code className="text-[12px]">data/bench/cases.json</code>, plus
-            the golden order and the ESS scenarios in <code className="text-[12px]">data/orders/feed.json</code>. Cases
-            that need a person go to Sign-off Pending; the batch never stops on the first gate.
+            Each run <b>clears</b> prior orders, sign-offs and shipping, then loads the <b>22 labelled bench POs</b> in{" "}
+            <code className="text-[12px]">data/bench/cases.json</code>, plus the golden order and the ESS scenarios in{" "}
+            <code className="text-[12px]">data/orders/feed.json</code> — as if they were the company’s first orders.
+            Cases that need a person go to Sign-off Pending; the batch never stops on the first gate.
           </p>
           {simResults ? (
             <ul className="space-y-1.5 text-[12.5px]">

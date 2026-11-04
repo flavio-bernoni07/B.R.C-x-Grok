@@ -406,11 +406,19 @@ export function rejectOrder(erp: Erp, caseId: string, d: { by: string; reason: s
 
 export type ParkedResult = { status: "parked"; order_ref: string | null };
 
-/** Manual EDI goes back to Parse; no EDI parks the order as pending. */
+/** Manual EDI goes back to Parse; no EDI parks the order as pending (optionally after sending the price mail). */
 export async function resolvePriceCase(
   erp: Erp,
   caseId: string,
-  d: { by: string; reason: string; manualEdi?: string | null; caller?: Caller | null },
+  d: {
+    by: string;
+    reason: string;
+    manualEdi?: string | null;
+    caller?: Caller | null;
+    draftMail?: string | null;
+    mailTo?: string | null;
+    sendMail?: boolean;
+  },
 ): Promise<ReceiveResult | ParkedResult> {
   const c = erp.signoff(caseId);
   if (!c || !["price_fix", "manual_edi"].includes(c.kind)) throw new Error(`${caseId} is not a price or EDI case`);
@@ -418,8 +426,32 @@ export async function resolvePriceCase(
     decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { manual_edi: true } });
     return receiveOrder(erp, d.manualEdi, { sourceName: `manual EDI for ${pyStr(c.subjectRef)}`, caller: d.caller });
   }
-  decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { parked: true } });
-  if (c.subjectRef && erp.order(c.subjectRef)) erp.setOrder(c.subjectRef, { status: "pending" });
+  const proposal = (c.proposal ?? {}) as { draft_mail?: string; grokbot?: string[] };
+  const sentMail = (d.draftMail?.trim() || proposal.draft_mail || "").trim();
+  const mailTo = d.mailTo?.trim() || null;
+  decide(erp, caseId, {
+    approve: true,
+    by: d.by,
+    reason: d.reason,
+    edits: { parked: true, mail_sent: !!d.sendMail, draft_mail: sentMail || null, mail_to: mailTo },
+  });
+  if (c.subjectRef && erp.order(c.subjectRef)) {
+    erp.setOrder(c.subjectRef, {
+      status: "pending",
+      notes: {
+        draft_mail: sentMail || proposal.draft_mail,
+        mail_to: mailTo,
+        mail_sent: !!d.sendMail,
+        grokbot: proposal.grokbot,
+        parked_for: d.sendMail ? "price_mail" : "price_park",
+      },
+    });
+  }
+  if (d.sendMail) {
+    erp.log(`person:${d.by.trim()}`, "order.price_parked", c.subjectRef, {
+      detail: { case: caseId, action: "mail", mail_to: mailTo },
+    });
+  }
   return { status: "parked", order_ref: c.subjectRef };
 }
 
@@ -430,7 +462,15 @@ export async function resolvePriceCase(
 export async function resolveQtyCase(
   erp: Erp,
   caseId: string,
-  d: { by: string; reason: string; action: "split" | "mail"; caller?: Caller | null },
+  d: {
+    by: string;
+    reason: string;
+    action: "split" | "mail";
+    caller?: Caller | null;
+    /** Edited mail body from the compose UI (falls back to the case draft). */
+    draftMail?: string | null;
+    mailTo?: string | null;
+  },
 ): Promise<ReceiveResult | ParkedResult> {
   const c = erp.signoff(caseId);
   if (!c || c.kind !== "qty_choice") throw new Error(`${caseId} is not a qty choice case`);
@@ -442,14 +482,29 @@ export async function resolveQtyCase(
   };
   const lines = proposal.lines ?? [];
   if (d.action === "mail") {
-    decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { qty_action: "mail" } });
+    const sentMail = (d.draftMail?.trim() || proposal.draft_mail || "").trim();
+    const mailTo = d.mailTo?.trim() || null;
+    decide(erp, caseId, {
+      approve: true,
+      by: d.by,
+      reason: d.reason,
+      edits: { qty_action: "mail", draft_mail: sentMail || null, mail_to: mailTo },
+    });
     if (c.subjectRef && erp.order(c.subjectRef)) {
       erp.setOrder(c.subjectRef, {
         status: "pending",
-        notes: { draft_mail: proposal.draft_mail, grokbot: proposal.grokbot, parked_for: "qty_short_mail" },
+        notes: {
+          draft_mail: sentMail || proposal.draft_mail,
+          mail_to: mailTo,
+          mail_sent: true,
+          grokbot: proposal.grokbot,
+          parked_for: "qty_short_mail",
+        },
       });
     }
-    erp.log(`person:${d.by.trim()}`, "order.qty_parked", c.subjectRef, { detail: { case: caseId, action: "mail" } });
+    erp.log(`person:${d.by.trim()}`, "order.qty_parked", c.subjectRef, {
+      detail: { case: caseId, action: "mail", mail_to: mailTo },
+    });
     return { status: "parked", order_ref: c.subjectRef };
   }
 

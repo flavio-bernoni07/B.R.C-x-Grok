@@ -218,6 +218,26 @@ describe("order service on the Mini ERP", () => {
     expect(results.at(-1)!.id).toBe("wave-5");
   });
 
+  it("clearOrderDesk wipes prior orders and sign-offs so a second simulate starts fresh", async () => {
+    const erp = freshErp();
+    const productBefore = erp.product({ gtin: "8000000000001" }) ?? erp.product({ itemCode: "RISO-ARB" });
+    await simulateOrderFeed(erp);
+    expect(erp.signoffs().length).toBeGreaterThan(0);
+    expect(erp.orders().length).toBeGreaterThan(0);
+    erp.clearOrderDesk();
+    expect(erp.signoffs()).toHaveLength(0);
+    expect(erp.orders()).toHaveLength(0);
+    expect(erp.documents()).toHaveLength(0);
+    expect(erp.auditLog()).toHaveLength(0);
+    // Master data remains.
+    if (productBefore) expect(erp.product({ gtin: productBefore.gtin })?.name).toBe(productBefore.name);
+    const { results } = await simulateOrderFeed(erp);
+    expect(results.every((r) => r.ok)).toBe(true);
+    // Counters restarted: first new case is SO-00001.
+    const ids = erp.signoffs().map((c) => c.caseId).sort();
+    expect(ids[0]).toBe("SO-00001");
+  });
+
   it("wrong price goes to the price step, not the confirm step", async () => {
     const erp = freshErp();
     const r = await receiveOrder(erp, edi("ordine_ess_bad_price.edi"));

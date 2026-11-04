@@ -42,10 +42,16 @@ export async function decideSignoff(
       return { ...base, status: "rejected" };
     }
     const manual = d.edits?.manual_edi;
+    const draftMail = typeof d.edits?.draft_mail === "string" ? d.edits.draft_mail : null;
+    const mailTo = typeof d.edits?.mail_to === "string" ? d.edits.mail_to : null;
+    const sendMail = d.edits?.send_mail === true || d.edits?.qty_action === "mail";
     const result = await resolvePriceCase(erp, caseId, {
       by: d.by,
       reason: d.reason,
       manualEdi: typeof manual === "string" && manual.trim() ? manual : null,
+      draftMail,
+      mailTo,
+      sendMail,
     });
     return { ...base, status: result.status, result };
   }
@@ -56,7 +62,15 @@ export async function decideSignoff(
       return { ...base, status: "rejected" };
     }
     const action = d.edits?.qty_action === "mail" ? "mail" : "split";
-    const result = await resolveQtyCase(erp, caseId, { by: d.by, reason: d.reason, action });
+    const draftMail = typeof d.edits?.draft_mail === "string" ? d.edits.draft_mail : null;
+    const mailTo = typeof d.edits?.mail_to === "string" ? d.edits.mail_to : null;
+    const result = await resolveQtyCase(erp, caseId, {
+      by: d.by,
+      reason: d.reason,
+      action,
+      draftMail,
+      mailTo,
+    });
     return { ...base, status: result.status, qty_action: action, result };
   }
 

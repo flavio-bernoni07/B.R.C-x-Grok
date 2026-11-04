@@ -4,6 +4,7 @@ import type { Signoff } from "@agent/lib/core/erp";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, PageHeader, Panel, Segmented, day } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
+import { DeskModal } from "./desk-modal";
 import { SignoffCard, SignoffStatus } from "./signoff";
 
 /** Desk tabs: confirm (Send-off), price errors, quantity errors, plus other rows / decided. */
@@ -66,11 +67,14 @@ export function SignoffView() {
     return decided;
   }, [tab, sendoff, price, quantity, other, decided]);
 
-  const current = cases.find((c) => c.caseId === selected && rows.some((r) => r.caseId === c.caseId)) ?? rows[0];
+  const current = cases.find((c) => c.caseId === selected) ?? null;
 
   useEffect(() => {
-    if (selected && !rows.some((r) => r.caseId === selected)) setSelected(undefined);
-  }, [rows, selected]);
+    if (selected && !cases.some((c) => c.caseId === selected && c.status === "pending") && tab !== "decided") {
+      // Case left the pending scheda after a decision — close the dialog.
+      if (selected && cases.some((c) => c.caseId === selected && c.status !== "pending")) setSelected(undefined);
+    }
+  }, [cases, selected, tab]);
 
   const sendOffOne = async (caseId: string, signer: string, why: string) => {
     const res = await fetch(`/api/signoffs/${encodeURIComponent(caseId)}/decide`, {
@@ -80,7 +84,7 @@ export function SignoffView() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? `Failed ${caseId} (${res.status})`);
-    return data;
+    return data as { result?: { shipping_ref?: string } };
   };
 
   const sendOffAll = async () => {
@@ -98,11 +102,15 @@ export function SignoffView() {
       /* ignore */
     }
     let ok = 0;
+    let shipped = 0;
     const errors: string[] = [];
-    for (const c of sendoff) {
+    // Snapshot — list mutates as cases leave Send-off.
+    const batch = [...sendoff];
+    for (const c of batch) {
       try {
-        await sendOffOne(c.caseId, signer, why);
+        const data = await sendOffOne(c.caseId, signer, why);
         ok += 1;
+        if (data.result?.shipping_ref) shipped += 1;
       } catch (err) {
         errors.push(`${c.caseId}: ${(err as Error).message}`);
       }
@@ -110,9 +118,10 @@ export function SignoffView() {
     setBulkBusy(false);
     setBulkMsg(
       errors.length
-        ? `Sent off ${ok}/${sendoff.length}. Issues: ${errors.slice(0, 3).join("; ")}`
-        : `Sent off all ${ok} orders.`,
+        ? `Sent off ${ok}/${batch.length} (${shipped} to Shipping). Issues: ${errors.slice(0, 3).join("; ")}`
+        : `Sent off all ${ok} orders · ${shipped} now in Shipping.`,
     );
+    setSelected(undefined);
     load();
   };
 
@@ -127,11 +136,16 @@ export function SignoffView() {
             ? "No other cases waiting."
             : "No decisions yet.";
 
+  const onCaseDecided = () => {
+    setSelected(undefined);
+    load();
+  };
+
   return (
     <Page>
       <PageHeader
         title="Sign-off Pending"
-        sub="Schede by gate: Send-off (confirm ORDRSP), Price error, Quantity error. Resolve one by one, or send off every ready order in one go."
+        sub="Schede by gate: Send-off (confirm ORDRSP → Shipping), Price error, Quantity error. Open a case for the actions; Send-off all releases every ready order."
       >
         <Segmented
           value={tab}
@@ -147,14 +161,10 @@ export function SignoffView() {
       </PageHeader>
 
       {tab === "sendoff" ? (
-        <Panel
-          title="Send-off"
-          aside={`${sendoff.length} ready for ORDRSP`}
-          className="mb-5"
-        >
+        <Panel title="Send-off" aside={`${sendoff.length} ready for ORDRSP`} className="mb-5">
           <p className="mb-3 text-[13px] text-ink-78">
-            These orders already passed parse, stock and price. Confirm one by one, or <b>Send-off all</b> to release
-            every ORDRSP in this scheda.
+            These orders already passed parse, stock and price. Open one to <b>Send off</b> (goes to Shipping), or{" "}
+            <b>Send-off all</b> to release every ORDRSP in this scheda.
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <input
@@ -184,53 +194,72 @@ export function SignoffView() {
 
       {tab === "price" ? (
         <p className="mb-3 text-[13px] text-ink-78">
-          Price does not match the contract. Open a case: paste a corrected ORDERS or park as pending (no ORDRSP while
-          blocked).
+          Price does not match the contract. Open a case: paste a corrected ORDERS, send the price mail, or park (no
+          ORDRSP while blocked).
         </p>
       ) : null}
       {tab === "quantity" ? (
         <p className="mb-3 text-[13px] text-ink-78">
-          Stock is short. Open a case: <b>Split available qty</b> (continue toward ORDRSP) or <b>Mail &amp; park</b> (no
-          ORDRSP while blocked).
+          Stock is short. Open a case: <b>Split available qty</b> (continue toward ORDRSP) or <b>Mail</b> (compose and
+          park — no ORDRSP while blocked).
         </p>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <Panel title={tab === "sendoff" ? "Ready to send off" : tab === "price" ? "Price errors" : tab === "quantity" ? "Quantity errors" : tab === "other" ? "Other" : "Decided"}>
-          <DataTable
-            rows={rows}
-            rowKey={(c) => c.caseId}
-            selectedKey={current?.caseId}
-            onRowClick={(c) => setSelected(c.caseId)}
-            empty={emptyCopy}
-            columns={[
-              { key: "id", header: "Case", main: true, cell: (c) => c.caseId },
-              {
-                key: "about",
-                header: "About",
-                cell: (c) => (
-                  <span className="inline-flex max-w-[230px] flex-col align-middle leading-tight">
-                    <span className="truncate">{c.title ?? c.kind}</span>
-                    <span className="text-[11px] text-ink-68">
-                      {c.subjectRef ?? c.row} · {day(c.createdAt)}
-                    </span>
+      <Panel
+        title={
+          tab === "sendoff"
+            ? "Ready to send off"
+            : tab === "price"
+              ? "Price errors"
+              : tab === "quantity"
+                ? "Quantity errors"
+                : tab === "other"
+                  ? "Other"
+                  : "Decided"
+        }
+      >
+        <DataTable
+          rows={rows}
+          rowKey={(c) => c.caseId}
+          selectedKey={selected}
+          onRowClick={(c) => setSelected(c.caseId)}
+          empty={emptyCopy}
+          columns={[
+            { key: "id", header: "Case", main: true, cell: (c) => c.caseId },
+            {
+              key: "about",
+              header: "About",
+              cell: (c) => (
+                <span className="inline-flex max-w-[230px] flex-col align-middle leading-tight">
+                  <span className="truncate">{c.title ?? c.kind}</span>
+                  <span className="text-[11px] text-ink-68">
+                    {c.subjectRef ?? c.row} · {day(c.createdAt)}
                   </span>
-                ),
-              },
-              { key: "kind", header: "Gate", cell: (c) => c.kind.replace(/_/g, " ") },
-              { key: "status", header: "Status", cell: (c) => <SignoffStatus status={c.status} /> },
-            ]}
-          />
-        </Panel>
-        {current ? (
+                </span>
+              ),
+            },
+            { key: "kind", header: "Gate", cell: (c) => c.kind.replace(/_/g, " ") },
+            { key: "status", header: "Status", cell: (c) => <SignoffStatus status={c.status} /> },
+          ]}
+        />
+      </Panel>
+
+      {current ? (
+        <DeskModal
+          title={current.title ?? current.kind}
+          aside={`${current.caseId} · ${current.subjectRef ?? current.row}`}
+          onClose={() => setSelected(undefined)}
+          wide
+        >
           <SignoffCard
             key={current.caseId}
             signoff={current}
-            onDecided={load}
-            confirmLabel={tab === "sendoff" ? "Send off" : undefined}
+            onDecided={onCaseDecided}
+            confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
+            embedded
           />
-        ) : null}
-      </div>
+        </DeskModal>
+      ) : null}
     </Page>
   );
 }
