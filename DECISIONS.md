@@ -9,6 +9,7 @@ Detail: [order-dec.md](order-dec.md)
 | When | Decision | Why | Who |
 |---|---|---|---|
 | Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
+| Wed 4 Nov | After Grokbot on parse_flags, re-enter Parse EDI on the corrected message; after Grokbot on qty_short, re-enter availability check — no skip to sign-off | Corrections must pass code checks again | order |
 
 ## Forecast and quality (Flavio)
 

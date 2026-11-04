@@ -26,20 +26,24 @@ Segnali che il **parser EDI (codice)** alza quando l’ordine non è “pulito�
 
 Esempi: segmento obbligatorio mancante; `QTY` ambigua (`20.000` vs `20000`); GTIN malformato; `NAD+BY`/`NAD+SU` assenti o non interpretable; segmenti spezzati / `'` mancanti dopo normalizzazione spazi/indent.
 
-Quei casi → **Grokbot** (grezzo + cosa il parser ha capito / dove ha dubitato). Parse netto → niente flag → si va a disponibilità → prezzo → sign-off.
+Quei casi → **Grokbot** identifica e propone la correzione → si **rientra in Parse EDI** sul messaggio/ordine corretto da Grokbot (non si salta ai check finché il parse non è netto). Parse netto → niente flag → disponibilità → prezzo → sign-off.
 
 ## Pipeline
+
+Grokbot **non chiude** i casi `parse_flags` / `qty_short` andando dritto al sign-off: corregge e **rimanda allo step di codice** che aveva fallito.
 
 ```mermaid
 flowchart TD
   inOrders[ORDERS_EDI] --> parse[Parse_EDI_code]
-  parse -->|parse_flags| grok[Grokbot]
-  parse --> stock[Check_availability_hook]
+  parse -->|parse_flags| grokParse[Grokbot]
+  grokParse -->|corrected_by_Grokbot| parse
+  parse -->|clean_parse| stock[Check_availability_hook]
   stock -->|qty_ok| price[Check_PRI_vs_contract]
-  stock -->|qty_short| grok
+  stock -->|qty_short| grokQty[Grokbot]
+  grokQty -->|revised_qty_or_split| stock
   price -->|price_ok_or_no_PRI| signoff[Human_signoff_always]
-  price -->|price_mismatch| grok
-  grok -->|draft_fix_or_mail| signoff
+  price -->|price_mismatch| grokPrice[Grokbot]
+  grokPrice -->|draft_mail| signoff
   signoff --> ordrsp[Emit_ORDRSP]
   ordrsp --> ship[Handoff_shipping_agent]
 ```
@@ -49,14 +53,16 @@ flowchart TD
 - Campi chiave: `BGM`, `DTM`, `NAD+BY`, `NAD+SU`, `LIN`, `QTY` (+ `PRI` se presente).
 - Normalizzare whitespace/indent; segment terminator `'`; decimali IT vs plain (`20.000` vs `20000`).
 - Segmenti/campi ambigui o incompleti → **flag → Grokbot** (non silenziare).
+- Grokbot restituisce la correzione (EDI e/o campi normalizzati) → **di nuovo Parse EDI** su quella versione. Solo parse senza flag procede ai check.
 
 ### 2. Disponibilità (hook)
 
 - Interfaccia tipo `getAvailability({ gtin, buyer, supplier, requestedDate })` con implementazione stub/`TODO` finché Core non fornisce stock + production events.
-- Qty entro disponibilità → avanti.
+- Qty entro disponibilità → avanti al check prezzo.
 - Qty oltre → Grokbot sceglie tra:
   - **split** su più giornate (priorità a chiudere questo ordine prima dei nuovi) + comunicazione informativa;
-  - **negoziare** qty inferiore (eventuale sconto da contratto) + comunicazione all’azienda; poi si riparte dai checks sul confermato.
+  - **negoziare** qty inferiore (eventuale sconto da contratto) + comunicazione all’azienda.
+- Dopo la decisione Grokbot si **ritorna al check disponibilità** sull’ordine/righe riviste (non al sign-off diretto). Il loop continua finché `qty_ok` (con un limite di tentativi in implementazione per evitare cicli infiniti).
 
 ### 3. Prezzo (codice + contratto fittizio)
 
