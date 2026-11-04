@@ -43,7 +43,11 @@ flowchart TD
   grokQty -->|split_or_mail_then_revised_qty| stock
   price -->|price_ok_or_no_PRI| signoff[Human_signoff_always]
   price -->|price_mismatch| grokPrice[Grokbot]
-  grokPrice -->|draft_mail| signoff
+  grokPrice -->|draft_mail| priceSplit{After_draft_mail}
+  priceSplit --> priceHuman[Prompt_manual_EDI_or_assign]
+  priceHuman -->|manual_EDI_data| parse
+  priceHuman -->|park_as_pending| pending[Pending_order]
+  pending -->|assign_new_ORDERS_later| parse
   signoff --> ordrsp[Emit_ORDRSP]
   ordrsp --> ship[Handoff_shipping_agent]
 ```
@@ -69,13 +73,29 @@ flowchart TD
 - Contratto demo in `data/` (o equivalente): listino, soglie sconto quantità, buyer/supplier.
 - Se `PRI` presente: deve combaciare col prezzo contrattuale applicabile alla qty (pieno o scontato se soglia rispettata).
 - Mismatch → Grokbot prepara **bozza mail** che cita il contratto; **persona** rivede e invia manualmente (nessun send automatico).
+- **Non** si va al `Human_signoff_always` di conferma ordine. Dopo la draft mail c’è uno **split** verso un altro step umano dedicato (sotto).
 
-### 4. Sign-off (sempre)
+### 4. Dopo draft mail (price mismatch): prompt manual EDI / assign
 
-- Coda/UI di conferma con: ordine parsato, esiti check, proposta Grok (se c’è), bozza ORDRSP, bozza mail se prezzo.
+Step umano distinto dal sign-off di conferma:
+
+**Prompt user for manual EDI / assign EDI to order**
+
+Lo user sceglie una delle due:
+
+1. **Manual EDI** — inserisce lui i dati necessari (campi corretti / EDI rivisto). Si **rientra in Parse EDI** su quella versione.
+2. **Park as pending** — mette da parte l’ordine come **pending**. Più tardi può **associare un nuovo ORDERS** a quel pending; l’EDI nuovo entra di nuovo da **Parse EDI** e ripercorre i check.
+
+Finché non c’è un EDI accettato dal parse + checks ok, questo ramo **non** emette ORDRSP e **non** fa handoff a shipping.
+
+### 5. Sign-off di conferma (sempre, solo sul path “checks ok”)
+
+- Vale per gli ordini che hanno passato parse pulito + disponibilità + prezzo (o no PRI).
+- Coda/UI di conferma con: ordine parsato, esiti check, proposta Grok se veniva da qty/split già rientrata nei check, bozza ORDRSP.
 - Solo dopo OK umano → emissione ORDRSP e handoff.
+- Il path prezzo errato **non** usa questo sign-off; usa lo step §4.
 
-### 5. Out
+### 6. Out
 
 - **ORDRSP** (codice, da dati confermati) salvato in Mini ERP.
 - Payload handoff a shipping: righe confermate, date, riferimenti ordine/ORDRSP (niente ORDERS grezzo non confermato).
