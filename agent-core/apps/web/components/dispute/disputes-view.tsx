@@ -7,6 +7,7 @@
  */
 import type { ClaimDetail, ClaimRow } from "@agent/lib/dispute/views";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PageHeader, Panel, Stat } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { askHref } from "@/components/shell/overview-chat";
@@ -16,8 +17,10 @@ import { ClaimsTable } from "./claims-table";
 type ListResponse = { claims: ClaimRow[]; samples: { name: string; text: string }[] };
 
 export function DisputesView() {
+  const searchParams = useSearchParams();
+  const claimFromUrl = searchParams.get("claim") ?? undefined;
   const [list, setList] = useState<ListResponse>();
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string | undefined>(claimFromUrl);
   const [detail, setDetail] = useState<ClaimDetail>();
   const [text, setText] = useState("");
   const [source, setSource] = useState("");
@@ -30,10 +33,10 @@ export function DisputesView() {
         .then((r) => r.json())
         .then((d: ListResponse) => {
           setList(d);
-          setSelected((s) => s ?? d.claims[0]?.claim_id);
+          setSelected((s) => s ?? claimFromUrl ?? d.claims[0]?.claim_id);
         })
         .catch(() => {}),
-    [],
+    [claimFromUrl],
   );
 
   const loadDetail = useCallback((id: string) => {
