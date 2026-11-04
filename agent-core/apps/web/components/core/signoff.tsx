@@ -18,13 +18,41 @@ import { cn } from "@/lib/utils";
 
 const ROW_LABEL: Record<string, string> = { order: "Order", shipping: "Shipping", dispute: "Dispute" };
 
+const mentionsGrok = (s: string) => /Grokbot|\bGrok\b/i.test(s);
+
 /** True when Grokbot actually stepped in (parse fix / Grok note), not merely any proposal note. */
 export function signoffUsedGrokbot(c: Signoff): boolean {
-  const mentions = (s: string) => /Grokbot|\bGrok\b/i.test(s);
   const notes = c.proposal?.grokbot;
-  if (Array.isArray(notes) && notes.some((n) => mentions(String(n ?? "")))) return true;
-  if (c.reasons?.some((r) => mentions(r))) return true;
+  if (Array.isArray(notes) && notes.some((n) => mentionsGrok(String(n ?? "")))) return true;
+  if (c.reasons?.some((r) => mentionsGrok(r))) return true;
+  if (c.proposal?.mail_by === "grok") return true;
   return false;
+}
+
+/** Person-facing lines for what Grokbot did on this case (EDI fix, mail polish, notes). */
+export function grokbotActionLines(c: Signoff): string[] {
+  const out: string[] = [];
+  const push = (raw: string) => {
+    const line = raw.trim();
+    if (!line) return;
+    if (out.some((x) => x === line || x.includes(line) || line.includes(x))) return;
+    out.push(line.endsWith(".") ? line : `${line}.`);
+  };
+
+  const notes = c.proposal?.grokbot;
+  if (Array.isArray(notes)) {
+    for (const n of notes) {
+      const s = String(n ?? "");
+      if (mentionsGrok(s)) push(s);
+    }
+  }
+  for (const r of c.reasons ?? []) {
+    if (mentionsGrok(r)) push(r);
+  }
+  if (c.proposal?.mail_by === "grok") {
+    push("Grokbot rewrote the draft mail to the retailer (figures unchanged); a person still reviews and sends it");
+  }
+  return out;
 }
 
 export function signoffTone(status: string, decidedAt?: string | null): PillTone {
@@ -154,6 +182,31 @@ function ProblemList({ items }: { readonly items: ProblemLine[] }) {
           <li key={`${item.title}-${item.detail ?? ""}`} className="rounded-[10px] bg-hh-honeydew px-3 py-2">
             <div className="font-bold text-[13px] tracking-[-0.01em]">{item.title}</div>
             {item.detail ? <div className="mt-0.5 text-[12.5px] text-ink-78">{item.detail}</div> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Clear Grokbot block in the open case scheda — not only the tiny list icon. */
+function GrokbotAction({ signoff }: { readonly signoff: Signoff }) {
+  const lines = grokbotActionLines(signoff);
+  if (!lines.length && !signoffUsedGrokbot(signoff)) return null;
+  const shown =
+    lines.length > 0
+      ? lines
+      : ["Grokbot stepped in on this case (see reasons and the draft below)."];
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-ink-68">
+        <GrokbotIcon size={14} title="Grokbot" />
+        <span>What Grokbot did</span>
+      </div>
+      <ul className="space-y-2">
+        {shown.map((line) => (
+          <li key={line} className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] leading-snug text-ink">
+            {line}
           </li>
         ))}
       </ul>
@@ -375,6 +428,7 @@ export function SignoffCard({
           </ul>
         </div>
       ) : null}
+      <GrokbotAction signoff={c} />
       <ProposalBody signoff={c} />
 
       {open ? (

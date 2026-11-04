@@ -266,7 +266,12 @@ export function OrdersView({
         </Panel>
         {selected ? (
           <Panel
-            title={selected}
+            title={
+              <span className="inline-flex items-center gap-2">
+                {ws?.details.grokChanges.length ? <GrokbotIcon size={16} title="Grokbot worked on this order" /> : null}
+                {selected}
+              </span>
+            }
             aside={
               <a href={ordersHref({ filter, q: qParam })} className="text-ink-68 hover:text-ink">
                 Close
