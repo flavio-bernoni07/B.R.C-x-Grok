@@ -47,6 +47,28 @@ python3 -m pytest tests/test_pull_facts.py -q
 Optional live path (needs API key):  
 `python3 -m dispute.pull_facts --from-claim-email data/disputes/claims/01_shortage_messy_it.txt`
 
+## Verdict + sources
+
+`verdict.py` takes claim-reader output + pull_facts (or a saved facts JSON), loads the
+Playbook and contract excerpt, and asks Grok for `accept` | `partial` | `reject`
+with a source on every point. Code normalizes amounts to figures present in
+claim / docs / threeway — invented euros are dropped or clamped.
+
+### Run
+
+```bash
+# dry-run: load claim + facts + playbook, no API key
+python3 -m dispute.verdict --extraction data/disputes/extractions/01_shortage.json --dry-run
+
+# live (needs XAI_API_KEY or GROK_API_KEY)
+python3 -m dispute.verdict --extraction data/disputes/extractions/01_shortage.json
+
+python3 -m pytest tests/test_verdict.py -q
+```
+
+Playbook: `data/disputes/playbook.md`  
+Contract excerpt: `data/disputes/contract_excerpt.md`
+
 ### Out of scope (later PRs)
 
-Verdict + sources, TD04 / credit note, real Mini ERP / SQLite wiring.
+TD04 / credit note generation, sign-off web UI, real Mini ERP / SQLite wiring.

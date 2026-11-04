@@ -17,12 +17,13 @@
 
 - First dispute-owned slice is the **claim reader** (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
 - Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage).
-- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from mock Mini ERP fixtures (`data/disputes/erp/catalog.json`), then run three-way matching. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok. Verdict and TD04 are still out of scope.
+- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from mock Mini ERP fixtures (`data/disputes/erp/catalog.json`), then run three-way matching. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok.
+- Third slice is **Verdict + sources** (`dispute/verdict.py`): Grok reads the Playbook (`data/disputes/playbook.md`) plus claim + facts + contract excerpt (`data/disputes/contract_excerpt.md`) and proposes `accept` | `partial` | `reject` with per-point citations. Code validates amounts against claim/facts/threeway (no invented totals). TD04 / credit-note generation and the sign-off UI are still out of scope.
 
 ## What I need from others
 
 - Order, DESADV, invoice, threeway result and signed DDT for any order, from the Mini ERP (core, Shipping and invoicing)
-- The contract (core or me)
+- The contract (core or me) — dispute-local excerpt is in `data/disputes/contract_excerpt.md` until shared core lands
 
 ## What I hand to others
 
