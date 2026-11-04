@@ -19,7 +19,7 @@ export async function seedDispatchDay(erp: Erp, opts: { say?: (line: string) => 
   const dir = dataPath("world", "dispatch");
   const files = readdirSync(dir).filter((f) => f.startsWith("ORDERS_") && f.endsWith(".edi")).sort();
   if (!batches(erp, "8000000000000").some((b) => b.batch === "LOT-A-0312")) {
-    recordEvent(erp, "batch_finished", { batch: "LOT-A-0312", gtin: "8000000000000", qty: 20000, note: "Arborio 1 kg, line 2, finished 5 Nov" });
+    recordEvent(erp, "batch_finished", { batch: "LOT-A-0312", gtin: "8000000000000", qty: 26000, note: "Arborio 1 kg, line 2, finished 5 Nov" });
   }
   const refs: string[] = [];
   for (const f of files) {

@@ -1,6 +1,7 @@
 /** The logistics agent: shared trucks and stop order on real road distances, against one truck per order. */
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Erp } from "../agent/lib/core/erp";
+import { availableToPromise } from "../agent/lib/core/stock";
 import { freshErp } from "../agent/lib/core/world";
 import { DISPATCH_DAY, seedDispatchDay } from "../agent/lib/demo/dispatch";
 import { decideSignoff } from "../agent/lib/shipping/decide";
@@ -22,6 +23,10 @@ describe("logistics agent", () => {
   let erp: Erp;
   beforeAll(async () => {
     erp = await dispatchDay();
+  });
+
+  it("leaves at least 6,000 Arborio packs to promise, so the ambiguous-order scenario (ESS-AMB-001) still fits", () => {
+    expect(availableToPromise(erp, "8000000000000").atp).toBeGreaterThanOrEqual(6000);
   });
 
   it("finds the six dispatch-day orders ready to ship", () => {
