@@ -17,12 +17,60 @@
     "needs_sign_off": false,
     "summary": "The signed DDT carries a reservation for one missing pallet of 240 packs, and the invoice bills the 10,800 on the DESADV. Credit 240 x 2.20.",
     "points": [
-      {"text": "The retailer signed the DDT with a reservation: 10,560 received of 10,800 shipped, one pallet missing", "amount": 528.0,
-       "source": {"kind": "pod", "ref": "DDT-ESS-GOLD-001-1", "detail": "POD-DESADV-ESS-GOLD-001-1"}},
-      {"text": "Invoice FT-2026/0001 bills 10,800 packs at 2.20, the quantity on the DESADV", "amount": null,
-       "source": {"kind": "invoice", "ref": "FT-2026/0001", "detail": "invoice line CAR-1KG"}},
-      {"text": "Playbook shortage rule: proof of delivery beats the despatch advice when the reservation was written at unloading", "amount": null,
-       "source": {"kind": "playbook", "ref": "Shortage / OSD", "detail": "prefer signed DDT/POD"}}
+      {
+        "text": "The retailer signed the DDT with a reservation: 10,560 received of 10,800 shipped, one pallet missing",
+        "amount": 528.0,
+        "source": {
+          "kind": "pod",
+          "ref": "DDT-ESS-GOLD-001-1",
+          "detail": "POD-DESADV-ESS-GOLD-001-1"
+        }
+      },
+      {
+        "text": "Invoice FT-2026/0001 bills 10,800 packs at 2.20, the quantity on the DESADV",
+        "amount": null,
+        "source": {
+          "kind": "invoice",
+          "ref": "FT-2026/0001",
+          "detail": "invoice line CAR-1KG"
+        }
+      },
+      {
+        "text": "Playbook shortage rule: proof of delivery beats the despatch advice when the reservation was written at unloading",
+        "amount": null,
+        "source": {
+          "kind": "playbook",
+          "ref": "Shortage / OSD",
+          "detail": "prefer signed DDT/POD"
+        }
+      }
+    ]
+  },
+  "deduction_verdict": {
+    "decision": "reject",
+    "amount": null,
+    "confidence": 0.72,
+    "needs_sign_off": false,
+    "summary": "The contract has no clause for flyer contributions: the promo annex RS-PROMO-AUT26 only sets a Basmati price. Ask Esselunga to repay the 300.00 deducted from FT-2026/0001.",
+    "points": [
+      {
+        "text": "No clause in the supply agreement allows a promotional contribution deduction",
+        "amount": null,
+        "source": {
+          "kind": "contract",
+          "ref": "RS-GDO-MASTER-2026 §12",
+          "detail": "promo annex RS-PROMO-AUT26 covers Basmati prices only"
+        }
+      },
+      {
+        "text": "Invoice FT-2026/0001 was issued for the 10,800 packs shipped, matched to the DESADV",
+        "amount": null,
+        "source": {
+          "kind": "invoice",
+          "ref": "FT-2026/0001",
+          "detail": "reconciled before sending"
+        }
+      }
     ]
   }
 }

@@ -12,17 +12,19 @@ Grok decides and explains, code writes every document and amount (dispute-dec.md
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
+from agent import learning
 from core import signoff
 from core.erp import Erp
-from dispute.claim_reader import read_claim
+from dispute.claim_reader import ClaimType, parse_extraction, read_claim
 from dispute.mini_erp import MiniErpStore
 from dispute.outcome import emit_outcome
 from dispute.pull_facts import pull_facts
-from dispute.verdict import DEFAULT_PLAYBOOK, decide_verdict
+from dispute.verdict import DEFAULT_PLAYBOOK, collect_known_amounts, decide_verdict, parse_verdict_payload
 from shipping.service import export_for_dispute
 
 OUTCOME_KINDS = {
@@ -45,6 +47,51 @@ def _save_outcome(erp: Erp, claim_id: str, outcome: Any) -> None:
         erp.log("code", f"dispute.{key}", claim_id, source_doc=doc_id)
     erp.set_claim(claim_id, status="closed" if outcome.kind != "awaiting_sign_off" else "awaiting_sign_off",
                   outcome=outcome.to_dict())
+    if outcome.kind != "awaiting_sign_off":
+        from finance.receivables import on_claim_closed
+
+        on_claim_closed(erp, claim_id, outcome.decision)
+
+
+COMPLAINT_WINDOW_DAYS = 30  # contract_excerpt.md §4
+
+
+def _iso_date(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def claim_checks(erp: Erp, claim_id: str, extraction: Any, facts: dict[str, Any],
+                 received_on: date) -> tuple[dict[str, Any], list[str]]:
+    """Facts code can settle on its own: the complaint window and duplicate claims.
+    Each failed check is a reason for a person; all of them go to Grok as facts."""
+    order = facts.get("order") or {}
+    order_ref = order.get("order_ref") or extraction.order_ref
+    delivered = [_iso_date(p.get("at")) for p in facts.get("proofs") or [] if p.get("kind") in {"pod", "recadv"}]
+    delivered = [d for d in delivered if d]
+    shipped = _iso_date((facts.get("desadv") or {}).get("ship_date"))
+    delivered_on = min(delivered) if delivered else shipped
+    checks: dict[str, Any] = {"received_on": received_on.isoformat(),
+                              "delivered_on": delivered_on.isoformat() if delivered_on else None,
+                              "complaint_window_days": COMPLAINT_WINDOW_DAYS}
+    reasons: list[str] = []
+    if delivered_on:
+        days = (received_on - delivered_on).days
+        checks["days_after_delivery"] = days
+        checks["inside_complaint_window"] = days <= COMPLAINT_WINDOW_DAYS
+        if days > COMPLAINT_WINDOW_DAYS:
+            reasons.append(f"the claim arrived {days} days after delivery; the contract allows "
+                           f"{COMPLAINT_WINDOW_DAYS} (§4)")
+    same = [c for c in erp.claims() if c["claim_id"] != claim_id and c["order_ref"] == order_ref
+            and c["status"] not in {"reopened", "received"}
+            and (c["extraction"] or {}).get("claim_type") == extraction.claim_type.value
+            and (c["extraction"] or {}).get("invoice_ref") == extraction.invoice_ref]
+    checks["earlier_claims_same_order_and_type"] = [c["claim_id"] for c in same]
+    for c in same:
+        reasons.append(f"claim {c['claim_id']} on the same order, invoice and type is already {c['status']}")
+    return checks, reasons
 
 
 def handle_claim(
@@ -57,31 +104,63 @@ def handle_claim(
     verdict_caller: Callable[[list[dict[str, str]]], dict[str, Any]] | None = None,
     include_fixtures: bool = True,
     issue_date: date | None = None,
+    received_on: date | None = None,
+    extraction: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`extraction`: a claim already structured by code from a document (a REMADV deduction).
+    It is used as given, claim type included, instead of reading the text."""
     doc_id = erp.add_document("claim email", None, email_text, path=source_name)
     claim_id = erp.next_id("claim", "CLM-")
     erp.save_claim(claim_id=claim_id, source_doc=doc_id, status="received")
     erp.log("retailer", "dispute.claim_received", claim_id, source_doc=doc_id)
 
-    extraction = read_claim(email_text, grok_caller=read_caller)
-    erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+    structured = extraction
+    if structured is not None:
+        extraction = replace(parse_extraction(structured), claim_type=ClaimType(structured["claim_type"]))
+        erp.log("code", "dispute.claim_from_document", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+    else:
+        extraction = read_claim(email_text, grok_caller=read_caller)
+        erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
     facts = pull_facts(extraction, store=_store(erp, include_fixtures))
     erp.log("code", "dispute.facts_pulled", claim_id, detail={"misses": [m.to_dict() for m in facts.misses],
                                                                "threeway": facts.threeway.summary if facts.threeway else None})
-    verdict = decide_verdict(extraction, facts, grok_caller=verdict_caller)
-    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict()}
+    facts_dict = facts.to_dict()
+    checks, check_reasons = claim_checks(erp, claim_id, extraction, facts_dict, received_on or date.today())
+    facts_dict["checks"] = checks
+    signature = learning.dispute_signature(extraction.to_dict(), facts_dict)
+    rule = learning.match_rule(erp, signature)
+    precedents: list[dict[str, Any]] = []
+    if rule:
+        verdict = _verdict_from_rule(rule, extraction, facts_dict)
+        # The rule was learned from people's decisions on exactly this kind of case and approved by a
+        # person, so the case type and the check flags in its pattern are no longer open questions.
+        reasons = [r for r in verdict.sign_off_reasons if r not in RULE_COVERS]
+        erp.log("code", "dispute.rule_applied", claim_id, source_doc=rule["rule_id"], detail=rule["text"])
+    else:
+        precedents = learning.similar(erp, signature)
+        facts_dict["precedents"] = precedents
+        verdict = decide_verdict(extraction, facts_dict, grok_caller=verdict_caller)
+        reasons = verdict.sign_off_reasons + [r for r in check_reasons if r not in verdict.sign_off_reasons]
+    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict(), "checks": checks,
+                                        "sign_off_reasons": reasons, "needs_sign_off": bool(reasons)}
     erp.log("grok", "dispute.verdict", claim_id, detail={"decision": verdict.decision.value, "amount": verdict.amount,
-                                                          "sign_off_reasons": verdict.sign_off_reasons})
-    erp.set_claim(claim_id, order_ref=extraction.order_ref, invoice_ref=extraction.invoice_ref,
+                                                          "sign_off_reasons": reasons})
+    erp.set_claim(claim_id, order_ref=(facts.order or {}).get("order_ref") or extraction.order_ref,
+                  invoice_ref=(facts.invoice or {}).get("invoice_ref") or extraction.invoice_ref,
                   extraction=extraction.to_dict(), verdict=verdict_dict)
 
-    facts_dict = facts.to_dict()
-    if verdict.needs_sign_off:
+    learning.log_case(erp, task="dispute.verdict", subject_ref=claim_id, signature=signature,
+                      proposal={"decision": verdict.decision.value, "amount": verdict.amount},
+                      confidence=verdict.confidence, asked_person=bool(reasons), why_person=reasons,
+                      decided_by=None if reasons else ("rule" if rule else "grok"),
+                      decision=None if reasons else verdict.decision.value,
+                      rule_id=rule["rule_id"] if rule else None, precedents=[p["case_id"] for p in precedents])
+    if reasons:
         case_id = signoff.request(
             erp, row="dispute", kind="verdict", subject_ref=claim_id,
             title=f"Claim {claim_id} on {extraction.order_ref or 'an unknown order'}: Grok proposes {verdict.decision.value}",
             proposal={"verdict": verdict_dict, "facts": facts_dict, "out_dir": str(out_dir)},
-            reasons=verdict.sign_off_reasons,
+            reasons=reasons,
         )
         erp.set_claim(claim_id, status="awaiting_sign_off")
         return {"status": "awaiting_person", "claim_id": claim_id, "case_id": case_id, "verdict": verdict_dict}
@@ -89,6 +168,27 @@ def handle_claim(
     outcome = emit_outcome(verdict_dict, facts=facts_dict, out_dir=out_dir, issue_date=issue_date)
     _save_outcome(erp, claim_id, outcome)
     return {"status": "closed", "claim_id": claim_id, "verdict": verdict_dict, "outcome": outcome.to_dict()}
+
+
+RULE_COVERS = {"the claim type is not covered by the Playbook", "Grok marked the case as unsure"}
+
+
+def _verdict_from_rule(rule: dict[str, Any], extraction: Any, facts: dict[str, Any]):
+    """An approved rule decides: no Grok call. Amounts still come only from the documents."""
+    decision = rule["action"]["decision"]
+    amount = extraction.amount if decision in {"accept", "partial"} else None
+    who = f"approved by {rule['approved_by']}" if rule.get("approved_by") else "approved"
+    points = [{"text": rule["text"], "amount": amount,
+               "source": {"kind": "playbook", "ref": rule["rule_id"], "detail": who}}]
+    for proof in facts.get("proofs") or []:
+        points.append({"text": proof.get("summary") or proof.get("kind"), "amount": None,
+                       "source": {"kind": proof.get("kind") or "other", "ref": proof.get("ref") or proof.get("doc_id"),
+                                  "detail": proof.get("doc_id") or ""}})
+    payload = {"decision": decision, "amount": amount, "confidence": 1.0, "needs_sign_off": False,
+               "summary": f"Decided by rule {rule['rule_id']} ({who}), learned from cases {', '.join(rule['support'])}.",
+               "points": points}
+    return parse_verdict_payload(payload, known_amounts=collect_known_amounts(extraction, facts),
+                                 playbook_path=str(DEFAULT_PLAYBOOK), claim=extraction, facts=facts)
 
 
 def approve_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
@@ -103,6 +203,8 @@ def approve_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
                            issue_date=issue_date, approved_by=by)
     _save_outcome(erp, case["subject_ref"], outcome)
     claim = verdict.get("claim") or {}
+    learning.record_person_decision(erp, case["subject_ref"], decided_by=by, decision=verdict["decision"],
+                                    reason=reason, overturned=False)
     signoff.record_past_case(playbook_path, when=(issue_date or date.today()).isoformat(),
                              order_ref=claim.get("order_ref") or "—", case_type=claim.get("claim_type") or "other",
                              decision=f"{verdict['decision']} (approved)", amount=verdict.get("amount"),
@@ -119,6 +221,8 @@ def reject_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
     verdict = case["proposal"]["verdict"]
     claim = verdict.get("claim") or {}
     erp.set_claim(case["subject_ref"], status="reopened")
+    learning.record_person_decision(erp, case["subject_ref"], decided_by=by, decision=f"not {verdict['decision']}",
+                                    reason=reason, overturned=True)
     signoff.record_past_case(playbook_path, when=date.today().isoformat(), order_ref=claim.get("order_ref") or "—",
                              case_type=claim.get("claim_type") or "other",
                              decision=f"{verdict['decision']} overturned", amount=verdict.get("amount"),

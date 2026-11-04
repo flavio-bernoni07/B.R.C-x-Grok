@@ -19,7 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from agent import grok
-from agent.checks import unknown_numbers
+from agent.checks import unknown_amounts
 from core import signoff
 from core.erp import Erp
 from core.stock import allocate, batches
@@ -116,7 +116,8 @@ def record_delivery(erp: Erp, desadv_ref: str, *, signed_by: str, received: dict
     reserve = f", with reservation: {note}" if note else ", no notes"
     summary = f"Signed DDT {shipment['ddt_ref']} by {signed_by}{' on ' + when if when else ''}: {'; '.join(parts)}{reserve}"
     doc_id = f"POD-{desadv_ref}"
-    erp.add_proof(doc_id=doc_id, order_ref=shipment["order_ref"], kind="pod", ref=shipment["ddt_ref"], summary=summary)
+    erp.add_proof(doc_id=doc_id, order_ref=shipment["order_ref"], kind="pod", ref=shipment["ddt_ref"], summary=summary,
+                  at=when)
     erp.log("retailer", "shipping.delivered", shipment["order_ref"], source_doc=doc_id, detail={"received": got, "note": note})
     return doc_id
 
@@ -202,7 +203,7 @@ def explain_flags(report_text: str, facts_text: str, *, caller: Any = None) -> t
         text = str(payload.get("explanation") or "")
         if not text:
             return ["explanation is empty"]
-        extra = unknown_numbers(text, report_text + " " + facts_text)
+        extra = unknown_amounts(text, report_text + " " + facts_text)
         return [f"figures not in the facts: {sorted(extra)}"] if extra else []
 
     try:

@@ -20,6 +20,11 @@ Detail: [order-dec.md](order-dec.md)
 | Wed 4 Nov | `shipping/` rebuilt from the v0.5.0 write-up below (trucks, scans, dispatch, cases), plus TD01 + INVOIC 380 and reconciliation that names every cause. No euro threshold: an employee in the case role approves every exception resolution | Nicola's code is not in the repo; the demo needs one order end to end | Flavio, shipping |
 | Wed 4 Nov | One Grok client, `agent/grok.py`, used by every row (Dispute moved onto it) | grok-agent-dec.md step 1 | Flavio, all rows |
 | Wed 4 Nov | Benchmark: 22 labelled cases, ours 21/22 against threeway 14/22 on whether to act, 21/22 against 10/22 on causes (`python -m bench.score`) | The track's first criterion | Flavio, shipping |
+| Wed 4 Nov | Receivables: REMADV payments are posted, a deduction that equals our credit note is matched, any other deduction opens a Dispute claim with the remittance as source; 60-day terms (D.Lgs. 198/2021) | Short payments are the other way a dispute starts, and cash is what the company watches | Flavio, finance |
+| Wed 4 Nov | Learning loop (grok-agent-dec.md): an approved rule decides with no Grok call; a rule is drafted after the same decision three times, none overturned; "no precedent yet" alone does not send a case to a person | Fewer people and fewer Grok calls over time, without loosening the ambiguity rule | Flavio, all rows |
+| Wed 4 Nov | CRM backend: one `crm.actions.decide()` for the sign-off desk, three-line briefings, the inbox router, plain-language questions on fixed read-only views, a JSON API (`python -m crm.api`) | The screen can be designed on top of it | Flavio, core |
+| Wed 4 Nov | Forecast and quality built in `forecast_quality/` on real EU, ECB and World Bank data; the buy-or-wait backtest shows no proven saving (+0.38%, 32 of 64), so it is pitched as signals for the buyer | Honest result beats a promise we cannot back | Flavio, forecast |
+| Wed 4 Nov | Two paddy price outlooks now exist: the Rice Agent (`agent-core/`, Prophet in `planning/rice_forecast/`, prices from 2021 in `data/raw/`) and the buy-or-wait advisor (`forecast_quality/`, gradient-boosted trees, prices from 2015 in `data/market/`, served at `/api/advice`). To agree as a team: show one in the pitch, or let the Rice Agent's tool call `/api/advice` | Same question answered twice; the jury should see one answer with its backtest | Flavio |
 
 ## Dispute
 
@@ -46,6 +51,15 @@ Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions o
 - **Data:** public and free: weekly EU paddy prices since 2015, World Bank world prices, ECB exchange rates, Ente Risi farmer stocks. All tested on 4 Nov.
 - **On stage:** about 20 seconds (we have 2 minutes in the demo video) and one screen with three panels.
 - **Cost:** about 15 hours: 12 of backend, 3 for the screen. Everything else is a nice-to-have.
+
+### Built (4 Nov evening)
+
+Code in `forecast_quality/`, data in `data/market/`, results in [docs/forecast-results.md](docs/forecast-results.md). Tests: `tests/test_forecast_quality.py`.
+
+- **Data** (`python -m forecast_quality.data`): EU weekly Italian rice prices since Sep 2015 (15,400 rows), ECB USD per EUR, World Bank Pink Sheet Thai and Viet Nam 5%. Checks against the research: Carnaroli €672/t on 19 Oct 2026; Thai 5% €306/t (Oct 2025) to €437/t (Oct 2026) in euros.
+- **Buy or wait** (`python -m forecast_quality.advisor`): gradient-boosted trees predict the 8-week price change; the rule buys 1.5, 1 or 0.5 weeks of use within 8 to 16 weeks of cover. **Backtest 2017/18 to 2025/26, 64 variety-campaigns: +0.38% against even buying, better in 32 of 64; direction right 57% of the time when the price moved more than 2%.** That is no proven saving yet: say "signals for the buyer", not "€1M a year". This week every variety reads BUY MORE (expected +3% to +6% in 8 weeks). The weekly memo (`forecast_quality/memo.py`) is written by code, or by Grok with every figure checked.
+- **Lot quality** (`forecast_quality/quality.py`): grains found in the photo, broken (shorter than 3/4 of a whole grain) and chalky (3/4 opaque white) counted, touching grains left out; broken grains become a whole-grain yield shortfall, priced at 10 kg x (milled − broken price) per point beyond the 1-point tolerance, refusable at 6 points; the lot goes to premium packs, standard packs, or rice drinks and cakes; anything doubtful goes to the lab on the sign-off desk, with a hold on the linked batch. Contract yields per variety are demo values.
+- **Demand and stock** (`forecast_quality/demand.py`): forecast on an invented 2-year order history beats "same week last year" (11.3% against 16.5% weighted error, last 12 weeks); the weekly stock projection (stock + production due − confirmed − expected) flags the first short week and suggests a batch size. In the demo Carnaroli goes short in W46.
 
 ### How it shows in the pitch
 

@@ -83,4 +83,22 @@ def test_golden_order_runs_through_every_row(tmp_path: Path) -> None:
     assert result["pending_signoffs"] == 0
     assert list(tmp_path.glob("ESS-GOLD-001_TD04.xml"))
     assert "credit notes issued: 1" in result["digest"]
+    assert result["planning"]["lot"] == "awaiting_person" and result["planning"]["suggestion"]["qty"] > 0
     assert (ROOT / "data" / "disputes" / "playbook.md").read_text().count("No past cases yet") == 1
+
+
+def test_every_output_traces_back_to_its_source(tmp_path: Path) -> None:
+    from core.erp import Erp
+    from core.trace import chain, gaps, render
+
+    db = tmp_path / "demo.sqlite"
+    demo.run(db=str(db), out_dir=tmp_path / "out", quiet=True, with_planning=False)
+    erp = Erp(db)
+    assert gaps(erp) == []
+    c = chain(erp, "ESS-GOLD-001")
+    assert c["order"]["orders_file"] == "ORDERS_ESS-GOLD-001.edi" and c["order"]["ordrsp_doc"]
+    assert {e["kind"] for e in c["production"]} >= {"batch_finished", "quality_hold"}
+    assert c["claims"][0]["decision"] == "accept" and any("TD04" in o for o in c["claims"][0]["outputs"])
+    assert "ORDERS" in render(c)
+    erp.db.execute("UPDATE signoffs SET decision_reason = NULL WHERE case_id = 'SO-00001'")
+    assert gaps(erp) == ["SO-00001: decided without a reason"]

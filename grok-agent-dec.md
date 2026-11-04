@@ -222,6 +222,15 @@ These go beyond the boxes on the map, with the same contract and checks.
 | 10 | Case briefing | Every case on the sign-off desk shows its three lines with links | 1 |
 | 11 | Ask the CRM | Five demo questions answered from read-only views, each answer linking to its records | 1.5 |
 
+## Built (4 Nov evening)
+
+- `agent/grok.py`: the one client (step 1). Dispute uses it; Order's Grokbot, Shipping's case proposals and flag explanations use it too.
+- `agent/learning.py`: case log, precedents, rules, promotion and demotion (steps 2, 3 and 5). The Dispute row logs every decision; an active rule decides with no Grok call; otherwise the three closest past cases go into Grok's prompt. A rule is drafted after the same decision three times on the same kind of case, none overturned, and decides nothing until a person approves it. Overturning a rule's decision sends it back to draft.
+- The ask-a-person gate (step 4) is the no-euro-threshold rule from DECISIONS.md: a person decides when anything is ambiguous. "No rule and no close precedent yet" does not send a case to a person on its own; precedents and rules make Grok faster and surer instead.
+- `agent/replay.py`: the case curve (step 6). Average of 20 replays of 60 invented claims, with a scripted Grok and a scripted person, through the real loop: a person decided 80% of cases in week 1 and 16% in week 6; learned rules decided 8 of 10 cases by week 4, with no Grok call. Chart: `docs/img/case-curve.svg`.
+
+![Case curve](docs/img/case-curve.svg)
+
 ## Open questions
 
 - Which Grok models and keys the hackathon gives us, and the rate limits

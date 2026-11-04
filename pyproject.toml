@@ -8,13 +8,13 @@ version = "0.1.0"
 description = "Riso Scotti zero-touch back office (Grok Hackathon Pavia 2026)"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["a38>=0.1.8,<0.2"]
+dependencies = ["a38>=0.1.8,<0.2", "numpy>=1.26", "scipy>=1.11", "scikit-learn>=1.4", "pillow>=10", "openpyxl>=3.1", "certifi"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9"]
 
 [tool.setuptools.packages.find]
-include = ["agent*", "bench*", "core*", "dispute*", "order*", "shipping*"]
+include = ["agent*", "bench*", "core*", "crm*", "dispute*", "finance*", "order*", "forecast_quality*", "shipping*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
