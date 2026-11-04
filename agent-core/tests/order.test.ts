@@ -17,6 +17,7 @@ import {
   rejectOrder,
   resolvePriceCase,
   resolveQtyCase,
+  sendOffConfirmBatch,
   simulateOrderFeed,
 } from "../agent/lib/order/service";
 import { listOrders, orderDetail } from "../agent/lib/order/views";
@@ -219,6 +220,22 @@ describe("order service on the Mini ERP", () => {
     expect(results.at(-1)!.id).toBe("wave-5");
   });
 
+  it("Send-off all releases every pending confirm even when live ATP would block later ones", async () => {
+    const erp = freshErp();
+    await simulateOrderFeed(erp);
+    const confirms = erp.signoffs({ status: "pending", row: "order" }).filter((c) => c.kind === "confirm");
+    expect(confirms.length).toBeGreaterThan(1);
+    const batch = sendOffConfirmBatch(erp, { by: "Giulia", reason: "batch release" });
+    expect(batch.failed).toBe(0);
+    expect(batch.ok).toBe(confirms.length);
+    expect(erp.signoffs({ status: "pending", row: "order" }).filter((c) => c.kind === "confirm")).toHaveLength(0);
+    for (const r of batch.results) {
+      expect(r.ok).toBe(true);
+      expect(r.shipping_ref).toBeTruthy();
+      expect(erp.order(r.order_ref!)!.status).toBe("ready_to_ship");
+    }
+  });
+
   it("clearOrderDesk wipes prior orders and sign-offs so a second simulate starts fresh", async () => {
     const erp = freshErp();
     const productBefore = erp.product({ gtin: "8000000000001" }) ?? erp.product({ itemCode: "RISO-ARB" });
@@ -327,14 +344,16 @@ describe("order service on the Mini ERP", () => {
     expect(erp.order("ESS-GOLD-001")!.status).toBe("rejected");
   });
 
-  it("confirm checks stock again when two orders wait", async () => {
+  it("Send-off reservation blocks a second confirm when stock is already spoken for", async () => {
     const erp = freshErp();
     const first = await receiveOrder(erp, GOLDEN);
+    expect(first.step).toBe("confirm");
+    // Soft-reserve while the first waits on Send-off: a twin that needs the same stock
+    // must not land in confirm as well (otherwise Send-off all would oversell).
     const second = await receiveOrder(erp, ediFor("ESS-TWIN", "8000000000001", 12000, 2.2));
-    expect(second.step).toBe("confirm"); // both passed the checks while neither was confirmed
+    expect(["qty_choice", "stock_short"]).toContain(second.step);
     confirmOrder(erp, first.case_id, { by: "Giulia", reason: "ok" });
-    expect(() => confirmOrder(erp, second.case_id, { by: "Giulia", reason: "ok" })).toThrow(/run the order again/);
-    expect(erp.signoff(second.case_id)!.status).toBe("pending");
+    expect(erp.order("ESS-GOLD-001")!.status).toBe("confirmed");
   });
 });
 

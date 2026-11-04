@@ -21,6 +21,7 @@ import type { Caller } from "../grok/client";
 import { dataPath } from "../paths";
 import { ErpAvailabilityProvider } from "./availability";
 import { loadContract, type SupplyContract } from "./contract";
+import { ingestConfirmedOrder } from "../shipping/service";
 import { polishPriceMail, proposeParseFix } from "./grokbot";
 import { draftQtyShortMail } from "./mail";
 import { buildOrdrsp, type OrdrspHandoff, qtyText } from "./ordrsp";
@@ -406,19 +407,32 @@ export async function receiveOrder(
 }
 
 /** The person approves the confirm sign-off: write ORDRSP, return the hand-over for Shipping. */
-export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): ConfirmedOrderHandoff {
+export function confirmOrder(
+  erp: Erp,
+  caseId: string,
+  d: { by: string; reason: string },
+  opts: {
+    /**
+     * Send-off all: these cases already passed stock at the gate; release every ORDRSP without
+     * re-blocking on live ATP (live ATP drops after each prior confirm in the same batch).
+     */
+    trustPriorCheck?: boolean;
+  } = {},
+): ConfirmedOrderHandoff {
   const c = erp.signoff(caseId);
   if (!c || c.kind !== "confirm") throw new Error(`${caseId} is not an order confirmation`);
   const order = erp.order(c.subjectRef ?? "");
   if (!order) throw new Error(`${caseId} is not an order confirmation`);
-  for (const line of order.lines) {
-    // another order may have been confirmed since the checks ran
-    const want = line.qtyConfirmed ?? line.qtyOrdered;
-    const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate).atp;
-    if (want && want > atp) {
-      throw new Error(
-        `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
-      );
+  if (!opts.trustPriorCheck) {
+    for (const line of order.lines) {
+      // Exclude this order's own Send-off reservation; other awaiting/confirmed still count.
+      const want = line.qtyConfirmed ?? line.qtyOrdered;
+      const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate, { exceptOrderRef: order.orderRef }).atp;
+      if (want && want > atp) {
+        throw new Error(
+          `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
+        );
+      }
     }
   }
   decide(erp, caseId, { approve: true, by: d.by, reason: d.reason });
@@ -433,6 +447,42 @@ export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: 
     backorders: ((order.notes ?? {}).backorders as Backorder[] | undefined) || [],
     signoff_case: caseId,
   };
+}
+
+export type SendOffBatchItem = {
+  case_id: string;
+  order_ref: string | null;
+  ok: boolean;
+  shipping_ref?: string;
+  error?: string;
+};
+
+/** Release every pending confirm case (Send-off all), smallest qty first. */
+export function sendOffConfirmBatch(
+  erp: Erp,
+  d: { by: string; reason: string; caseIds?: string[] },
+): { results: SendOffBatchItem[]; ok: number; failed: number } {
+  const pending = erp
+    .signoffs({ status: "pending", row: "order" })
+    .filter((c) => c.kind === "confirm" && (!d.caseIds?.length || d.caseIds.includes(c.caseId)));
+  const ranked = [...pending].sort((a, b) => {
+    const orderA = a.subjectRef ? erp.order(a.subjectRef) : undefined;
+    const orderB = b.subjectRef ? erp.order(b.subjectRef) : undefined;
+    const qtyA = orderA?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    const qtyB = orderB?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    return qtyA - qtyB || a.caseId.localeCompare(b.caseId);
+  });
+  const results: SendOffBatchItem[] = [];
+  for (const c of ranked) {
+    try {
+      const handoff = confirmOrder(erp, c.caseId, { by: d.by, reason: d.reason }, { trustPriorCheck: true });
+      const shippingRef = ingestConfirmedOrder(erp, handoff);
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: true, shipping_ref: shippingRef });
+    } catch (err) {
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: false, error: (err as Error).message });
+    }
+  }
+  return { results, ok: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
 }
 
 export function rejectOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): void {
