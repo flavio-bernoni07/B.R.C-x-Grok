@@ -52,8 +52,8 @@
     "product": "Riso Scotti Arborio sottovuoto 1kg",
     "quantity": 100,
     "amount": 70.0,
-    "claim_type": "other",
-    "confidence": 0.55,
-    "raw_notes": "PRI/UNK remittance; resolved as pricing via threeway"
+    "claim_type": "pricing",
+    "confidence": 0.72,
+    "raw_notes": "PRI/UNK remittance mapped to pricing; threeway confirms €70 price gap"
   }
 }

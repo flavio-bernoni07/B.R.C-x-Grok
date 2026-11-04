@@ -4,7 +4,7 @@
   "product": "Riso Scotti Arborio sottovuoto 1kg",
   "quantity": 100,
   "amount": 70.0,
-  "claim_type": "other",
-  "confidence": 0.55,
-  "raw_notes": "Remittance shows inv ending 334 only; PRI/UNK; 100 CTN full POD; price hold €70"
+  "claim_type": "pricing",
+  "confidence": 0.72,
+  "raw_notes": "Remittance shows inv ending 334 only; PRI/UNK → pricing; 100 CTN full POD; price hold €70"
 }
