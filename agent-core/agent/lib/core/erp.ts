@@ -384,4 +384,33 @@ export class Erp {
       .all()
       .map((r) => this.signoff(r.id)!);
   }
+
+  /**
+   * Wipe operational Order / Shipping / Sign-off state so a simulation starts as the company's
+   * first orders. Master data (products, retailers, batches, production events) stays.
+   */
+  clearOrderDesk(): void {
+    this.tx(() => {
+      this.db.delete(s.siProposals).run();
+      this.db.delete(s.siExceptionCases).run();
+      this.db.delete(s.siExceptions).run();
+      this.db.delete(s.siLoadings).run();
+      this.db.delete(s.siScans).run();
+      this.db.delete(s.siPallets).run();
+      this.db.delete(s.siManifests).run();
+      this.db.delete(s.siTrucks).run();
+      this.db.delete(s.invoiceLines).run();
+      this.db.delete(s.invoices).run();
+      this.db.delete(s.shipmentLines).run();
+      this.db.delete(s.shipments).run();
+      this.db.delete(s.proofs).run();
+      this.db.delete(s.claims).run();
+      this.db.delete(s.signoffs).run();
+      this.db.delete(s.orderLines).run();
+      this.db.delete(s.orders).run();
+      this.db.delete(s.documents).run();
+      this.db.delete(s.audit).run();
+      this.db.delete(s.counters).run();
+    });
+  }
 }

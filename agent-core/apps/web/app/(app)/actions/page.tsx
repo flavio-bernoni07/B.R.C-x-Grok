@@ -1,13 +1,13 @@
-import { readPolicy, policyLabel } from "@agent/lib/core/policy";
 import { Suspense } from "react";
-import { ActionsView } from "@/components/core/actions-view";
+import { SignoffView } from "@/components/core/signoff-view";
 
 export const dynamic = "force-dynamic";
 
+/** Actions = Sign-off Pending desk with Send-off / Price / Quantity schede. */
 export default function ActionsPage() {
   return (
     <Suspense>
-      <ActionsView policy={policyLabel(readPolicy())} />
+      <SignoffView />
     </Suspense>
   );
 }

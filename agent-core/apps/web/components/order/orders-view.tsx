@@ -60,6 +60,9 @@ export function OrdersView() {
   const [listError, setListError] = useState(false);
   const [ws, setWs] = useState<OrderWorkspace | null>(null);
   const [wsState, setWsState] = useState<"idle" | "loading" | "error" | "missing">("idle");
+  const [simBusy, setSimBusy] = useState(false);
+  const [simMsg, setSimMsg] = useState<string>();
+  const [listTick, setListTick] = useState(0);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -76,7 +79,36 @@ export function OrdersView() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [filter, q]);
+  }, [filter, q, listTick]);
+
+  const runSimulation = async () => {
+    setSimBusy(true);
+    setSimMsg(undefined);
+    try {
+      const res = await fetch("/api/orders/simulate", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSimMsg(data.error ?? `Simulation failed (${res.status})`);
+        return;
+      }
+      const s = data.summary as { total?: number; awaiting_person?: number } | undefined;
+      setSimMsg(
+        s
+          ? `Desk cleared. Loaded ${s.total ?? "?"} orders · ${s.awaiting_person ?? "?"} waiting in Actions.`
+          : "Desk cleared and simulation loaded.",
+      );
+      setListTick((n) => n + 1);
+      try {
+        window.dispatchEvent(new Event("brc:changed"));
+      } catch {
+        /* ignore */
+      }
+    } catch (err) {
+      setSimMsg((err as Error).message);
+    } finally {
+      setSimBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!selected) {
@@ -105,8 +137,20 @@ export function OrdersView() {
     <Page>
       <PageHeader
         title="Orders"
-        sub={rows ? `${rows.length} orders shown, ${attention} need attention. Agents do the steps; a person approves what needs a person.` : "Loading orders..."}
+        sub={
+          rows
+            ? `${rows.length} orders shown, ${attention} need attention. Agents do the steps; a person approves what needs a person.`
+            : "Loading orders..."
+        }
       >
+        <button
+          type="button"
+          disabled={simBusy}
+          onClick={() => void runSimulation()}
+          className="h-[34px] rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+        >
+          {simBusy ? "Running simulation…" : "Run order simulation"}
+        </button>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -115,6 +159,7 @@ export function OrdersView() {
         />
         <Segmented options={FILTERS} value={filter} onChange={setFilter} />
       </PageHeader>
+      {simMsg ? <p className="text-[13px] text-ink-78">{simMsg}</p> : null}
       <div className={selected ? "mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : "mt-4 grid gap-5"}>
         <Panel title="Inbox">
           {listError ? (

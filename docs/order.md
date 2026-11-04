@@ -14,10 +14,10 @@
 
 ## What I decided
 
-- First Order slice is code in `order/`: deterministic EDI parse with `parse_flags`, availability stub hook, contract price check + draft mail, pipeline statuses that match order-dec.md (including re-entry gates for Grokbot and the price-mismatch human path).
-- Availability is `StubAvailabilityProvider` reading `data/orders/availability_stub.json` until Core exposes Mini ERP / stock projection (`getAvailability`).
+- Detail in [order-dec.md](../order-dec.md). On stock short: **operator** chooses **split** (ORDRSP for available qty only) or **mail** (pending, **no ORDRSP** until reactivated).
+- First Order slice is code in `order/` and the TypeScript port in `agent-core/`: deterministic EDI parse with `parse_flags`, Mini ERP available-to-promise, contract price check + draft mail, pipeline statuses that match order-dec.md.
 - Contract demo: `data/orders/contract_scotti_esselunga.json` (list price + volume discounts).
-- Live Grokbot API for parse/qty loops is next; statuses `await_grok_parse` / `await_grok_qty` already stop the pipeline correctly.
+- Non-blocking feed: `data/orders/feed.json` + golden ORDERS run through Sign-off Pending without stopping the batch.
 
 ## What I need from others
 
