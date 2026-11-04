@@ -199,9 +199,9 @@ tests/
 4. What are your internal quality limits compared with the legal tolerances?
 5. How many hectares do you farm in Romania today, which varieties, and can we have past yields per field?
 6. Do any retailers send you their sales or warehouse stock data (SLSRPT, INVRPT)?
-----------------------------------
+## Shipping and invoicing
 
-# What we built, step by step
+### What we built, step by step
 
 This is the shipping and invoicing lane for the Grok Hackathon Pavia 2026, Track B (Autonomous Company, Riso Scotti). The current version is **0.5.0**.
 
@@ -209,13 +209,13 @@ The module is a Python library with a local SQLite database. Tables start with `
 
 Times below are Europe/Rome.
 
-## Where we started
+### Where we started
 
 **4 November 2026, 12:04** — commit `eb40163`, "Initialize project".
 
 The folder was empty. There was no shipping code, no database, and no screen. The CRM dashboard was left for later. This lane only had to receive an approved retailer order and handle shipping and invoicing.
 
-## Step 1 — Ship, write documents, and find mismatches
+### Step 1 — Ship, write documents, and find mismatches
 
 **4 November 2026, 12:24** — commit `95d6590`, "Add the shipping and invoicing module." Version **0.1.0**.
 
@@ -242,7 +242,7 @@ Rules we locked in:
 
 `demo.py` shows a complete order, a partial shipment, an invoice that bills too much, a second click on the same shipment, and stock on hold.
 
-## Step 2 — Pick, scan, load, then dispatch
+### Step 2 — Pick, scan, load, then dispatch
 
 **4 November 2026, 13:12** — commit `2c33940`, "Add warehouse picking and loading verification before dispatch." Version **0.2.0**.
 
@@ -259,7 +259,7 @@ A pallet is checked with simulated scans only. There is no barcode hardware. Pre
 
 After this step the suite was **41 passed**.
 
-## Step 3 — Plan trucks, without loading them
+### Step 3 — Plan trucks, without loading them
 
 **4 November 2026, 13:38** — commit `f1a397c`, "Add simulated truck planning and loading manifests." Version **0.3.0**.
 
@@ -276,7 +276,7 @@ The planner checks, in order: the truck is available, the destination matches, t
 
 After truck planning the suite was **54 passed**.
 
-## Step 4 — Tie the plan to the warehouse
+### Step 4 — Tie the plan to the warehouse
 
 **4 November 2026, 13:57** — commit `ae64466`, "Connect truck manifests to warehouse loading." Version **0.4.0**.
 
@@ -295,7 +295,7 @@ What changed:
 
 After this step the suite was **65 passed** (54 previous and 11 new integration tests).
 
-## Step 5 — Turn a failed check into an employee case
+### Step 5 — Turn a failed check into an employee case
 
 **4 November 2026, 14:19** — commit `65e6c38`, "Add exception cases and employee approval." Version **0.5.0**.
 
@@ -335,7 +335,7 @@ The assigned employee, in the case role, approves, rejects, or asks for clarific
 
 The five new tests also cover a proposal for the too-small truck, a proposal to release a quality hold, execution before approval, a second execution, and a missing pallet that stays unresolved after it is only recorded.
 
-## Where the code stands now
+### Where the code stands now
 
 The full path a future CRM can call:
 
@@ -358,6 +358,60 @@ Latest check of this version: **70 passed in 0.21s** (`pytest`), and `python dem
 
 The contract for the other teammates is `INTEGRATION.md`. How to run the module is `README.md`.
 
-## Left for other lanes
+### Left for other lanes
 
 Real EDI, FatturaPA XML, submission to SdI, credit notes, GPS, a route optimizer, hardware scanners, external logistics APIs, a second Grok agent, and the CRM screen stay outside this module. A planned manifest is a plan. A case does not send a message, release a quality hold, unblock dispatch, or issue a financial document.
+
+### Review and next steps (Flavio, 4 Nov)
+
+**TL;DR:** the rules and the safety design are right. What is missing is the link to the rest of the team, plus the proof the jury scores:
+- the code is not in this repo
+- it does not take the Order lane's hand-over or feed the Dispute lane
+- it writes no real DESADV, INVOIC or FatturaPA
+- `reconcile` has never been scored against threeway
+
+**Keep as it is:**
+- the invoice uses the dispatched quantity, never the ordered one
+- a batch on quality hold never ships, and a shipment is never invoiced twice
+- Grok proposes, Python validates, a person approves, and the action runs once
+- scans are tied to the assigned truck (`WRONG_TRUCK`)
+
+**Improve, most important first:**
+1. **Bring the code into this repo** as `shipping/` with `tests/shipping/`. Today it lives outside, so it can be neither in the demo nor in the repo we deliver.
+2. **Connect the hand-overs.**
+   - **In:** the Order lane's payload from `order-dec.md`: confirmed lines, dates, order and ORDRSP references, sent only after the human sign-off.
+   - **Out:** the shape the Dispute lane reads in `data/disputes/erp/catalog.json`: `orders`, `desadv`, `invoices` and `proofs`, keyed by `order_ref`, `desadv_ref` and `invoice_ref`, with numeric quantities. Strings inside the module are fine; convert at the hand-over.
+3. **Write the real documents.** On the map this row ends with DESADV + INVOIC + FatturaPA, and no other lane owns them. `dispute/outcome.py` already writes a FatturaPA TD04 with `a38` and an EDI INVOIC 381, with the seller's data. Reuse both for:
+   - the FatturaPA TD01 invoice
+   - an EDI INVOIC 380
+   - an EANCOM DESADV
+4. **Score `reconcile` against threeway.** It is the track's first judging criterion, and threeway is already in the repo (`dispute/_threeway_core.py`). Some cases show the difference clearly. For example, a short shipment invoiced correctly is a fulfillment gap for us and "matched" for threeway. That difference needs a number.
+5. **Call Grok.** `grok_case_package` is ready, but no lane sends it to Grok. A small adapter sends it, passes the answer to `submit_resolution_proposal` (which already validates it), and falls back to code-written text if the network fails.
+6. **Add proof of delivery.** The driver scans the pallets off at the retailer's dock, and we store the signed-DDT reference. Both are exported as `proofs` for disputes.
+7. **No more logistics features.** Truck planning already goes beyond the brief, and route optimisation was ruled out.
+8. **One screen for a case,** showing each step: plan, scan, dispatch, invoice, reconcile, case, Grok's proposal, approval.
+
+**Build plan, about 11 hours:**
+
+| # | Step | Done when | Hours |
+|---|---|---|---|
+| 1 | Move the code into `shipping/` and `tests/shipping/` | The PR is merged and the 70 tests pass next to the Dispute tests | 0.5 |
+| 2 | Hand-overs, written as one line each in this section | `ingest_confirmed_order(payload)` accepts the Order payload; `export_for_dispute(order_ref)` returns the catalog shape | 1.5 |
+| 3 | Real documents, reusing `dispute/outcome.py` | Each dispatch writes an EANCOM DESADV and an INVOIC 380, and a FatturaPA TD01 that `a38` validates | 2.5 |
+| 4 | Reconciliation scored against threeway | About 25 labelled cases give a table of right status and right reason for both | 2.5 |
+| 5 | Grok adapter for exception cases | A live proposal passes the validator, with a fallback when the network is down | 1 |
+| 6 | Proof of delivery | The unload scan and the signed-DDT reference appear in `export_for_dispute` | 1 |
+| 7 | The case screen | One page shows a case end to end, in the same style as the team's UI | 2 |
+
+Steps 1, 2 and 4 come first. Without them this lane stays a separate project, and the main criterion has no number.
+
+The step 4 cases should cover:
+- a clean order
+- a short shipment invoiced correctly
+- overbilling
+- a price gap
+- a typo in a reference
+- a split delivery
+- two causes on one line
+- cases against bags (unit of measure)
+- an orphan invoice
