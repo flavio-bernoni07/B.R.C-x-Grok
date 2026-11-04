@@ -70,8 +70,9 @@ We wrote the cases ourselves to cover threeway's blind spots, so the jury's test
 ## Run it
 
 ```bash
-./test.sh                     # every test (142), no key needed
-python demo.py                # the golden order end to end, offline (--live calls Grok: XAI_API_KEY or GROK_API_KEY)
+./test.sh                     # every test (146), no key needed
+python demo.py                # the golden order end to end, offline (--live calls Grok: XAI_API_KEY or GROK_API_KEY, or in a gitignored .env.local)
+python -m scenarios.ambiguous_order   # an ambiguous order: Grok fixes the EDI, a person confirms, a crushed pallet, a €444 claim (--live, --me to decide yourself)
 python -m bench.score         # us against threeway
 python -m agent.replay        # the case curve (--svg docs/img/case-curve.svg)
 python demo.py --db data/demo.sqlite                 # keeps the database for the next three
