@@ -114,7 +114,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 USAGE: dict[str, Any] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "seconds": 0.0,
-                         "by_task": {}, "models": set()}
+                         "by_task": {}, "models": set(), "retries": {}, "rejected": []}
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -144,7 +144,9 @@ def usage_summary() -> str:
         return "no live Grok calls"
     return (f"{USAGE['calls']} live Grok calls ({', '.join(f'{k} {v}' for k, v in USAGE['by_task'].items())}), "
             f"{USAGE['prompt_tokens']:,} tokens in, {USAGE['completion_tokens']:,} out, "
-            f"{USAGE['seconds']:.1f} s, model {', '.join(sorted(USAGE['models'])) or model_for()}")
+            f"{USAGE['seconds']:.1f} s, model {', '.join(sorted(USAGE['models'])) or model_for()}"
+            + (f"; retried after a rejected answer: {', '.join(f'{k} {v}' for k, v in USAGE['retries'].items())}"
+               if USAGE["retries"] else ""))
 
 
 def key_source() -> str | None:
@@ -157,13 +159,23 @@ def key_source() -> str | None:
     return None
 
 
+_JSON_MODE = {"supported": True}
+
+
 def post_chat(messages: Messages, *, task: str | None = None, api_key_value: str | None = None,
-              temperature: float = 0, timeout: int = 90) -> str:
-    """One HTTP call to xAI chat completions; returns the message text."""
+              temperature: float = 0, timeout: int = 90, json_mode: bool = True) -> str:
+    """One HTTP call to xAI chat completions; returns the message text.
+
+    json_mode asks the API for a guaranteed JSON object (response_format), so a reply can
+    never come back with brackets out of order; if the model refuses the option, the call
+    is made again without it and the code checks catch any bad JSON as before.
+    """
     key = api_key_value or api_key()
     if not key:
         raise MissingApiKeyError("Missing API key. Set XAI_API_KEY or GROK_API_KEY.")
-    body = {"model": model_for(task), "temperature": temperature, "messages": messages}
+    body: dict[str, Any] = {"model": model_for(task), "temperature": temperature, "messages": messages}
+    if json_mode and _JSON_MODE["supported"]:
+        body["response_format"] = {"type": "json_object"}
     request = urllib.request.Request(
         f"{base_url()}/chat/completions",
         data=json.dumps(body).encode("utf-8"),
@@ -180,6 +192,10 @@ def post_chat(messages: Messages, *, task: str | None = None, api_key_value: str
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code == 400 and "response_format" in body and "response_format" in detail:
+            _JSON_MODE["supported"] = False
+            return post_chat(messages, task=task, api_key_value=key, temperature=temperature, timeout=timeout,
+                             json_mode=False)
         raise RuntimeError(f"xAI API HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"xAI API request failed: {exc}") from exc
@@ -229,6 +245,8 @@ def chat_json(
             if not problems:
                 return payload
         if attempt < retries:
+            USAGE["retries"][task] = USAGE["retries"].get(task, 0) + 1
+            USAGE["rejected"].append({"task": task, "problems": problems, "reply": text[:600]})
             convo = convo + [
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": "Your answer was rejected by the checks: "

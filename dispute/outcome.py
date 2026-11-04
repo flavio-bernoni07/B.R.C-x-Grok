@@ -122,7 +122,7 @@ def _credit_note_number(order_ref: str | None, issue_date: date) -> str:
 
 def _line_description(verdict: dict[str, Any], facts: dict[str, Any] | None) -> str:
     claim = verdict.get("claim") or {}
-    product = claim.get("product") or (facts or {}).get("order", {}).get("lines", [{}])[0].get(
+    product = claim.get("product") or (((facts or {}).get("order") or {}).get("lines") or [{}])[0].get(
         "product"
     )
     summary = verdict.get("summary") or "Dispute credit"
@@ -429,8 +429,8 @@ def emit_outcome(
     out.mkdir(parents=True, exist_ok=True)
 
     claim = verdict.get("claim") or {}
-    order_ref = claim.get("order_ref") or (facts or {}).get("order", {}).get("order_ref")
-    invoice_ref = claim.get("invoice_ref") or (facts or {}).get("invoice", {}).get("invoice_ref")
+    order_ref = claim.get("order_ref") or ((facts or {}).get("order") or {}).get("order_ref")
+    invoice_ref = claim.get("invoice_ref") or ((facts or {}).get("invoice") or {}).get("invoice_ref")
     invoice_date = ((facts or {}).get("invoice") or {}).get("invoice_date")
     issue = issue_date or date.today()
     stem = _slug(order_ref or invoice_ref, decision.value)

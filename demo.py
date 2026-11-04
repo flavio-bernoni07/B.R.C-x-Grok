@@ -125,7 +125,16 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     v = claim["verdict"]
     say(f"Claim {claim['claim_id']}: Grok proposes {v['decision']} €{v['amount']}, sources "
         f"{', '.join(p['source']['kind'] for p in v['points'])}")
-    say(f"Nothing ambiguous, so no person: {claim['status']}, {claim.get('outcome', {}).get('kind')}")
+    if claim["status"] == "awaiting_person":  # live Grok may be less sure than the recorded answer
+        case = erp.signoff(claim["case_id"])
+        say(f"A person is needed ({case['case_id']}): {'; '.join(case['reasons'])}")
+        done = approve_verdict(erp, case["case_id"], by="Sara, credit desk",
+                               reason="The signed DDT carries the reservation for the missing pallet",
+                               playbook_path=playbook, issue_date=date(2026, 11, 7))
+        claim = {**claim, "status": "closed", "outcome": done["outcome"]}
+        say(f"Sara approves: {done['outcome']['kind']}")
+    else:
+        say(f"Nothing ambiguous, so no person: {claim['status']}, {claim.get('outcome', {}).get('kind')}")
     result["golden_claim"] = claim["status"]
 
     unclear = json.loads((DISPUTES / "extractions" / "05_ambiguous.json").read_text())
