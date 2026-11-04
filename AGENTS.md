@@ -8,10 +8,11 @@ Team B.R.C, Grok Hackathon Pavia 2026, Track B (Riso Scotti): a zero-touch back 
 |---|---|---|
 | `DECISIONS.md` | Decisions that change what another area receives. **Read it before designing anything.** Add a line when you change an interface | – |
 | `docs/*.md` | One findings file per area (order, shipping, dispute, core) and the process map | – |
-| `agent-core/` | **Rice Agent**: the eve agent (TypeScript, pnpm) with Grok, its tools and skills, and the Next.js web UI | `agent-core/AGENTS.md` |
+| `agent-core/` | **The final app, B.R.C x Grok**: Next.js + eve agent (TypeScript, pnpm), every row ported onto one SQLite Mini ERP (Drizzle), the HeyHandy UI. Start here for anything the jury sees | `agent-core/AGENTS.md`, `agent-core/PORTING.md` |
+| `core/`, `order/`, `shipping/`, `dispute/`, `bench/`, `demo.py` | The Python rows: the reference implementation the app is ported from (run `./test.sh`, `python demo.py`) | `README.md`, `docs/*.md` |
 | `planning/` | Python forecaster (uv): data downloaders, Prophet baseline, backtest. Called by the agent's tools | `planning/AGENTS.md` |
 | `data/raw/` | Public price data written by `planning` (committed, so the demo works offline). `sources.json` records where each file came from | – |
-| `data/out/` | Forecast cache, gitignored, rebuilt automatically | – |
+| `data/out/`, `data/app.sqlite`, `data/runtime/` | Forecast cache, the app's Mini ERP and its runtime files; gitignored, rebuilt by the app (`pnpm db:reset`) | – |
 | `data/disputes/` | Synthetic dispute world (claims, ERP, verdicts) | `dispute/README.md` |
 | `dispute/`, `tests/` | Dispute row in Python (root `pyproject.toml`, pytest) | `dispute/README.md` |
 

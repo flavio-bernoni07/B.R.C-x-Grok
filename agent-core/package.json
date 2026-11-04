@@ -39,10 +39,14 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
-    "typescript": "^6.0.3"
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "scripts": {
     "dev": "eve dev",
@@ -52,6 +56,8 @@
     "dev:web": "next dev apps/web",
     "build:web": "next build apps/web",
     "data:fetch": "cd ../planning && uv run python -m rice_forecast fetch",
-    "setup:py": "cd ../planning && uv sync"
+    "setup:py": "cd ../planning && uv sync",
+    "db:reset": "tsx scripts/db-reset.ts",
+    "test": "vitest run"
   }
 }

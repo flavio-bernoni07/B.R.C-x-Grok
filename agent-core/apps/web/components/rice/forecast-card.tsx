@@ -17,7 +17,7 @@ export function ForecastCard({
   const end = forecast.forecast_end;
   const bt = forecast.backtest;
   return (
-    <section className="w-full space-y-3 rounded-xl border bg-card p-4">
+    <section className="w-full space-y-3 rounded-[14px] bg-hh-seasalt p-4 shadow-[inset_0_0_0_1.5px_rgb(32_49_25/0.09)]">
       <header className="flex items-center justify-between gap-3">
         {picker ?? <h3 className="font-medium">{forecast.variety}</h3>}
         <span className="text-muted-foreground text-xs">paddy · week of {shortDate(forecast.as_of)}</span>

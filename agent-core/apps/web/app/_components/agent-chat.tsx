@@ -12,7 +12,7 @@ import {
 } from "eve/events";
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 import { WEB_CHAT_AGENT } from "@/app/eve-agent";
 
-const DEFAULT_AGENT_NAME = "Rice Agent";
+const DEFAULT_AGENT_NAME = "B.R.C x Grok";
 
 /** Sends a message from inside the thread, e.g. a suggestion under the intro. */
 export type AskAgent = (text: string, context?: Record<string, string | number | boolean>) => void;
@@ -44,11 +44,14 @@ export function AgentChat({
   sessionId,
   sessionless = false,
   intro,
+  initialPrompt,
 }: {
   readonly sessionId?: string;
   readonly sessionless?: boolean;
   /** First message of the thread, shown before anything is asked; the conversation continues below it. */
   readonly intro?: (ask: AskAgent) => ReactNode;
+  /** Sent once when the chat opens, e.g. an "Ask Grok" link from another page. */
+  readonly initialPrompt?: string;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
@@ -138,6 +141,14 @@ export function AgentChat({
     });
   };
 
+  const sentInitial = useRef(false);
+  useEffect(() => {
+    if (!initialPrompt || sentInitial.current || isResuming) return;
+    sentInitial.current = true;
+    void sendText(initialPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- send once
+  }, [initialPrompt, isResuming]);
+
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     if ((text.length === 0 && message.files.length === 0) || isResuming) return;
@@ -174,7 +185,7 @@ export function AgentChat({
       <PromptInputTextarea
         disabled={isResuming}
         onChange={(event) => setHasInputText(event.currentTarget.value.trim().length > 0)}
-        placeholder="Send a message…"
+        placeholder="Ask about orders, shipments, claims, stock or paddy prices…"
       />
       <ComposerAction
         hasInputText={hasInputText}
@@ -188,8 +199,7 @@ export function AgentChat({
   return (
     <main
       className={cn(
-        "flex flex-col overflow-hidden bg-background text-foreground",
-        "h-dvh",
+        "relative flex h-full flex-col overflow-hidden bg-hh-seasalt text-ink",
       )}
     >
       {showConversationLayout ? (
@@ -207,8 +217,8 @@ export function AgentChat({
               : `eve:web-chat-scroll:${activeSessionId}`
           }
         >
-          <ConversationTopFade className="top-14" />
-          <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-36 sm:px-6">
+          <ConversationTopFade className="top-14 from-hh-seasalt" />
+          <ConversationContent className="mx-auto w-full max-w-[860px] gap-6 px-4 pt-16 pb-36 sm:px-6">
             {intro ? (
               <Message className="max-w-full" from="assistant">
                 <MessageContent className="w-full">
@@ -248,7 +258,7 @@ export function AgentChat({
         className={cn(
           "mx-auto w-full px-4 sm:px-6",
           showConversationLayout
-            ? "fixed bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
+            ? "absolute bottom-0 left-1/2 z-20 max-w-[860px] -translate-x-1/2 bg-gradient-to-t from-hh-seasalt via-hh-seasalt to-transparent pt-4 pb-5"
             : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]",
         )}
       >
@@ -314,13 +324,13 @@ function ErrorMessage({ message }: { readonly message: string }) {
 
 function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) {
   return (
-    <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
-      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
-        <span className="truncate text-muted-foreground text-sm">{AGENT_NAME}</span>
+    <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
+      <div className="relative mx-auto flex h-full w-full max-w-[860px] items-center justify-between bg-hh-seasalt px-6">
+        <span className="font-bold text-[22px] tracking-[-0.035em]">Overview</span>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"
-            className="pointer-events-auto fixed top-3 right-6 pr-4"
+            className="pointer-events-auto"
             onClick={() => window.location.assign("/s")}
             size="sm"
             type="button"

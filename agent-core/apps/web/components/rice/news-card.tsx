@@ -7,7 +7,7 @@ import { MessageResponse } from "@/components/ai-elements/message";
 /** Chat card for the rice_market_news tool: Grok's search summary with its sources. */
 export function NewsCard({ news }: { readonly news: NewsResult }) {
   return (
-    <section className="w-full space-y-2 rounded-xl border bg-card p-4">
+    <section className="w-full space-y-2 rounded-[14px] bg-hh-seasalt p-4 shadow-[inset_0_0_0_1.5px_rgb(32_49_25/0.09)]">
       <header className="flex items-center gap-2 text-sm">
         <NewspaperIcon className="size-4 text-muted-foreground" />
         <span className="font-medium">News search</span>
