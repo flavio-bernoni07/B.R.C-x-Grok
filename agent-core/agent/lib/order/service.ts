@@ -499,16 +499,97 @@ export type SimulateFeedItemResult = {
   error?: string;
 };
 
-/** Run every ORDERS in `data/orders/feed.json` (plus the golden order). Never stops the batch on a human gate. */
+type BenchPoLine = {
+  order_ref?: string;
+  item_code?: string;
+  quantity?: number;
+  unit_price?: number;
+};
+
+type BenchCase = {
+  id: string;
+  kind?: string;
+  description?: string;
+  po?: BenchPoLine[];
+};
+
+/** Map item_code → GTIN from the shared product list (world/products.json). */
+function gtinByItemCode(): Map<string, string> {
+  const raw = JSON.parse(readFileSync(dataPath("world", "products.json"), "utf8")) as {
+    products?: { gtin: string; item_code: string }[];
+  };
+  return new Map((raw.products ?? []).map((p) => [p.item_code, p.gtin]));
+}
+
+/** Build a minimal ORDERS EDI from one labelled bench case (the 22 simulation POs). */
+export function ediFromBenchCase(c: BenchCase, gtinMap: Map<string, string>): string | null {
+  const lines = c.po ?? [];
+  if (!lines.length) return null;
+  const orderRef = lines[0].order_ref || c.id;
+  const segs = [
+    "UNH+1+ORDERS:D:96A:UN'",
+    `BGM+220+${orderRef}+9'`,
+    "DTM+137:20261104:102'",
+    "NAD+BY+BUYER001::9'",
+    "NAD+SU+SUPPLIER001::9'",
+  ];
+  let n = 0;
+  for (const line of lines) {
+    const code = line.item_code || "";
+    const gtin = gtinMap.get(code);
+    if (!gtin || line.quantity == null) continue;
+    n += 1;
+    segs.push(`LIN+${n}++${gtin}:EN'`);
+    segs.push(`QTY+21:${line.quantity}'`);
+    if (line.unit_price != null) segs.push(`PRI+AAA:${line.unit_price}:CT'`);
+  }
+  if (!n) return null;
+  segs.push("UNS+S'");
+  segs.push(`UNT+${segs.length + 1}+1'`);
+  return segs.join("\n");
+}
+
+/** The 22 labelled bench POs already in the repo (data/bench/cases.json), as ORDERS messages. */
+export function benchSimulationOrders(): { id: string; label: string; file: string; edi: string }[] {
+  const bench = JSON.parse(readFileSync(dataPath("bench", "cases.json"), "utf8")) as { cases?: BenchCase[] };
+  const gtinMap = gtinByItemCode();
+  const out: { id: string; label: string; file: string; edi: string }[] = [];
+  for (const c of bench.cases ?? []) {
+    const edi = ediFromBenchCase(c, gtinMap);
+    if (!edi) continue;
+    const ref = c.po?.[0]?.order_ref || c.id;
+    out.push({
+      id: c.id,
+      label: `${c.id} ${ref} — ${c.kind || "case"}`,
+      file: `bench/${c.id}.edi`,
+      edi,
+    });
+  }
+  return out;
+}
+
+/**
+ * Run the full Order simulation without stopping the batch on a human gate:
+ * 1) the 22 labelled bench POs already in the repo
+ * 2) optional golden order
+ * 3) the ESS scenario files in data/orders/feed.json (messy / qty short / price / …)
+ */
 export async function simulateOrderFeed(
   erp: Erp,
-  opts: { caller?: Caller | null; includeGolden?: boolean } = {},
+  opts: { caller?: Caller | null; includeGolden?: boolean; includeBench?: boolean } = {},
 ): Promise<{ results: SimulateFeedItemResult[] }> {
   const feedPath = dataPath("orders", "feed.json");
   const feed = JSON.parse(readFileSync(feedPath, "utf8")) as {
     orders?: { id?: string; label?: string; file: string }[];
   };
-  const items: { id: string; label: string; file: string; absolute: string }[] = [];
+  type Item = { id: string; label: string; file: string; edi?: string; absolute?: string };
+  const items: Item[] = [];
+
+  if (opts.includeBench !== false) {
+    for (const b of benchSimulationOrders()) {
+      items.push({ id: b.id, label: b.label, file: b.file, edi: b.edi });
+    }
+  }
   if (opts.includeGolden !== false) {
     items.push({
       id: "golden",
@@ -529,7 +610,7 @@ export async function simulateOrderFeed(
   const results: SimulateFeedItemResult[] = [];
   for (const item of items) {
     try {
-      const raw = readFileSync(item.absolute, "utf8");
+      const raw = item.edi ?? readFileSync(item.absolute!, "utf8");
       const result = await receiveOrder(erp, raw, { sourceName: item.file, caller: opts.caller ?? null });
       results.push({ id: item.id, label: item.label, file: item.file, ok: true, result });
     } catch (err) {

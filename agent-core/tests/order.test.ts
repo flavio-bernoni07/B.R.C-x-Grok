@@ -204,15 +204,17 @@ describe("order service on the Mini ERP", () => {
     expect(String(erp.signoff(r.case_id)!.proposal!.draft_mail)).toContain("partial availability");
   });
 
-  it("simulate feed never stops on the first human gate", async () => {
+  it("simulate feed keeps the 22 bench POs and never stops on the first human gate", async () => {
     const erp = freshErp();
     const { results } = await simulateOrderFeed(erp);
-    expect(results.length).toBeGreaterThanOrEqual(6); // golden + 5 feed items
+    // 22 labelled bench cases + golden + 5 ESS feed items
+    expect(results.length).toBeGreaterThanOrEqual(22 + 1 + 5);
+    expect(results.filter((r) => r.id.startsWith("C")).length).toBe(22);
     expect(results.every((r) => r.ok)).toBe(true);
     const steps = new Set(results.map((r) => r.result!.step));
     expect(steps.has("confirm") || steps.has("qty_choice") || steps.has("price_fix") || steps.has("manual_edi")).toBe(true);
     expect(results.filter((r) => r.result?.status === "awaiting_person").length).toBe(results.length);
-    // A later feed item still ran even though earlier ones needed a person.
+    // A later ESS feed item still ran even though earlier ones needed a person.
     expect(results.at(-1)!.id).toBe("wave-5");
   });
 

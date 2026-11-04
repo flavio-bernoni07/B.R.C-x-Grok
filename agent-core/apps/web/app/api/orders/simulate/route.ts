@@ -1,6 +1,7 @@
 /**
- * POST /api/orders/simulate: run every ORDERS in data/orders/feed.json (plus the golden order).
- * Human gates go to Sign-off Pending; the batch never stops on the first one.
+ * POST /api/orders/simulate: the 22 labelled bench POs (data/bench/cases.json), the golden order,
+ * and every ORDERS in data/orders/feed.json. Human gates go to Sign-off Pending; the batch never
+ * stops on the first one.
  */
 import { getReadyErp } from "@agent/lib/db/app";
 import { simulateOrderFeed } from "@agent/lib/order/service";
