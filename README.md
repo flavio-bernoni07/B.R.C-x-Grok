@@ -58,14 +58,14 @@ Production enters only as events, so a batch on hold can never be promised or sh
 
 ## Result against the baseline
 
-On 22 labelled cases ([docs/results.md](docs/results.md)):
+On 21 labelled cases ([docs/results.md](docs/results.md)):
 
 | | threeway | ours |
 |---|---|---|
-| Right call on whether someone must act | 14/22 | 22/22 |
-| Every cause named, nothing extra | 10/22 | 22/22 |
+| Right call on whether someone must act | 13/21 | 21/21 |
+| Every cause named, nothing extra | 10/21 | 21/21 |
 
-We wrote the cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. Our one miss (C19) is a labelling slip, explained in the results.
+We wrote the cases ourselves to cover threeway's blind spots, so the jury's test set is the real test.
 
 ## Run it
 
