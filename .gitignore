@@ -12,5 +12,8 @@ data/out/
 # Mini ERP files written by the demo or by hand
 *.sqlite
 
+# App state (rebuilt by pnpm db:reset)
+data/app.sqlite*
+data/runtime/
 # Local secrets (XAI_API_KEY=... for live Grok calls)
 .env.local

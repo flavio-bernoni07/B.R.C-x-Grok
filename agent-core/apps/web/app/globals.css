@@ -27,71 +27,76 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+@theme inline {
+  /* HeyHandy brand palette (HeyHandy/brand/tokens.ts) */
+  --color-hh-dark: #203119;
+  --color-hh-honeydew: #ebf1e4;
+  --color-hh-flex: #bfff80;
+  --color-hh-mint: #cfe2cf;
+  --color-hh-mintcream: #d7e4e0;
+  --color-hh-seasalt: #f9f9f9;
+  --color-hh-opal: #9fc6bf;
+  --color-hh-asparagus: #559646;
+  /* UI kit tints, only inside the app window (HeyHandy/brand/UI.md) */
+  --color-hh-window: #eef3e8;
+  --color-hh-sidebar: #e3ebdb;
+  --color-hh-selection: #fbfdf9;
+  /* Client-screen status states (UI.md: only for status) */
+  --color-st-attention: #fbe2a4;
+  --color-st-attention-ink: #6d4a08;
+  --color-st-ok: #d9f5bf;
+  --color-st-ok-ink: #2c6a1d;
+  --color-st-wait: #e4e9de;
+  --color-st-wait-ink: #5f6a5b;
+  --color-st-wrong: #d2473b;
+  /* Dark Green at the kit's ink levels */
+  --color-ink: #203119;
+  --color-ink-78: rgb(32 49 25 / 0.78);
+  --color-ink-68: rgb(32 49 25 / 0.68);
+  --color-ink-50: rgb(32 49 25 / 0.5);
+  --color-hairline: rgb(32 49 25 / 0.08);
+}
+
 /* Not inline: font utilities must read the variables so each host's font loader can override them. */
 @theme {
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-sans: var(--font-satoshi), "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --ease-out-kit: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-kit: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
+/*
+ * The app is the HeyHandy UI kit: light only, Dark Green ink on Seasalt and Honeydew tints.
+ * shadcn tokens are mapped onto the brand so generated components match.
+ */
 :root {
   color-scheme: light;
-  /* Soft neutral page with white elevated surfaces so cards/composer pop. */
-  --background: oklch(0.971 0 0);
-  --foreground: oklch(0.16 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0 0);
-  --primary: oklch(0.19 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0 0);
-  --secondary-foreground: oklch(0.19 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.94 0 0);
-  --accent-foreground: oklch(0.19 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.916 0 0);
-  --input: oklch(0.916 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-  /* Rice forecaster */
-  --rice-history: oklch(0.45 0.09 250);
-  --rice-forecast: oklch(0.62 0.16 55);
-  --rice-band: oklch(0.62 0.16 55 / 0.16);
-  --rice-world: oklch(0.55 0.12 160);
-  --rice-up: oklch(0.52 0.15 150);
-  --rice-down: oklch(0.55 0.2 27);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --rice-history: oklch(0.75 0.1 250);
-    --rice-forecast: oklch(0.78 0.15 65);
-    --rice-band: oklch(0.78 0.15 65 / 0.18);
-    --rice-world: oklch(0.75 0.12 160);
-    --rice-up: oklch(0.75 0.15 150);
-    --rice-down: oklch(0.72 0.17 27);
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-  }
+  --background: #eef3e8;
+  --foreground: #203119;
+  --card: #f9f9f9;
+  --card-foreground: #203119;
+  --popover: #fbfdf9;
+  --popover-foreground: #203119;
+  --primary: #203119;
+  --primary-foreground: #ebf1e4;
+  --secondary: #ebf1e4;
+  --secondary-foreground: #203119;
+  --muted: #ebf1e4;
+  --muted-foreground: rgb(32 49 25 / 0.68);
+  --accent: #e3ebdb;
+  --accent-foreground: #203119;
+  --destructive: #d2473b;
+  --border: rgb(32 49 25 / 0.09);
+  --input: rgb(32 49 25 / 0.12);
+  --ring: #559646;
+  --radius: 0.75rem;
+  /* Charts: Dark Green for what happened, Asparagus for what we expect, Flex Green for the band */
+  --rice-history: #203119;
+  --rice-forecast: #559646;
+  --rice-band: rgb(191 255 128 / 0.45);
+  --rice-world: #9fc6bf;
+  --rice-up: #2c6a1d;
+  --rice-down: #d2473b;
 }
 
 * {

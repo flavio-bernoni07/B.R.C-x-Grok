@@ -48,7 +48,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace";
-import { isCardTool, ToolCard } from "@/components/rice/tool-card";
+import { isCardTool, ToolCard } from "@/components/cards/registry";
 import { cn } from "@/lib/utils";
 
 export type AgentAnswer = {
