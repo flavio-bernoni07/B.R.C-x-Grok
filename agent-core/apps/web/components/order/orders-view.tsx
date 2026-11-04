@@ -72,16 +72,19 @@ export function OrdersView() {
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       setListError(false);
+      const watchdog = setTimeout(() => ctrl.abort(), 12_000);
       fetch(`/api/orders/inbox?filter=${filter}&q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
         .then((d: { rows: InboxRow[] }) => setRows(d.rows))
         .catch((e: Error) => {
           if (e.name !== "AbortError") setListError(true);
-        });
+          else if (!ctrl.signal.reason) setListError(true); // watchdog abort → show error, not infinite loading
+        })
+        .finally(() => clearTimeout(watchdog));
     }, 150);
     return () => {
       clearTimeout(t);
-      ctrl.abort();
+      ctrl.abort("unmount");
     };
   }, [filter, q, listTick]);
 
