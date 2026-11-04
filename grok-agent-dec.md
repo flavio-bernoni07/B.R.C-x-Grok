@@ -13,6 +13,9 @@ Design for the **Grok decides** column of the process map, shared by all three r
   - similar open questions go to a person together
   - the confidence threshold is tuned on real agreement data
   - past cases are replayed before any rule goes live
+- **More uses in the CRM**, after the core:
+  - first: one inbox that sorts every retailer message, matching payments that arrive with deductions, a short briefing on each case waiting for sign-off, and plain-language questions to the CRM
+  - later: the weekly digest, explaining jumps on the dashboard, briefings on retailers, reading new contracts, tidying master data, and "why did it decide that?"
 
 ## Where Grok is called
 
@@ -26,6 +29,8 @@ These are the white boxes in the **Grok decides** column of the map, plus the tw
 | Shipping | Explain the flags, and the exception cases | `grok_case_package` (threeway result, shipment, scans, the failed check) | One cause per line with its € share, or a resolution from the allowed actions | `submit_resolution_proposal`: stock, batch, truck, window and approval rules |
 | Dispute | Read the claim | The claim email text | Order ref, invoice ref, product, quantity, amount, claim type, confidence | The refs exist in the Mini ERP, or they stay empty |
 | Dispute | Verdict + sources | The claim, the facts, the contract excerpt, the Playbook | Accept, partial or reject, with a source for every point | Amounts match the facts and threeway |
+| Forecast and quality | Weekly purchasing memo | The buy-or-wait decision and the signals behind it, each with its source | The memo for the buyer | Every number in the memo is one of the facts, otherwise a memo written by code is used |
+| Forecast and quality | Lot quality report | Defect percentages, the yield shortfall, the contract price cut, where the lot goes | The lot report | Same number check; the price cut and the allocation are computed by code |
 
 The sign-off rules stay as each lane decided them:
 - **Order:** a person always signs before ORDRSP (`order-dec.md`).
@@ -146,6 +151,39 @@ Beyond the loop itself:
    - a model per task (a fast one for reading claims, the strongest for verdicts), set by `XAI_MODEL_<TASK>`
    - the Playbook as a fixed prompt prefix, so repeated calls can be cached
 
+## More uses in the CRM
+
+These go beyond the boxes on the map, with the same contract and checks.
+
+**First, after the core build:**
+
+1. **One inbox that sorts everything.** Retailers send claims, order changes, delivery-slot moves, promo notices, payment advices and questions. Grok reads each incoming email or PDF and routes it:
+   - claims to Dispute
+   - order changes to Order
+   - slot changes to Shipping
+   - promos to the demand calendar
+
+   Code checks that the references exist, and anything unclear goes to a person. Today only claims have a reader.
+2. **Payments with deductions.** Supermarkets often pay less than the invoice and send a messy remittance advice ("−€186 shortage, −€90 promo contribution").
+   - Grok extracts each line: invoice reference, amount, reason code.
+   - Code matches the lines to open invoices.
+   - A deduction nobody can explain opens a dispute on its own.
+
+   This joins the Shipping and Dispute rows.
+3. **Case briefing on the sign-off desk.** Each waiting case gets three lines: what happened, what Grok proposes, and the one question that blocks it, with links to the documents. People decide faster, which speeds up the case curve.
+4. **Ask the CRM in plain words.** For example: "Which Esselunga orders for next week are at risk?" or "Show every claim on lot 17." Grok writes a read-only query on a fixed set of views. Code runs it, and the answer links to the records.
+
+**Later, if there is time:**
+
+5. **Weekly digest.** This is the "Accountant, managers" box on the map. Code computes the totals, open problems and credit notes issued; Grok writes the summary, citing them.
+6. **Explaining a jump on the dashboard.** Code spots a jump, for example claims at Coop up 30%. Grok looks at the linked records for the likely cause (one batch, one truck, a new price list) and shows it as a hint with its sources, never as a fact.
+7. **Retailer briefing for the sales team.** One page before a call: on-time deliveries, open claims, deductions, trend. Numbers from code, text from Grok.
+8. **Reading new contracts and promo sheets.** Grok turns clauses and prices into draft rules. A person approves them, and Order's price check and Dispute's verdict then use them.
+9. **Tidying master data.** Grok matches messy store names, store codes and reference variants to the right records, and a person confirms each match.
+10. **"Why did it decide that?"** For any decision, the trail of facts, rule, precedent and who signed. The same view answers new staff questions straight from the Playbook ("how do we handle a damaged pallet?").
+
+**Never:** Grok does not send anything to a retailer by itself, change a price or an amount, or close a case without code checking it.
+
 ## Where things live
 
 | Thing | Where | Notes |
@@ -173,6 +211,15 @@ Beyond the loop itself:
 | 5 | Promotion and demotion | 3 matching decisions give a draft rule; an overturned rule goes back to draft | 1 |
 | 6 | Replay and case curve | The chart for 60 cases over 6 weeks | 2 |
 | 7 | Wire in the call sites, one call per lane owner: Order (3), Shipping (1), Dispute (2) | Every white box on the map goes through the agent | 2 |
+
+**CRM uses, after the core, about 7 hours:**
+
+| # | Step | Done when | Hours |
+|---|---|---|---|
+| 8 | Inbox router | Ten sample messages of different kinds each land in the right lane, and unclear ones go to a person | 2 |
+| 9 | Payments with deductions | A remittance advice is matched to open invoices, and an unexplained deduction opens a dispute | 2.5 |
+| 10 | Case briefing | Every case on the sign-off desk shows its three lines with links | 1 |
+| 11 | Ask the CRM | Five demo questions answered from read-only views, each answer linking to its records | 1.5 |
 
 ## Open questions
 
