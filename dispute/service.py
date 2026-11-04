@@ -134,18 +134,34 @@ def handle_claim(
     signature = learning.dispute_signature(extraction.to_dict(), facts_dict)
     rule = learning.match_rule(erp, signature)
     precedents: list[dict[str, Any]] = []
+    rule_skipped: dict[str, Any] | None = None
     if rule:
-        verdict = _verdict_from_rule(rule, extraction, facts_dict)
-        # A person already approved this exact fingerprint (or an active rule from 3 alike
-        # decisions). Ambiguity for the pattern is settled; only operational checks remain
-        # (late complaint window, duplicate claim on the same order).
-        reasons = list(check_reasons)
-        erp.log("code", "dispute.rule_applied", claim_id, source_doc=rule["rule_id"], detail=rule["text"])
-    else:
+        applies, failures = learning.reason_still_applies(rule, facts_dict)
+        if applies:
+            verdict = _verdict_from_rule(rule, extraction, facts_dict)
+            # Fingerprint matches and the person's why still holds on these facts.
+            # Only operational checks remain (late complaint window, duplicate claim).
+            reasons = list(check_reasons)
+            erp.log("code", "dispute.rule_applied", claim_id, source_doc=rule["rule_id"],
+                    detail={"text": rule["text"], "reason": rule.get("approved_reason"),
+                            "when": (rule.get("action") or {}).get("when")})
+        else:
+            # Same kind of case, but Sara's reason does not fit these documents — ask again.
+            rule_skipped = {"rule_id": rule["rule_id"], "reason": rule.get("approved_reason"),
+                            "failures": failures}
+            facts_dict["rule_skipped"] = rule_skipped
+            erp.log("code", "dispute.rule_skipped", claim_id, source_doc=rule["rule_id"],
+                    detail=rule_skipped)
+            rule = None
+    if not rule:
         precedents = learning.similar(erp, signature)
         facts_dict["precedents"] = precedents
         verdict = decide_verdict(extraction, facts_dict, grok_caller=verdict_caller)
         reasons = verdict.sign_off_reasons + [r for r in check_reasons if r not in verdict.sign_off_reasons]
+        if rule_skipped:
+            for fail in rule_skipped["failures"]:
+                if fail not in reasons:
+                    reasons.append(fail)
     verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict(), "checks": checks,
                                         "sign_off_reasons": reasons, "needs_sign_off": bool(reasons)}
     erp.log("grok", "dispute.verdict", claim_id, detail={"decision": verdict.decision.value, "amount": verdict.amount,
@@ -185,15 +201,18 @@ def _verdict_from_rule(rule: dict[str, Any], extraction: Any, facts: dict[str, A
     amount = extraction.amount if decision in {"accept", "partial"} else None
     who = f"approved by {rule['approved_by']}" if rule.get("approved_by") else "approved"
     support = rule.get("support") or []
+    why = rule.get("approved_reason") or (rule.get("action") or {}).get("when", {}).get("reason") or ""
     points = [{"text": rule["text"], "amount": amount,
-               "source": {"kind": "playbook", "ref": rule["rule_id"], "detail": who}}]
+               "source": {"kind": "playbook", "ref": rule["rule_id"],
+                          "detail": f"{who}" + (f"; because: {why}" if why else "")}}]
     for proof in facts.get("proofs") or []:
         points.append({"text": proof.get("summary") or proof.get("kind"), "amount": None,
                        "source": {"kind": proof.get("kind") or "other", "ref": proof.get("ref") or proof.get("doc_id"),
                                   "detail": proof.get("doc_id") or ""}})
     learned = f", learned from {', '.join(support)}" if support else ""
+    because = f" Because: {why}." if why else ""
     payload = {"decision": decision, "amount": amount, "confidence": 1.0, "needs_sign_off": False,
-               "summary": f"Decided by rule {rule['rule_id']} ({who}{learned}).",
+               "summary": f"Decided by rule {rule['rule_id']} ({who}{learned}).{because}",
                "points": points}
     return parse_verdict_payload(payload, known_amounts=collect_known_amounts(extraction, facts),
                                  playbook_path=str(DEFAULT_PLAYBOOK), claim=extraction, facts=facts)
@@ -219,6 +238,7 @@ def approve_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
     rule_id = learning.activate_from_person(
         erp, signature, verdict["decision"], by=by, reason=reason,
         support_case_id=(agent_case or {}).get("case_id"),
+        facts=facts,
     )
     signoff.record_past_case(playbook_path, when=(issue_date or date.today()).isoformat(),
                              order_ref=claim.get("order_ref") or "—", case_type=claim.get("claim_type") or "other",

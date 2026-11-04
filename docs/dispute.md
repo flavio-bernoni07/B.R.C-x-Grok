@@ -28,9 +28,9 @@
 ## Learning beat (hand-off → fewer hand-offs)
 
 1. Ambiguous claim A goes to a person (desk / Sara).
-2. Their approve **activates a rule** for that case fingerprint (claim type + threeway + reconcile causes + proofs + flags).
-3. Claim B of the same kind closes alone, citing the rule — no Grok, no person.
-4. Shown in `demo.py` (RS26112 → Sara → RS26113) and `tests/test_learning.py::test_person_signoff_teaches_the_next_similar_claim`.
+2. Their approve **activates a rule** for that fingerprint **and stores their why** as applicability conditions (e.g. quantities agree, late gate-in / OTIF).
+3. Claim B of the same kind closes alone **only if that why still holds** on the new facts; otherwise the rule is skipped and a person is asked again.
+4. Shown in `demo.py` (RS26112 → Sara → RS26113) and `tests/test_learning.py` (teaches + reason-applicability).
 
 ## Current work (after the pipeline)
 
