@@ -82,6 +82,8 @@ export type DispatchPlan = {
   plan: Totals;
   saving: Totals & { km_pct: number; fuel_pct: number };
   unplanned: { order_ref: string; reason: string }[];
+  /** Orders planned as if ready, though a person has not confirmed them yet (planRoutes `preview`). */
+  preview: string[];
   checks: string[];
   sources: { what: string; source: string; url?: string }[];
 };
@@ -236,23 +238,43 @@ export function readyOrders(erp: Erp): string[] {
     .map((o) => o.orderRef);
 }
 
-/** Plan one dispatch day. Pure: reads the Mini ERP and the logistics file, writes nothing. */
-export function planRoutes(erp: Erp, opts: { shipDate: string; orderRefs?: string[]; logistics?: Logistics }): DispatchPlan {
+/** Clean orders a person has not confirmed yet, or confirmed but not yet handed to Shipping. */
+export const PREVIEW_STATUSES = new Set(["awaiting_confirmation", "confirmed"]);
+
+/**
+ * Plan one dispatch day. Pure: reads the Mini ERP and the logistics file, writes nothing.
+ *
+ * `preview`: orders that are not ready to ship yet (still awaiting confirmation, or confirmed and
+ * not yet with Shipping) are planned as if they were, so a sign-off card can show "if you approve,
+ * this order goes on this truck". They are listed in `plan.preview`; any other status stays unplanned.
+ */
+export function planRoutes(
+  erp: Erp,
+  opts: { shipDate: string; orderRefs?: string[]; preview?: string[]; logistics?: Logistics },
+): DispatchPlan {
   const lg = opts.logistics ?? loadLogistics();
   const roads = new Roads(lg);
   const plantPoint = lg.points.find((p) => p.kind === "plant");
   if (!plantPoint) throw new RoutePlanError("logistics.json has no plant");
   const plant = plantPoint.id;
-  const refs = opts.orderRefs ?? readyOrders(erp);
+  const previewAsked = new Set(opts.preview ?? []);
+  const refs = [...new Set([...(opts.orderRefs ?? readyOrders(erp)), ...previewAsked])];
   const unplanned: DispatchPlan["unplanned"] = [];
+  const preview: string[] = [];
   const byPoint = new Map<string, Node[]>();
 
   for (const ref of refs) {
     const order = erp.order(ref);
-    if (!order || order.status !== "ready_to_ship") {
-      unplanned.push({ order_ref: ref, reason: "not ready to ship" });
+    if (!order) {
+      unplanned.push({ order_ref: ref, reason: "no such order" });
       continue;
     }
+    const previewing = previewAsked.has(ref) && PREVIEW_STATUSES.has(order.status ?? "");
+    if (order.status !== "ready_to_ship" && !previewing) {
+      unplanned.push({ order_ref: ref, reason: `not ready to ship (${String(order.status ?? "no status").replace(/_/g, " ")})` });
+      continue;
+    }
+    if (previewing) preview.push(ref);
     if (manifestForOrder(erp, ref)) {
       unplanned.push({ order_ref: ref, reason: "already on a truck" });
       continue;
@@ -384,6 +406,7 @@ export function planRoutes(erp: Erp, opts: { shipDate: string; orderRefs?: strin
     plan,
     saving,
     unplanned,
+    preview,
     checks,
     sources,
   };

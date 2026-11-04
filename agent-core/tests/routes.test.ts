@@ -4,6 +4,7 @@ import type { Erp } from "../agent/lib/core/erp";
 import { availableToPromise } from "../agent/lib/core/stock";
 import { freshErp } from "../agent/lib/core/world";
 import { DISPATCH_DAY, seedDispatchDay } from "../agent/lib/demo/dispatch";
+import { receiveOrder } from "../agent/lib/order/service";
 import { decideSignoff } from "../agent/lib/shipping/decide";
 import { codeBriefing, loadLogistics, planRoutes, proposeDispatchPlan, readyOrders } from "../agent/lib/shipping/routes";
 import { manifestForOrder, truck } from "../agent/lib/shipping/warehouse";
@@ -71,6 +72,29 @@ describe("logistics agent", () => {
     expect(plan.routes[0].stops.map((s) => s.point).sort()).toEqual(["CeDi Carrefour Nord", "CeDi Melzo"]);
     const direct = plan.baseline.km;
     expect(plan.plan.km).toBeLessThan(direct);
+  });
+});
+
+describe("preview of an order not confirmed yet", () => {
+  it("plans it as if confirmed, marks it, and writes nothing", async () => {
+    const erp = await dispatchDay();
+    const edi = "UNH+1+ORDERS:D:96A:UN'BGM+220+ESS-PRV-001+9'DTM+137:20261105:102'NAD+BY+BUYER001::9'NAD+SU+SUPPLIER001::9'LIN+1++8000000000000:EN'QTY+21:2880'PRI+AAA:1.85:CT'UNS+S'UNT+10+1'";
+    const r = await receiveOrder(erp, edi, { sourceName: "test" });
+    expect(erp.order("ESS-PRV-001")?.status).toBe("awaiting_confirmation");
+    const audit = erp.auditLog().length;
+
+    const without = planRoutes(erp, { shipDate: DISPATCH_DAY, orderRefs: [...readyOrders(erp), "ESS-PRV-001"] });
+    expect(without.unplanned.map((u) => u.order_ref)).toEqual(["ESS-PRV-001"]);
+    expect(without.preview).toEqual([]);
+
+    const p = planRoutes(erp, { shipDate: DISPATCH_DAY, preview: ["ESS-PRV-001"] });
+    expect(p.preview).toEqual(["ESS-PRV-001"]);
+    expect(p.unplanned).toEqual([]);
+    const melzo = p.routes.flatMap((x) => x.stops).find((s) => s.point === "CeDi Melzo")!;
+    expect(melzo.orders).toContain("ESS-PRV-001");
+    expect(erp.auditLog().length).toBe(audit);
+    expect(manifestForOrder(erp, "ESS-PRV-001")).toBeUndefined();
+    expect(erp.signoff(r.case_id)?.status).toBe("pending");
   });
 });
 

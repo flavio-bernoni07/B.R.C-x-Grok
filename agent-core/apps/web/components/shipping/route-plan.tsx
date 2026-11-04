@@ -105,6 +105,11 @@ export function RoutePlanBody({ plan, briefing }: { readonly plan: DispatchPlan;
       <p className="text-[12px] text-ink-68">
         {qty(p.litres)} l of diesel instead of {qty(b.litres)}. CO2 about {qty(p.co2_kg)} kg instead of {qty(b.co2_kg)} (estimate).
       </p>
+      {plan.preview?.length ? (
+        <p className="rounded-[12px] bg-st-wait px-3 py-2 text-[13px] text-st-wait-ink">
+          Preview: {plan.preview.join(", ")} {plan.preview.length > 1 ? "are" : "is"} not confirmed yet and {plan.preview.length > 1 ? "are" : "is"} planned as if approved. Nothing is booked.
+        </p>
+      ) : null}
       {briefing ? <BriefingBox briefing={briefing} /> : null}
       <div className="space-y-2">
         {plan.routes.map((r) => (

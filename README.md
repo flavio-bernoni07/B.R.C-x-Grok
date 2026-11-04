@@ -90,7 +90,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
 pnpm dev:web                  # http://localhost:3000, then Shipping > "Plan the trucks with Grok"
-pnpm test                     # the app's tests (106)
+pnpm test                     # the app's tests (107)
 ```
 
 The Python rows are the reference the app is ported from:
