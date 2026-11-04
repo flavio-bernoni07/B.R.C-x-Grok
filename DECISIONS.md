@@ -13,6 +13,7 @@ Detail: [order-dec.md](order-dec.md)
 | Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
 | Wed 4 Nov | After Grokbot on parse_flags, re-enter Parse EDI on the corrected message; after Grokbot on qty_short, re-enter availability check — no skip to sign-off | Corrections must pass code checks again | order |
 | Wed 4 Nov | Price mismatch: after draft mail, separate human step (manual EDI or park pending + assign new ORDERS later) — not the always-confirm sign-off; re-enters Parse when data arrives | Wrong price needs retailer correction path, not silent confirm | order |
+| Wed 4 Nov | Dispute row detail in dispute-dec.md: claim_reader → pull_facts/threeway → verdict+sources → optional sign-off → TD04/INVOIC 381 or evidence reply | Same schemino style as Order for the team | dispute |
 
 ## Forecast and quality (Flavio)
 
