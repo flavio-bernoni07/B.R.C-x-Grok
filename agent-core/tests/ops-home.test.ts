@@ -10,7 +10,7 @@ let erp: Erp;
 beforeAll(async () => {
   process.env.BRC_PLAYBOOK = "/tmp/brc-ops-home-playbook.md";
   erp = freshErp();
-  await runGolden(erp);
+  await runGolden(erp, { dispatchDay: false }); // the golden order alone; the 6 Nov dispatch day has its own tests
 });
 
 describe("impact summary", () => {

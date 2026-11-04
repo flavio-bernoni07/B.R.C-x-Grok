@@ -13,8 +13,8 @@ export function LogisticsPlanCard({ plan, toolbar }: { readonly plan: LogisticsP
       title="Logistics plan"
       aside={
         <span className="flex items-center gap-2">
-          {plan.scenario ? <Pill tone="attention">Demo orders added</Pill> : null}
-          <Pill tone="quiet">Estimate</Pill>
+          {plan.preview?.length ? <Pill tone="wait">Preview: {plan.preview.join(", ")} not confirmed</Pill> : null}
+          <Pill tone="quiet">Road km, OSRM</Pill>
           {toolbar}
         </span>
       }
@@ -69,32 +69,24 @@ export function LogisticsPlanCard({ plan, toolbar }: { readonly plan: LogisticsP
   );
 }
 
-/** The plan with a toggle for the demo scenario, fetching GET /api/logistics/plan. */
+/** The plan, fetching GET /api/logistics/plan (read only; the Shipping page's card asks for the sign-off). */
 export function LogisticsPlanPanel() {
-  const [scenario, setScenario] = useState(false);
   const [plan, setPlan] = useState<LogisticsPlan | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
     setFailed(false);
-    fetch(`/api/logistics/plan${scenario ? "?scenario=1" : ""}`)
+    fetch("/api/logistics/plan")
       .then((r) => r.json())
       .then((d: LogisticsPlan) => live && setPlan(d))
       .catch(() => live && setFailed(true));
     return () => {
       live = false;
     };
-  }, [scenario]);
+  }, []);
   if (failed) return <Panel title="Logistics plan"><p className="text-[13px] text-ink-68">The plan could not be loaded. Please reload the page.</p></Panel>;
   if (!plan) return <div className="h-40 animate-pulse rounded-[14px] bg-hh-honeydew" />;
   return (
-    <LogisticsPlanCard
-      plan={plan}
-      toolbar={
-        <button type="button" onClick={() => setScenario((v) => !v)} className="text-ink-68 hover:text-ink">
-          {scenario ? "Hide demo orders" : "Show with demo orders"}
-        </button>
-      }
-    />
+    <LogisticsPlanCard plan={plan} />
   );
 }

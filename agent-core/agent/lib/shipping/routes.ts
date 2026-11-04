@@ -51,6 +51,8 @@ export type Stop = {
   weight_kg: number;
   /** Driving minutes from the plant to this stop, along the route. */
   arrive_drive_min: number;
+  /** Road km from the previous stop (or the plant) to this one. */
+  leg_km: number;
 };
 
 export type Route = {
@@ -185,7 +187,8 @@ function routeFrom(lg: Logistics, roads: Roads, plant: string, nodes: Node[], or
   let min = 0;
   for (const i of order) {
     const nd = nodes[i];
-    km += roads.km(prev, nd.point.id);
+    const leg = roads.km(prev, nd.point.id);
+    km += leg;
     min += roads.min(prev, nd.point.id);
     stops.push({
       point: nd.point.id,
@@ -197,6 +200,7 @@ function routeFrom(lg: Logistics, roads: Roads, plant: string, nodes: Node[], or
       pallets: nd.pallets,
       weight_kg: nd.weight_kg,
       arrive_drive_min: min,
+      leg_km: r1(leg),
     });
     prev = nd.point.id;
   }
