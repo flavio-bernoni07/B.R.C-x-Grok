@@ -64,7 +64,7 @@ flowchart TD
 ### 5. Sign-off (condizionale) + learning
 
 - Se `needs_sign_off` → persona approva/modifica; caso approvato entra nel Playbook “past cases”.
-- **`approve_verdict` attiva una regola** sul fingerprint del caso (`activate_from_person`): il prossimo claim dello stesso tipo chiude da solo citando la regola (demo: RS26112 → Sara → RS26113).
+- **`approve_verdict` attiva una regola** sul fingerprint (`activate_from_person`) **e salva il perché** come condizioni di applicabilità. Il prossimo claim dello stesso tipo chiude da solo **solo se quel perché vale ancora** sui nuovi fatti; altrimenti la regola si salta e si chiede di nuovo una persona (demo: RS26112 → Sara → RS26113).
 - Desk CLI: `python -m dispute.desk --db data/demo.sqlite list|show|approve|reject`.
 - Finché una persona non approva, niente TD04/reply (`awaiting_sign_off`). Web UI CRM: ancora da fare; il desk usa la stessa coda.
 
