@@ -28,12 +28,12 @@ rejected unless Seller agrees in writing.
 - Invoice unit prices must match the PO price, or the active promo annex when the
   PO references it.
 - **RS-PROMO-AUT26** (Autumn 2026, through **15/11/2026**):
-  - Scotti Basmati 500g (`BAS-500G`, EAN 8003660012345): promo unit price **€1.49**.
-  - List / non-promo reference price for the same SKU: **€1.85**.
-- Arborio 1kg carton (`ARB-1KG-CTN12`): standard PO price **€15.50** / CTN unless
+  - Riso Scotti Basmati 500g (`BAS-500G`, EAN 8003660012345): promo unit price **€1.49** / EA.
+  - List / non-promo reference price for the same SKU: **€1.85** / EA.
+- Arborio 1kg carton (`ARB-1KG-CTN12`, pack 12×1kg): standard PO price **€15.50** / CTN unless
   otherwise on the order.
-- Arborio vacuum 1kg (`ARB-VAC-1KG`): standard PO price **€12.40** / EA.
-- Carnaroli 1kg carton (`CAR-1KG-CTN12`): standard PO price **€15.50** / CTN.
+- Arborio sottovuoto 1kg carton (`ARB-VAC-1KG-CTN12`, pack 12×1kg): standard PO price **€12.40** / CTN.
+- Carnaroli 1kg carton (`CAR-1KG-CTN12`, pack 12×1kg): standard PO price **€15.50** / CTN.
 
 ## §15 Credits
 

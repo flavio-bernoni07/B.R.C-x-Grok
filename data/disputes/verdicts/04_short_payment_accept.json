@@ -1,0 +1,59 @@
+{
+  "decision": "accept",
+  "amount": 70.0,
+  "confidence": 0.84,
+  "needs_sign_off": false,
+  "summary": "Remittance PRI/UNK resolves to price gap: invoice €13.10/CTN vs PO €12.40/CTN on 100 CTN Arborio sottovuoto. Credit €70.00.",
+  "points": [
+    {
+      "text": "Invoice unit price above PO for ARB-VAC-1KG-CTN12",
+      "amount": 70.0,
+      "source": {
+        "kind": "threeway",
+        "ref": "Invoice price differs from the PO price",
+        "detail": "(13.10 − 12.40) × 100 = 70.00"
+      }
+    },
+    {
+      "text": "Invoice FT-2026/0334 matched from remittance fragment 334",
+      "amount": null,
+      "source": {
+        "kind": "invoice",
+        "ref": "FT-2026/0334",
+        "detail": "alias 334; total 1310.00"
+      }
+    },
+    {
+      "text": "POD confirms full qty — price-only dispute",
+      "amount": null,
+      "source": {
+        "kind": "pod",
+        "ref": "POD-COOP-771",
+        "detail": "quantity_confirmed 100 CTN"
+      }
+    },
+    {
+      "text": "Contract / PO standard price €12.40/CTN for Arborio sottovuoto",
+      "amount": null,
+      "source": {
+        "kind": "contract",
+        "ref": "RS-GDO-MASTER-2026 §12",
+        "detail": "ARB-VAC-1KG-CTN12 €12.40/CTN"
+      }
+    }
+  ],
+  "playbook_path": "data/disputes/playbook.md",
+  "contract_path": "data/disputes/contract_excerpt.md",
+  "amount_notes": [],
+  "known_amounts": [70.0, 12.4, 13.1, 1310.0],
+  "claim": {
+    "order_ref": "RS2026/771",
+    "invoice_ref": "334",
+    "product": "Riso Scotti Arborio sottovuoto 1kg",
+    "quantity": 100,
+    "amount": 70.0,
+    "claim_type": "other",
+    "confidence": 0.55,
+    "raw_notes": "PRI/UNK remittance; resolved as pricing via threeway"
+  }
+}

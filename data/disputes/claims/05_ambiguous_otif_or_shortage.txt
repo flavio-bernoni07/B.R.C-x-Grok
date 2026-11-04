@@ -1,4 +1,4 @@
-From: vendor.claims@auchan.it
+From: vendor.claims@iper.it
 To: claims@risoscotti.it
 Subject: Problema consegna ordine??
 
@@ -14,4 +14,4 @@ responsabile ricevimento (nessun conteggio formale).
 Importo: non calcolato.
 
 Vi preghiamo di verificare e dirci se aprire shortage o OTIF.
-Auchan – Claim intake
+Iper – Claim intake

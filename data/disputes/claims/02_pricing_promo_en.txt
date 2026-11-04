@@ -7,10 +7,10 @@ Hello,
 We short-paid invoice INV2026-0891 against PO77821 because the unit price does not
 match the Autumn promo agreement (promo sheet RS-PROMO-AUT26).
 
-Product: Scotti Basmati 500g (EAN 8003660012345)
-Qty on invoice: 200 packs
+Product: Riso Scotti Basmati 500g (EAN 8003660012345) — consumer units on invoice
+Qty on invoice: 200 packs (EA)
 Invoice unit price: €1.85
-Contract / promo price: €1.49
+Contract / promo price: €1.49 (annex RS-PROMO-AUT26)
 Difference: €0.36 x 200 = €72.00 deducted on remittance 31/10.
 
 Please issue a credit note for €72.00 or confirm the correct price with commercial.

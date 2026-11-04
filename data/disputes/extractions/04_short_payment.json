@@ -1,10 +1,10 @@
 {
   "order_ref": "RS2026/771",
   "invoice_ref": "334",
-  "product": "Arborio vacuum 1kg",
-  "quantity": null,
+  "product": "Riso Scotti Arborio sottovuoto 1kg",
+  "quantity": 100,
   "amount": 70.0,
   "claim_type": "other",
   "confidence": 0.55,
-  "raw_notes": "Remittance shows inv ending 334 only; claim type PRI/UNK"
+  "raw_notes": "Remittance shows inv ending 334 only; PRI/UNK; 100 CTN full POD; price hold €70"
 }

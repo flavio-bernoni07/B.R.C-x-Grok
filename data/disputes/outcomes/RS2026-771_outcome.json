@@ -1,0 +1,43 @@
+{
+  "kind": "credit_note",
+  "decision": "accept",
+  "amount": 70.0,
+  "order_ref": "RS2026/771",
+  "invoice_ref": "334",
+  "credit_note_number": "NC-20261104-RS2026771",
+  "paths": {
+    "td04_xml": "data/disputes/outcomes/RS2026-771_TD04.xml",
+    "edi_invoic_381": "data/disputes/outcomes/RS2026-771_INVOIC_381.edi"
+  },
+  "evidence_refs": [
+    {
+      "kind": "threeway",
+      "ref": "Invoice price differs from the PO price",
+      "detail": "(13.10 − 12.40) × 100 = 70.00",
+      "text": "Invoice unit price above PO for ARB-VAC-1KG-CTN12"
+    },
+    {
+      "kind": "invoice",
+      "ref": "FT-2026/0334",
+      "detail": "alias 334; total 1310.00",
+      "text": "Invoice FT-2026/0334 matched from remittance fragment 334"
+    },
+    {
+      "kind": "pod",
+      "ref": "POD-COOP-771",
+      "detail": "quantity_confirmed 100 CTN",
+      "text": "POD confirms full qty — price-only dispute"
+    },
+    {
+      "kind": "contract",
+      "ref": "RS-GDO-MASTER-2026 §12",
+      "detail": "ARB-VAC-1KG-CTN12 €12.40/CTN",
+      "text": "Contract / PO standard price €12.40/CTN for Arborio sottovuoto"
+    }
+  ],
+  "notes": [
+    "Generated with a38 (PyPI package name for Truelite/python-a38).",
+    "Demo VAT rate 4.00% applied so net+IVA ≈ verdict amount.",
+    "Sign-off UI out of scope."
+  ]
+}

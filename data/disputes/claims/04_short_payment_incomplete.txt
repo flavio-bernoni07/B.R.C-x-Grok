@@ -5,10 +5,13 @@ Invoice paid short.
 
 Inv: ? (your inv ending 334? remittance only shows "334")
 PO: RS2026/771
-SKU: Arborio vacuum 1kg
+SKU: Riso Scotti Arborio sottovuoto 1kg (cartoni da 12)
+Qty: 100 CTN (full receipt confirmed on POD)
 Paid: 1.240,00 EUR
 Invoice total (as per our AP): 1.310,00 EUR
 Short: 70,00 EUR
+
+Unit price on remittance hold: we expected PO €12,40/CTN; AP booked €13,10/CTN.
 
 Reason code on remittance: PRI/UNK — buyer note: "price or qty unclear, hold 70"
 No clear claim type selected in portal.

@@ -17,7 +17,7 @@
     },
     {
       "kind": "warehouse_event",
-      "ref": "GATE-AUCHAN-2026-11-03",
+      "ref": "GATE-IPER-2026-11-03",
       "detail": "OTIF miss; no liquidated damages € in contract excerpt",
       "text": "Gate-in 10:40 outside booked slot 06:00-08:00 (OTIF miss logged)"
     },
