@@ -5,12 +5,18 @@
  */
 import type { Erp } from "../core/erp";
 import { runGolden } from "./golden";
+import { seedPortalDemoOrders } from "./portal_orders";
 import { seedScenarios } from "./scenarios";
 
 export async function seedDemo(erp: Erp, opts: { say?: (line: string) => void } = {}) {
   const golden = await runGolden(erp, { say: opts.say });
   const scenarios = await seedScenarios(erp);
-  opts.say?.(`== Scenarios\nESS-AMB-001: ${scenarios.ambiguousOrder.status} (${scenarios.ambiguousOrder.case_id ?? "already there"})`);
-  erp.log("code", "demo.seeded", null, { detail: { grok: "recorded", scenarios: Object.keys(scenarios) } });
-  return { golden, scenarios };
+  const portalOrders = seedPortalDemoOrders(erp);
+  opts.say?.(
+    `== Scenarios\nESS-AMB-001: ${scenarios.ambiguousOrder.status} (${scenarios.ambiguousOrder.case_id ?? "already there"})\nPortal demo orders: ${portalOrders.ord3001}, ${portalOrders.ord3002}`,
+  );
+  erp.log("code", "demo.seeded", null, {
+    detail: { grok: "recorded", scenarios: Object.keys(scenarios), portal_orders: portalOrders },
+  });
+  return { golden, scenarios, portalOrders };
 }
