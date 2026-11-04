@@ -91,7 +91,7 @@ export function ExceptionCaseCard({ output }: { readonly output: unknown }) {
   );
 }
 
-/** bench_score: 21/22 against 14/22 and 10/22. */
+/** bench_score: 21/21 against 13/21 and 10/21. */
 export function BenchCard({ output }: { readonly output: unknown }) {
   const res = output as BenchResult;
   if (!res?.totals) return null;
