@@ -158,9 +158,6 @@ export function toMarkdown(res: BenchResult): string {
       "spots are handled; it is not a measure of accuracy on documents we have not seen. threeway runs with " +
       "its default settings: it can convert units if it is given a conversion map, which the baseline does not have.",
     "",
-    "One miss of ours is a labelling slip, left as written: C19 ships 38 of 40 cartons, exactly on the " +
-      'contract\'s 2-unit tolerance, which C22 treats as fine. By that rule our "ok" is arguably right.',
-    "",
   );
   return out.join("\n");
 }
