@@ -38,7 +38,9 @@
 2. Keep the desk CLI as the person path until the shared CRM screen is the default demo surface.
 3. Use `--erp-db` (no fixtures) for any jury-picked claim against an order already in the Mini ERP.
 
-Still later / not blocking the demo: richer case pack on the desk, quality-lot evidence handoff, shared contract file.
+**Case pack on the desk:** `dispute.desk show` leads with why handed off + briefing + evidence index; `--pack-dir` writes one folder (`README.md`, briefing, evidence, verdict, facts).
+
+Still later / not blocking the demo: quality-lot evidence handoff, shared contract file.
 
 ## What I need from others
 

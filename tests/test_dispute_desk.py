@@ -53,19 +53,37 @@ def test_desk_lists_and_approves_pending_dispute(tmp_path: Path, capsys) -> None
     assert len(pending) == 1
     assert pending[0]["case_id"] == res["case_id"]
     assert pending[0]["decision"] == "reject"
-    assert pending[0]["sign_off_reasons"]
+    assert pending[0]["why_handed_off"]
+    assert pending[0]["blocking_question"]
+    assert pending[0]["evidence_count"] >= 1
     assert pending[0]["order_ref"] == "RS26112"
 
-    shown = desk.show_case(erp, res["case_id"])
-    assert shown["verdict"]["decision"] == "reject"
-    assert shown["facts"]["order_ref"] == "RS26112"
+    pack_dir = tmp_path / "case-pack"
+    shown = desk.show_case(erp, res["case_id"], pack_dir=pack_dir)
+    assert shown["proposal"]["decision"] == "reject"
+    assert shown["why_handed_off"]
+    assert shown["briefing"]["what_happened"]
+    assert shown["briefing"]["question"]
+    assert shown["blocking_question"]
+    assert any(e["kind"] == "order" for e in shown["evidence"])
+    assert (pack_dir / "README.md").is_file()
+    assert (pack_dir / "briefing.json").is_file()
+    assert (pack_dir / "evidence.json").is_file()
+    assert (pack_dir / "verdict.json").is_file()
+    assert (pack_dir / "facts.json").is_file()
+    readme = (pack_dir / "README.md").read_text()
+    assert "Why a person is needed" in readme
+    assert "Evidence we already have" in readme
 
     assert desk.main(["--db", str(db), "list"]) == 0
     listed = json.loads(capsys.readouterr().out)
     assert listed["count"] == 1
+    assert listed["pending"][0]["why_handed_off"]
 
-    assert desk.main(["--db", str(db), "show", res["case_id"]]) == 0
-    capsys.readouterr()  # discard show JSON
+    assert desk.main(["--db", str(db), "show", res["case_id"], "--pack-dir", str(tmp_path / "cli-pack")]) == 0
+    shown_cli = json.loads(capsys.readouterr().out)
+    assert shown_cli["pack_dir"]
+    assert Path(shown_cli["pack_dir"], "README.md").is_file()
 
     assert (
         desk.main(

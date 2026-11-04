@@ -110,12 +110,23 @@ Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing`
 
 `dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus fixtures unless `include_fixtures=False`), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` / `reject_verdict()` close the loop. Tests: `tests/test_dispute_service.py`, `tests/test_dispute_desk.py`.
 
-## Sign-off desk
+## Sign-off desk (case pack)
+
+When a claim is handed off, the desk puts everything in one place so the person
+does not hunt for documents:
 
 ```bash
 python3 -m dispute.desk --db data/demo.sqlite list
+# each row: why_handed_off, blocking_question, decision, evidence_count
+
 python3 -m dispute.desk --db data/demo.sqlite show SO-0001
+# briefing + why handed off + evidence index (order, DESADV, invoice, DDT, reconcile…)
+
+python3 -m dispute.desk --db data/demo.sqlite show SO-0001 --pack-dir /tmp/SO-0001
+# writes README.md, briefing.json, evidence.json, verdict.json, facts.json
+
 python3 -m dispute.desk --db data/demo.sqlite approve SO-0001 --by Sara --reason "Late gate-in"
+# also activates a learned rule so the next same-kind claim can close alone
 ```
 
 ### Out of scope
