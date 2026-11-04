@@ -7,7 +7,6 @@ import { Page } from "@/components/shell/app-shell";
 import { ShippingView } from "@/components/shipping/shipping-view";
 import { FinanceTab } from "./finance";
 import { InventoryTab } from "./inventory";
-import { LogisticsPlanPanel } from "./logistics";
 
 export type OpsTab = "inventory" | "warehouse" | "finance";
 export const OPS_TABS: { value: OpsTab; label: string }[] = [
@@ -37,10 +36,8 @@ export function OperationsView({ initialTab }: { readonly initialTab: OpsTab }) 
       </PageHeader>
       {tab === "inventory" ? <InventoryTab /> : null}
       {tab === "warehouse" ? (
-        <>
-          <LogisticsPlanPanel />
-          <ShippingView embedded />
-        </>
+        // The Logistics agent's plan, with the transport planner's sign-off, is the first section of ShippingView.
+        <ShippingView embedded />
       ) : null}
       {tab === "finance" ? <FinanceTab /> : null}
     </Page>

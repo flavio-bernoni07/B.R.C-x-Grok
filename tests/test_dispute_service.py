@@ -70,7 +70,7 @@ def test_benchmark_beats_threeway_on_its_blind_spots() -> None:
     rows = {r["id"]: r for r in res["rows"]}
     for blind_spot in ("C06", "C13", "C14", "C15"):  # short invoiced right, two causes, ref typo
         assert rows[blind_spot]["ours_causes_ok"] and not rows[blind_spot]["threeway_causes_ok"]
-    for parity in ("C01", "C04", "C09", "C11", "C20"):
+    for parity in ("C01", "C04", "C09", "C11", "C19"):
         assert rows[parity]["ours_causes_ok"] and rows[parity]["threeway_causes_ok"]
 
 
