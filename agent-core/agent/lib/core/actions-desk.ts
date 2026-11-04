@@ -9,6 +9,7 @@ export type DeskTab =
   | "sendoff"
   | "price"
   | "quantity"
+  | "disputes"
   | "pending"
   | "other"
   | "decided";
@@ -38,6 +39,7 @@ export function deskTabForSignoff(c: {
     if (c.row === "order" && SEND_OFF_KINDS.has(c.kind)) return "sendoff";
     if (c.row === "order" && PRICE_KINDS.has(c.kind)) return "price";
     if (c.row === "order" && QTY_KINDS.has(c.kind)) return "quantity";
+    if (c.row === "dispute" && (c.kind === "customer_dispute" || c.kind === "verdict")) return "disputes";
     return "other";
   }
   return "other";
