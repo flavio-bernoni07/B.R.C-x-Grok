@@ -10,28 +10,27 @@ Detail: [order-dec.md](order-dec.md)
 |---|---|---|---|
 | Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
 
-## Forecast and quality (Flavio, 4 Nov)
+## Forecast and quality (Flavio)
 
 ### TL;DR
 
-- **What:** three tools that keep the stock figure honest:
-  - a weekly "buy now or wait" advice for paddy
-  - a photo check of each rice delivery
+- **What:**
+  - FORCAST: a weekly "buy now or wait" advice for paddy
+  - QUALITY CHECK: a photo check of a sample rice delivery -> inference adapting to the whole delivery
   - a stock projection the Order row reads
-- **Why:** Italian paddy fell 27 to 40% last campaign because Asian rice got cheap. World prices are now up 43% in euros. When to buy is worth about €1M a year for every 1% saved, and a wrong stock figure turns into short deliveries and disputes.
+- **Why:** Italian paddy fell 27% to 40% last campaign because Asian rice got cheap. World prices are now up 43% in euros. When to buy is worth about €1M a year for every 1% saved, and a wrong stock figure turns into short deliveries and disputes.
 - **Data:** public and free: weekly EU paddy prices since 2015, World Bank world prices, ECB exchange rates, Ente Risi farmer stocks. All tested on 4 Nov.
-- **Proof:** a backtest over the last 10 campaigns, the advisor against buying the same amount every week. This is our number against a baseline.
-- **On stage:** about 40 seconds and one screen with three panels. It is a stretch goal, not the main task, so it gets a small slice of the pitch.
+- **On stage:** about 20 seconds (we have 2 minutes in the demo video) and one screen with three panels.
 - **Cost:** about 15 hours: 12 of backend, 3 for the screen. Everything else is a nice-to-have.
 
 ### How it shows in the pitch
 
-About 40 seconds (to confirm when we split the pitch). One screen, three panels, clicked left to right while one person talks:
+About 20 seconds. One screen, three panels:
 
 1. *Before the screen:* "Last year Italian paddy fell up to 40% because Asian rice got cheap. This year world prices are up 43% in euros. For Riso Scotti, every 1% saved on paddy is about a million euros."
-2. *Buy or wait:* "Every Monday Grok proposes what to buy, and every number links to its source. Over the last ten campaigns this rule paid X € per tonne less than buying evenly." (X comes from the backtest, whatever it turns out to be.)
-3. *Lot check:* "A delivery arrives. A photo of the lab sample counts broken and chalky grains, applies the contract price cut, and sends the lot where it is worth most."
-4. *Stock:* "That lot leaves less Carnaroli for week 47, so the order desk sees the problem before the truck does."
+2. *Buy or wait:* "Every Monday Grok proposes what to buy, and every number links to its source.
+3. *How it works:* 
+4. *Lot check:* "A delivery arrives. A photo of the lab sample counts broken and chalky grains, adapt it (inference) to the whole delivery, applies the contract price cut if needed and must require further checks by human to confirm quality (good to show in the demo)."
 
 ### The screen
 
@@ -55,8 +54,6 @@ One web page (Streamlit) on the laptop. It reads the CSV tables and the Mini ERP
 +----------------------------------------+----------------------------------------+
 ```
 
-The lot numbers are an illustrative case until we photograph a real sample. The top panel is all real data.
-
 ### Build budget
 
 **Must have**, in this order:
@@ -75,8 +72,6 @@ The lot numbers are an illustrative case until we photograph a real sample. The 
 - reading the Ente Risi PDFs automatically (1.5 h)
 - a weather and satellite chart for the Romanian fields (1.5 h)
 - Grok reading promotions from retailer emails (1 h)
-
-**Skipped:** field-level Sentinel maps, rice blast risk, sales team estimates, retailer sell-out data. They stay as answers for the Q&A.
 
 ### What this part does
 
