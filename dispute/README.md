@@ -95,6 +95,7 @@ until a person approves it with `--approved-by NAME`.
 ./scripts/run_dispute_claim.sh data/disputes/claims/01_shortage_messy_it.txt
 # No API key → offline fixtures (extraction+verdict); with key → live claim_reader+verdict.
 # Writes JSON under data/disputes/runs/<claim-stem>/ (or OUT_DIR=… / --out-dir).
+# Passes --approved-by demo by default so needs_sign_off verdicts still emit TD04/reject reply.
 ```
 
 Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing` in `claim_reader` (and via threeway price-gap safety net in `pull_facts`).
