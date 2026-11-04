@@ -2,7 +2,6 @@
 
 import type { InboxFilter, InboxRow } from "@agent/lib/order/inbox";
 import type { OrderWorkspace } from "@agent/lib/order/workspace";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -12,6 +11,8 @@ import { GrokbotIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
 import { Page } from "@/components/shell/app-shell";
 import { OrderWorkspaceBody, STATUS_TONE } from "./workspace";
+
+/** Plain <a> — full page load so ?ref= SSR opens the workspace without relying on next/link hydration. */
 
 function SimulateSubmitButton() {
   const { pending } = useFormStatus();
@@ -57,7 +58,7 @@ function InboxList({
     <ul>
       {rows.map((r) => (
         <li key={r.orderRef} className="border-hairline border-t first:border-t-0">
-          <Link
+          <a
             href={ordersHref({ ref: r.orderRef, filter, q })}
             className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-1 py-2.5 text-left transition-colors hover:bg-hh-honeydew/60 ${selected === r.orderRef ? "bg-hh-honeydew" : ""}`}
           >
@@ -80,19 +81,19 @@ function InboxList({
               ))}
             </span>
             <span className="col-span-2 truncate text-[13px] text-ink-68">{r.statusLine}</span>
-          </Link>
+          </a>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Filter chips as Links — work without client JS. */
+/** Filter chips as plain anchors — full navigation + SSR without next/link. */
 function FilterTabs({ filter, q }: { readonly filter: InboxFilter; readonly q: string }) {
   return (
     <div className="inline-flex h-[34px] items-center gap-0.5 rounded-full bg-white/85 p-1 shadow-[inset_0_1.5px_0.5px_rgb(255_255_255/0.95),inset_0_0_0_1px_rgb(32_49_25/0.07),0_10px_26px_-16px_rgb(32_49_25/0.35),0_2px_6px_rgb(32_49_25/0.06)]">
       {FILTERS.map((o) => (
-        <Link
+        <a
           key={o.value}
           href={ordersHref({ filter: o.value, q })}
           className={cn(
@@ -101,7 +102,7 @@ function FilterTabs({ filter, q }: { readonly filter: InboxFilter; readonly q: s
           )}
         >
           {o.label}
-        </Link>
+        </a>
       ))}
     </div>
   );
@@ -236,7 +237,7 @@ export function OrdersView({
         <FilterTabs filter={filter} q={qParam} />
       </PageHeader>
       {simMsg ? <p className="rounded-[10px] bg-st-ok px-3 py-2 text-[13px] text-st-ok-ink">{simMsg}</p> : null}
-      <div className={selected ? "mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : "mt-4 grid gap-5"}>
+      <div className={selected ? "mt-4 grid items-start gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : "mt-4 grid gap-5"}>
         <Panel title="Inbox">
           {listError && !rows?.length ? (
             <div className="space-y-3 py-6 text-center">
@@ -267,11 +268,11 @@ export function OrdersView({
           <Panel
             title={selected}
             aside={
-              <Link href={ordersHref({ filter, q: qParam })} className="text-ink-68 hover:text-ink">
+              <a href={ordersHref({ filter, q: qParam })} className="text-ink-68 hover:text-ink">
                 Close
-              </Link>
+              </a>
             }
-            className="xl:sticky xl:top-0"
+            className="lg:sticky lg:top-0"
           >
             {ws ? (
               <OrderWorkspaceBody ws={ws} />

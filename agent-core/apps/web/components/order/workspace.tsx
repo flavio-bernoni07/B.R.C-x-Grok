@@ -1,7 +1,6 @@
 "use client";
 
 import type { InboxStatus, OrderWorkspace } from "@agent/lib/order/workspace";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { day, eur, Facts, Panel, Pill, type PillTone, qty, SourceTag } from "@/components/kit";
 import { askHref } from "@/components/shell/overview-chat";
@@ -80,9 +79,9 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
           <span>
             <b>{x.caseId}</b> {x.text}
           </span>
-          <Link href={x.href} className="rounded-full bg-hh-dark px-3 py-1 font-bold text-[12px] text-hh-window">
+          <a href={x.href} className="rounded-full bg-hh-dark px-3 py-1 font-bold text-[12px] text-hh-window">
             Review proposed resolution
-          </Link>
+          </a>
         </div>
       ))}
 
@@ -242,9 +241,9 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
         </div>
       )}
 
-      <Link href={askHref(ws.askQuestion)} className="inline-block text-[13px] font-bold underline underline-offset-2">
+      <a href={askHref(ws.askQuestion)} className="inline-block text-[13px] font-bold underline underline-offset-2">
         Ask about this order
-      </Link>
+      </a>
     </div>
   );
 }
@@ -260,7 +259,10 @@ export function OrderWorkspaceCard({ output }: { readonly output: unknown }) {
     );
   }
   return (
-    <Panel title={`Order ${o.workspace.orderRef}`} aside={<Link href={`/orders?ref=${encodeURIComponent(o.workspace.orderRef)}`}>Open the workspace</Link>}>
+    <Panel
+      title={`Order ${o.workspace.orderRef}`}
+      aside={<a href={`/orders?ref=${encodeURIComponent(o.workspace.orderRef)}`}>Open the workspace</a>}
+    >
       <OrderWorkspaceBody ws={o.workspace} compact />
     </Panel>
   );

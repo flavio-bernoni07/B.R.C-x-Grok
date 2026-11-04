@@ -9,7 +9,6 @@
  */
 import type { Signoff } from "@agent/lib/core/erp";
 import { actionsCaseHref, deskTabForSignoff } from "@agent/lib/core/actions-desk";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { decideSignoffAction } from "@/app/(app)/actions/actions";
@@ -340,13 +339,12 @@ export function SignoffCard({
         </label>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <DecideSubmit label="Send mail" className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window" />
-          <Link
+          <a
             href={closeMailHref}
             className="inline-flex h-9 items-center rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)]"
-            onClick={() => setComposeMail(false)}
           >
             Back
-          </Link>
+          </a>
         </div>
       </form>
     );
@@ -413,16 +411,15 @@ export function SignoffCard({
                 <div className="font-bold text-[13px]">{splitCopy.headline}</div>
                 <div className="mt-1 text-[12px] text-hh-window/80">{splitCopy.detail}</div>
               </button>
-              <Link
+              <a
                 href={mailHref}
                 className="rounded-[12px] bg-hh-seasalt px-3 py-3 text-left shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)]"
-                onClick={() => setComposeMail(true)}
               >
                 <div className="font-bold text-[13px] text-ink">Email &amp; Pending</div>
                 <div className="mt-1 text-[12px] text-ink-68">
                   Open the mail to the retailer, send it, and move this order to Pending. No ORDRSP while it is blocked.
                 </div>
-              </Link>
+              </a>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
@@ -430,13 +427,12 @@ export function SignoffCard({
                 {sendOffLabel}
               </button>
               {priceCase || manualEdiCase ? (
-                <Link
+                <a
                   href={mailHref}
                   className="inline-flex h-8 items-center rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)]"
-                  onClick={() => setComposeMail(true)}
                 >
                   Mail → Pending…
-                </Link>
+                </a>
               ) : null}
             </div>
           )}
@@ -491,7 +487,7 @@ export function SignoffQueue({ cases, compact = false }: { readonly cases: Signo
     <ul className="divide-y divide-[var(--color-hairline)]">
       {cases.map((c) => (
         <li key={c.caseId} className="py-2">
-          <Link href={actionsCaseHref(c.caseId, deskTabForSignoff(c))} className="flex w-full items-center gap-3 text-left">
+          <a href={actionsCaseHref(c.caseId, deskTabForSignoff(c))} className="flex w-full items-center gap-3 text-left">
             <span className="inline-flex w-[88px] shrink-0 items-center gap-1.5 font-bold text-[13px]">
               {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
               {c.caseId}
@@ -499,7 +495,7 @@ export function SignoffQueue({ cases, compact = false }: { readonly cases: Signo
             <span className="w-[64px] shrink-0 text-[12px] text-ink-68">{ROW_LABEL[c.row] ?? c.row}</span>
             <span className={cn("min-w-0 flex-1 truncate text-[13px]", compact && "text-ink-78")}>{c.title ?? c.kind}</span>
             <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
-          </Link>
+          </a>
         </li>
       ))}
     </ul>

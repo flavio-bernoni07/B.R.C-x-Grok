@@ -3,7 +3,7 @@
 import type { Signoff } from "@agent/lib/core/erp";
 import { actionsCaseHref, deskTabForSignoff, type DeskTab as CoreDeskTab } from "@agent/lib/core/actions-desk";
 import type { OrderBoardRow } from "@agent/lib/order/board";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { sendOffAllAction } from "@/app/(app)/actions/actions";
@@ -15,6 +15,8 @@ import { SignoffCard, SignoffStatus, signoffUsedGrokbot } from "./signoff";
 
 /** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
 export type DeskTab = CoreDeskTab;
+
+const DESK_TABS = new Set<DeskTab>(["board", "sendoff", "price", "quantity", "pending", "other", "decided"]);
 
 function isOpenCase(c: Signoff) {
   return c.status === "pending" && !c.decidedAt;
@@ -58,7 +60,7 @@ function actionsHref(tab: DeskTab, caseId?: string) {
   return s ? `/actions?${s}` : "/actions";
 }
 
-/** Link tabs — work without client JS (full navigation + SSR). */
+/** Plain <a> tabs — full page load so ?tab= SSR sticks without next/link hydration. */
 function DeskTabs({
   tab,
   options,
@@ -69,7 +71,7 @@ function DeskTabs({
   return (
     <div className="inline-flex h-[34px] flex-wrap items-center gap-0.5 rounded-full bg-white/85 p-1 shadow-[inset_0_1.5px_0.5px_rgb(255_255_255/0.95),inset_0_0_0_1px_rgb(32_49_25/0.07),0_10px_26px_-16px_rgb(32_49_25/0.35),0_2px_6px_rgb(32_49_25/0.06)]">
       {options.map((o) => (
-        <Link
+        <a
           key={o.value}
           href={actionsHref(o.value)}
           className={cn(
@@ -78,7 +80,7 @@ function DeskTabs({
           )}
         >
           {o.label}
-        </Link>
+        </a>
       ))}
     </div>
   );
@@ -117,8 +119,12 @@ export function SignoffView({
 } = {}) {
   const [cases, setCases] = useState<Signoff[]>(() => initialCases ?? []);
   const [board, setBoard] = useState<OrderBoardRow[]>(() => initialBoard ?? []);
-  const tab = initialTab;
-  const selected = initialCaseId;
+  // Prefer live URL so opening a case works even if soft-nav skips a full RSC remount.
+  const params = useSearchParams();
+  const tabRaw = params.get("tab");
+  const tab: DeskTab =
+    tabRaw && DESK_TABS.has(tabRaw as DeskTab) ? (tabRaw as DeskTab) : (initialTab ?? "board");
+  const selected = params.get("case") ?? initialCaseId;
   const [byDefault, setByDefault] = useState("");
 
   const load = useCallback(() => {
@@ -231,9 +237,9 @@ export function SignoffView({
                     </span>
                   );
                   return href ? (
-                    <Link href={href} className="hover:underline">
+                    <a href={href} className="hover:underline">
                       {inner}
-                    </Link>
+                    </a>
                   ) : (
                     inner
                   );
@@ -310,54 +316,95 @@ export function SignoffView({
       ) : null}
 
       {tab !== "board" ? (
-        <Panel
-          title={
-            tab === "sendoff"
-              ? "Ready to send off"
-              : tab === "price"
-                ? "Price errors"
-                : tab === "quantity"
-                  ? "Quantity errors"
-                  : tab === "pending"
-                    ? "Pending"
-                    : tab === "other"
-                      ? "Other"
-                      : "Decided"
+        <div
+          className={
+            current
+              ? "mt-1 grid items-start gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]"
+              : "mt-1 grid gap-5"
           }
         >
-          {rows.length === 0 ? (
-            <p className="py-6 text-center text-[14px] text-ink-68">{emptyCopy}</p>
-          ) : (
-            <ul className="divide-y divide-[var(--color-hairline)]">
-              {rows.map((c) => (
-                <li key={c.caseId}>
-                  <Link
-                    href={actionsHref(tab, c.caseId)}
-                    className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-1 py-2.5 transition-colors hover:bg-hh-honeydew/60",
-                      selected === c.caseId ? "bg-hh-honeydew" : "",
-                    )}
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[14px]">
-                      {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
-                      <b className="tracking-[-0.02em]">{c.caseId}</b>
-                      <span className="truncate text-ink-68">{c.title ?? c.kind}</span>
-                    </span>
-                    <span className="justify-self-end">
-                      <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
-                    </span>
-                    <span className="truncate text-[12px] text-ink-68">
-                      {c.subjectRef ?? c.row} · {c.kind.replace(/_/g, " ")} · {day(c.createdAt)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+          <Panel
+            title={
+              tab === "sendoff"
+                ? "Ready to send off"
+                : tab === "price"
+                  ? "Price errors"
+                  : tab === "quantity"
+                    ? "Quantity errors"
+                    : tab === "pending"
+                      ? "Pending"
+                      : tab === "other"
+                        ? "Other"
+                        : "Decided"
+            }
+          >
+            {rows.length === 0 ? (
+              <p className="py-6 text-center text-[14px] text-ink-68">{emptyCopy}</p>
+            ) : (
+              <ul className="divide-y divide-[var(--color-hairline)]">
+                {rows.map((c) => (
+                  <li key={c.caseId}>
+                    <a
+                      href={actionsHref(tab, c.caseId)}
+                      className={cn(
+                        "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-1 py-2.5 transition-colors hover:bg-hh-honeydew/60",
+                        selected === c.caseId ? "bg-hh-honeydew" : "",
+                      )}
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[14px]">
+                        {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
+                        <b className="tracking-[-0.02em]">{c.caseId}</b>
+                        <span className="truncate text-ink-68">{c.title ?? c.kind}</span>
+                      </span>
+                      <span className="justify-self-end">
+                        <SignoffStatus status={c.status} decidedAt={c.decidedAt} />
+                      </span>
+                      <span className="truncate text-[12px] text-ink-68">
+                        {c.subjectRef ?? c.row} · {c.kind.replace(/_/g, " ")} · {day(c.createdAt)}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          {current ? (
+            <Panel
+              title={
+                <span className="inline-flex items-center gap-2">
+                  {signoffUsedGrokbot(current) ? <GrokbotIcon size={16} title="Grokbot worked on this case" /> : null}
+                  {current.title ?? current.kind}
+                </span>
+              }
+              aside={
+                <a
+                  href={actionsHref(tab === "board" ? tabFor(current) : tab)}
+                  className="text-[13px] text-ink-68 hover:text-ink"
+                >
+                  Close
+                </a>
+              }
+              className="lg:sticky lg:top-0"
+            >
+              <p className="mb-3 text-[12px] text-ink-68">
+                {current.caseId} · {current.subjectRef ?? current.row}
+              </p>
+              <SignoffCard
+                key={`${current.caseId}-${openMail ? "mail" : "card"}`}
+                signoff={current}
+                confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
+                embedded
+                returnTab={tab === "board" ? tabFor(current) : tab}
+                initialCompose={openMail}
+                formError={formError}
+              />
+            </Panel>
+          ) : null}
+        </div>
       ) : null}
 
-      {current ? (
+      {tab === "board" && current ? (
         <Panel
           title={
             <span className="inline-flex items-center gap-2">
@@ -366,9 +413,9 @@ export function SignoffView({
             </span>
           }
           aside={
-            <Link href={actionsHref(tab === "board" ? tabFor(current) : tab)} className="text-[13px] text-ink-68 hover:text-ink">
+            <a href={actionsHref(tabFor(current))} className="text-[13px] text-ink-68 hover:text-ink">
               Close
-            </Link>
+            </a>
           }
           className="mt-5"
         >
@@ -380,7 +427,7 @@ export function SignoffView({
             signoff={current}
             confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
             embedded
-            returnTab={tab === "board" ? tabFor(current) : tab}
+            returnTab={tabFor(current)}
             initialCompose={openMail}
             formError={formError}
           />
