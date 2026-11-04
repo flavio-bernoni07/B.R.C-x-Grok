@@ -203,14 +203,122 @@ def maybe_draft_rule(erp: Erp, signature: dict[str, Any], decision: str) -> str 
     return rule_id
 
 
-def _rule_text(pattern: dict[str, Any], decision: str, signature: dict[str, Any] | None = None) -> str:
+def _rule_text(pattern: dict[str, Any], decision: str, signature: dict[str, Any] | None = None,
+               reason: str | None = None) -> str:
     causes = pattern.get("reconcile_causes") or "none"
     threeway = (signature or {}).get("threeway_reason") or "n/a"
-    return (
+    base = (
         f"When a {pattern['case_type']} claim has reconcile [{causes}] "
         f"(baseline threeway: {threeway}), proofs [{pattern['proofs'] or 'none'}] and flags "
         f"[{pattern['checks'] or 'none'}]: {decision}."
     )
+    if reason and reason.strip():
+        return f"{base} Because: {reason.strip()}"
+    return base
+
+
+def _line_qtys_by_item(doc: dict[str, Any] | None) -> dict[str, float]:
+    out: dict[str, float] = {}
+    if not doc:
+        return out
+    for line in doc.get("lines") or []:
+        item = str(line.get("item_code") or "").strip()
+        if not item:
+            continue
+        out[item] = out.get(item, 0.0) + float(line.get("quantity") or 0)
+    return out
+
+
+def quantities_agree(facts: dict[str, Any]) -> bool:
+    """DESADV (received) and invoice quantities agree line-by-line — Sara's common 'why'."""
+    received = _line_qtys_by_item(facts.get("desadv"))
+    invoiced = _line_qtys_by_item(facts.get("invoice"))
+    if not received or not invoiced:
+        return False
+    keys = set(received) | set(invoiced)
+    return all(abs(received.get(k, 0.0) - invoiced.get(k, 0.0)) < 0.001 for k in keys)
+
+
+def has_late_gate_or_otif(facts: dict[str, Any]) -> bool:
+    """Warehouse / gate proof mentions late slot / OTIF — another common sign-off reason."""
+    for proof in facts.get("proofs") or []:
+        blob = " ".join(
+            str(proof.get(k) or "") for k in ("summary", "kind", "ref", "notes")
+        ).lower()
+        if any(tok in blob for tok in ("otif", "gate-in", "gate in", "outside", "slot", "late")):
+            return True
+    desadv = facts.get("desadv") or {}
+    notes = str(desadv.get("notes") or "").lower()
+    return any(tok in notes for tok in ("otif", "outside", "slot", "late"))
+
+
+def applicability_conditions(facts: dict[str, Any], reason: str) -> dict[str, Any]:
+    """Snapshot which parts of the person's why must still hold on the next case.
+
+    Parses common cues from the free-text reason and records the facts that were true
+    when they signed. The next case must still satisfy those required checks.
+    """
+    text = (reason or "").strip()
+    lower = text.lower()
+    required: list[str] = []
+    if any(tok in lower for tok in ("quantit", "qty", "agree", "match the", "quantities agree")):
+        required.append("quantities_agree")
+    if any(tok in lower for tok in ("late", "gate-in", "gate in", "otif", "slot", "window")):
+        required.append("late_gate_or_otif")
+
+    snapshot = {
+        "reason": text,
+        "quantities_agree": quantities_agree(facts),
+        "late_gate_or_otif": has_late_gate_or_otif(facts),
+        "reconcile_causes": sorted(
+            {str(c) for c in ((facts.get("reconcile") or {}).get("causes") or []) if c}
+        ),
+    }
+    # If the reason had no parseable cues, keep whatever was true at sign-off as required
+    # so we don't auto-apply when the supporting facts disappear.
+    if not required:
+        if snapshot["quantities_agree"]:
+            required.append("quantities_agree")
+        if snapshot["late_gate_or_otif"]:
+            required.append("late_gate_or_otif")
+    snapshot["required"] = required
+    return snapshot
+
+
+def reason_still_applies(rule: dict[str, Any], facts: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Does the person's why still hold on these facts? If not, do not auto-apply the rule."""
+    action = rule.get("action") or {}
+    when = action.get("when") or {}
+    reason = when.get("reason") or rule.get("approved_reason") or ""
+    required = list(when.get("required") or [])
+    # Legacy rules (no when block): only safe to auto-apply if there is no stored reason,
+    # otherwise rebuild conditions from the reason alone against current facts.
+    if not when and reason:
+        when = applicability_conditions(facts, reason)
+        # For legacy: require cues from the reason text only (not a past snapshot).
+        required = list(when.get("required") or [])
+    if not required:
+        return True, []
+
+    current = {
+        "quantities_agree": quantities_agree(facts),
+        "late_gate_or_otif": has_late_gate_or_otif(facts),
+    }
+    failures: list[str] = []
+    labels = {
+        "quantities_agree": (
+            f"Sara's reason needs quantities to agree ({reason!r}), "
+            "but DESADV and invoice quantities differ on this claim"
+        ),
+        "late_gate_or_otif": (
+            f"Sara's reason needs late gate-in / OTIF evidence ({reason!r}), "
+            "but none is on this claim"
+        ),
+    }
+    for key in required:
+        if key in current and not current[key]:
+            failures.append(labels.get(key, f"condition {key} no longer holds"))
+    return (not failures), failures
 
 
 def approve_rule(erp: Erp, rule_id: str, *, by: str, reason: str) -> None:
@@ -230,13 +338,12 @@ def activate_from_person(
     by: str,
     reason: str,
     support_case_id: str | None = None,
+    facts: dict[str, Any] | None = None,
 ) -> str:
     """A person signed off this kind of case → that pattern becomes an active rule.
 
-    Approving the verdict *is* approving the rule for this fingerprint, so the next
-    matching claim can close without a person (demo beat: Case A → Sara → Case B alone).
-    The slower path (3 alike decisions → draft → separate approve) still exists for
-    Grok-only runs via maybe_draft_rule.
+    Stores their why as applicability conditions (`action.when`) so the next matching
+    claim only auto-closes if that reason still holds on the new facts.
 
     Never reuse an existing rule whose stored decision differs from this sign-off.
     """
@@ -244,6 +351,8 @@ def activate_from_person(
         raise ValueError("write one line on why: it becomes the rule's approval reason")
     ensure_schema(erp)
     pattern = _pattern(signature)
+    when = applicability_conditions(facts or {}, reason)
+    action = {"decision": decision, "when": when}
     for existing in rules(erp):
         if existing["pattern"] != pattern:
             continue
@@ -258,23 +367,35 @@ def activate_from_person(
                 )
             continue
         if existing["status"] == "active":
+            # Refresh why / conditions from this newer sign-off so applicability stays current.
+            erp.db.execute(
+                "UPDATE playbook_rules SET action = ?, approved_by = ?, approved_reason = ?, text = ? WHERE rule_id = ?",
+                (json.dumps(action), by, reason.strip(),
+                 _rule_text(pattern, decision, signature, reason), existing["rule_id"]),
+            )
+            erp.db.commit()
             return existing["rule_id"]
         if existing["status"] == "draft":
+            erp.db.execute(
+                "UPDATE playbook_rules SET action = ?, text = ? WHERE rule_id = ?",
+                (json.dumps(action), _rule_text(pattern, decision, signature, reason), existing["rule_id"]),
+            )
+            erp.db.commit()
             approve_rule(erp, existing["rule_id"], by=by, reason=reason)
             return existing["rule_id"]
 
     rule_id = erp.next_id("playbook_rule", "R-")
-    text = _rule_text(pattern, decision, signature)
+    text = _rule_text(pattern, decision, signature, reason)
     support = [support_case_id] if support_case_id else []
     erp.db.execute(
         "INSERT INTO playbook_rules(rule_id, task, pattern, action, status, support, text, "
         "approved_by, approved_reason, created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-        (rule_id, signature["task"], json.dumps(pattern), json.dumps({"decision": decision}), "active",
+        (rule_id, signature["task"], json.dumps(pattern), json.dumps(action), "active",
          json.dumps(support), text, by, reason.strip(), now_iso()),
     )
     erp.db.commit()
     erp.log(f"person:{by}", "agent.rule_activated_from_signoff", rule_id,
-            detail={"pattern": pattern, "decision": decision, "reason": reason.strip()})
+            detail={"pattern": pattern, "decision": decision, "reason": reason.strip(), "when": when})
     return rule_id
 
 

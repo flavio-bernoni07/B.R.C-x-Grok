@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import date
 from pathlib import Path
@@ -84,6 +85,35 @@ def test_same_kind_matches_on_reconcile_causes_not_threeway_wording() -> None:
     assert learning.match_rule(erp, other) is None
 
 
+def test_reason_applicability_requires_saras_why_to_still_hold() -> None:
+    """Same fingerprint is not enough: quantities / OTIF from the reason must still be true."""
+    from dispute.pull_facts import load_claim_json, pull_facts
+
+    facts = pull_facts(load_claim_json(ROOT / "data" / "disputes" / "extractions" / "05_ambiguous.json")).to_dict()
+    reason = "Late gate-in, quantities agree: reply with the evidence"
+    when = learning.applicability_conditions(facts, reason)
+    assert "quantities_agree" in when["required"]
+    assert "late_gate_or_otif" in when["required"]
+    assert when["quantities_agree"] and when["late_gate_or_otif"]
+
+    rule = {"action": {"decision": "reject", "when": when}, "approved_reason": reason}
+    assert learning.reason_still_applies(rule, facts) == (True, [])
+
+    disagree = json.loads(json.dumps(facts))
+    disagree["invoice"]["lines"][0]["quantity"] = 99
+    ok, fails = learning.reason_still_applies(rule, disagree)
+    assert not ok and any("quantities" in f for f in fails)
+
+    no_otif = json.loads(json.dumps(facts))
+    for proof in no_otif["proofs"]:
+        if proof.get("kind") == "warehouse_event":
+            proof["summary"] = "Pallet scanned at gate"
+    if no_otif.get("desadv"):
+        no_otif["desadv"]["notes"] = ""
+    ok, fails = learning.reason_still_applies(rule, no_otif)
+    assert not ok and any("OTIF" in f or "gate-in" in f for f in fails)
+
+
 def test_precedents_are_the_closest_and_never_overturned() -> None:
     erp = Erp()
     _log(erp, 1)
@@ -108,7 +138,7 @@ def _shipped():
 
 
 def test_person_signoff_teaches_the_next_similar_claim(tmp_path: Path) -> None:
-    """Case A unclear → Sara approves → Case B same kind closes alone via learned rule."""
+    """Case A unclear → Sara approves → Case B same kind + same why closes alone via learned rule."""
     import json
 
     erp = fresh_erp()
@@ -134,7 +164,9 @@ def test_person_signoff_teaches_the_next_similar_claim(tmp_path: Path) -> None:
         playbook_path=playbook, issue_date=date(2026, 11, 7),
     )
     assert done["learned_rule_id"]
-    assert learning.match_rule(erp, learning.case_for(erp, first["claim_id"])["signature"])
+    rule = learning.match_rule(erp, learning.case_for(erp, first["claim_id"])["signature"])
+    assert rule and rule["action"]["when"]["required"] == ["quantities_agree", "late_gate_or_otif"]
+    assert rule["approved_reason"].startswith("Late gate-in")
 
     def no_grok(_messages):
         raise AssertionError("Grok must not be called when the learned rule matches")
@@ -147,8 +179,56 @@ def test_person_signoff_teaches_the_next_similar_claim(tmp_path: Path) -> None:
     assert second["status"] == "closed"
     assert second["outcome"]["kind"] == "reject_reply"
     assert second["verdict"]["points"][0]["source"]["ref"] == done["learned_rule_id"]
+    assert "because:" in second["verdict"]["points"][0]["source"]["detail"].lower()
     assert learning.case_for(erp, second["claim_id"])["decided_by"] == "rule"
     assert done["learned_rule_id"] in second["verdict"]["summary"]
+    assert "Late gate-in" in second["verdict"]["summary"]
+
+
+def test_matching_rule_skipped_when_reason_no_longer_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fingerprint matches, but Sara's why does not → ask a person again, do not force the rule."""
+    import json
+
+    erp = fresh_erp()
+    playbook = tmp_path / "playbook.md"
+    shutil.copy(ROOT / "data" / "disputes" / "playbook.md", playbook)
+    unclear = json.loads((ROOT / "data" / "disputes" / "extractions" / "05_ambiguous.json").read_text())
+    twin = json.loads((ROOT / "data" / "disputes" / "extractions" / "06_ambiguous_twin.json").read_text())
+    verdict = json.loads((ROOT / "data" / "disputes" / "verdicts" / "05_ambiguous_reject.json").read_text())
+    for key in ("claim", "playbook_path", "contract_path", "amount_notes", "known_amounts"):
+        verdict.pop(key, None)
+
+    first = handle_claim(
+        erp, "a", out_dir=tmp_path / "a",
+        read_caller=lambda _t: dict(unclear),
+        verdict_caller=lambda _m: json.loads(json.dumps(verdict)),
+        received_on=date(2026, 11, 7),
+    )
+    approve_verdict(
+        erp, first["case_id"], by="Sara",
+        reason="Late gate-in, quantities agree: reply with the evidence",
+        playbook_path=playbook, issue_date=date(2026, 11, 7),
+    )
+
+    monkeypatch.setattr(
+        learning,
+        "reason_still_applies",
+        lambda _rule, _facts: (
+            False,
+            ["Sara's reason needs quantities to agree, but DESADV and invoice quantities differ on this claim"],
+        ),
+    )
+    second = handle_claim(
+        erp, "b", out_dir=tmp_path / "b",
+        read_caller=lambda _t: dict(twin),
+        verdict_caller=lambda _m: json.loads(json.dumps(verdict)),
+        received_on=date(2026, 11, 7),
+    )
+    assert second["status"] == "awaiting_person"
+    assert any("quantities" in r for r in second["verdict"]["sign_off_reasons"])
+    assert learning.case_for(erp, second["claim_id"])["decided_by"] is None
 
 
 def test_an_active_rule_decides_with_no_grok_call(tmp_path: Path) -> None:

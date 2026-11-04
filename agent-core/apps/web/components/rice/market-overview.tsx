@@ -8,7 +8,7 @@ import { eur, pct, shortDate, trendClass } from "./format";
 export function MarketOverview({ market }: { readonly market: MarketSnapshot }) {
   const thai = market.world.thai_5pct;
   return (
-    <section className="w-full space-y-2 rounded-xl border bg-card p-4">
+    <section className="w-full space-y-2 rounded-[14px] bg-hh-seasalt p-4 shadow-[inset_0_0_0_1.5px_rgb(32_49_25/0.09)]">
       <header className="flex items-baseline justify-between gap-2">
         <h3 className="font-medium">Paddy prices</h3>
         <span className="text-muted-foreground text-xs">week of {shortDate(market.as_of)}</span>

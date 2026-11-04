@@ -1,33 +1,29 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const sans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: "variable",
+// Satoshi (Fontshare, FFL licence in ./fonts): the HeyHandy brand face. Bold for headlines, Medium for body.
+const satoshi = localFont({
+  variable: "--font-satoshi",
   display: "swap",
-});
-
-const mono = Geist_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: "variable",
-  display: "swap",
+  src: [
+    { path: "./fonts/Satoshi-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/Satoshi-Bold.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/Satoshi-Black.woff2", weight: "900", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
-  title: "Rice Agent",
-  description: "Paddy price outlook for Riso Scotti: baseline forecast plus news, by Grok.",
+  title: "B.R.C x Grok",
+  description: "Riso Scotti back office: orders checked by code, invoices matched against what shipped, claims answered with sources.",
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html className={cn(sans.variable, mono.variable)} lang="en">
-      <body>
+    <html className={satoshi.variable} lang="en">
+      <body className="font-medium text-ink">
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

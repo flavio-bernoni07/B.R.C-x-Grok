@@ -12,4 +12,6 @@ export default defineAgent({
   reasoning: "low",
   // Not in the AI Gateway catalog, so eve needs the window to plan compaction.
   modelContextWindowTokens: 256_000,
+  // The Mini ERP uses better-sqlite3, a native module: keep it unbundled so Node finds its binary.
+  build: { externalDependencies: ["better-sqlite3", "drizzle-orm"] },
 });
