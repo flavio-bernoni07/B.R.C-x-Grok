@@ -4,7 +4,7 @@
 - `validate` returns a list of problems; the answer is sent back once with them,
   and a second bad answer raises GrokAnswerRejected so the case goes to a person.
 - Model per task: XAI_MODEL_<TASK> (dots become underscores, e.g.
-  XAI_MODEL_DISPUTE_VERDICT), then XAI_MODEL, then the default below.
+  XAI_MODEL_DISPUTE_VERDICT), then XAI_MODEL, then GROK_MODEL, then the default below.
 - Key from XAI_API_KEY or GROK_API_KEY; base URL from XAI_BASE_URL.
 
 Grok proposes; code checks; a person decides when it is unclear. Nothing here
@@ -20,7 +20,7 @@ import urllib.request
 from typing import Any, Callable
 
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
-DEFAULT_MODEL = "grok-2-latest"
+DEFAULT_MODEL = "grok-4-latest"  # grok-2-latest answers 404 (PR #11)
 
 Messages = list[dict[str, str]]
 Caller = Callable[[Messages], Any]
@@ -60,7 +60,11 @@ def model_for(task: str | None = None) -> str:
         specific = os.environ.get("XAI_MODEL_" + task.upper().replace(".", "_").replace("-", "_"), "").strip()
         if specific:
             return specific
-    return os.environ.get("XAI_MODEL", DEFAULT_MODEL)
+    for name in ("XAI_MODEL", "GROK_MODEL"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return DEFAULT_MODEL
 
 
 def extract_json_object(text: str) -> dict[str, Any]:

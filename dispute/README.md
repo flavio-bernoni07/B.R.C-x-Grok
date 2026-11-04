@@ -12,7 +12,7 @@ Dispute-owned code for the Riso Scotti zero-touch back office (hackathon Track B
 |---|---|---|
 | `XAI_API_KEY` or `GROK_API_KEY` | yes for live runs | xAI API key |
 | `XAI_BASE_URL` | no | default `https://api.x.ai/v1` |
-| `XAI_MODEL` | no | default `grok-2-latest` |
+| `XAI_MODEL` or `GROK_MODEL` | no | default `grok-4-latest` (`XAI_MODEL` wins if both set) |
 
 Without a key, live extraction fails clearly (no silent fake output). `--dry-run` only checks that a fixture file loads.
 

@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 from dispute.claim_reader import (
+    DEFAULT_XAI_MODEL,
     ClaimExtraction,
     ClaimType,
     MissingApiKeyError,
+    _model,
     load_claim_file,
     main,
     parse_extraction,
@@ -141,6 +143,21 @@ def test_cli_missing_key(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
     assert code == 1
     err = capsys.readouterr().err
     assert "XAI_API_KEY" in err or "GROK_API_KEY" in err
+
+
+def test_model_default_is_current(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XAI_MODEL", raising=False)
+    monkeypatch.delenv("GROK_MODEL", raising=False)
+    assert DEFAULT_XAI_MODEL == "grok-4-latest"
+    assert _model() == "grok-4-latest"
+
+
+def test_model_env_override_prefers_xai(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XAI_MODEL", "grok-3")
+    monkeypatch.setenv("GROK_MODEL", "ignored-when-xai-set")
+    assert _model() == "grok-3"
+    monkeypatch.delenv("XAI_MODEL")
+    assert _model() == "ignored-when-xai-set"
 
 
 def test_cli_live_with_mocked_api(
