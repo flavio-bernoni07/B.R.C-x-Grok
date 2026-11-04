@@ -43,7 +43,16 @@ function Proposal({ proposal }: { readonly proposal: Record<string, unknown> | n
   );
 }
 
-export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff; readonly onDecided?: (result: unknown) => void }) {
+export function SignoffCard({
+  signoff,
+  onDecided,
+  confirmLabel,
+}: {
+  readonly signoff: Signoff;
+  readonly onDecided?: (result: unknown) => void;
+  /** Override the primary approve label (e.g. Send-off on the confirm scheda). */
+  readonly confirmLabel?: string;
+}) {
   const [c, setC] = useState(signoff);
   const [by, setBy] = useState("");
   const [reason, setReason] = useState("");
@@ -175,7 +184,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
                   onClick={() => void decide(true)}
                   className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
                 >
-                  Approve
+                  {confirmLabel ?? (c.kind === "confirm" ? "Send off" : "Approve")}
                 </button>
               )}
               <button
