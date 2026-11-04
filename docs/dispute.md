@@ -15,8 +15,9 @@
 
 ## What I decided
 
-- First dispute-owned slice is the **claim reader** only (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
-- Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage). Verdict, facts puller, and TD04 are out of scope for this step.
+- First dispute-owned slice is the **claim reader** (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
+- Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage).
+- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from mock Mini ERP fixtures (`data/disputes/erp/catalog.json`), then run three-way matching. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok. Verdict and TD04 are still out of scope.
 
 ## What I need from others
 
@@ -28,5 +29,6 @@
 - A verdict per claim: accept, partial or reject, with the amount and a source for every point
 - A credit note or a reply to the retailer, saved in the Mini ERP
 - Structured claim extraction from the claim reader (input for Pull the facts)
+- A facts object per claim: linked order/DESADV/invoice, threeway lines+reasons, proof refs, lookup misses (input for Verdict)
 
 ## Open questions

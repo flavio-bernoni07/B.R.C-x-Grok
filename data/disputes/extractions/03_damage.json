@@ -1,0 +1,10 @@
+{
+  "order_ref": "RS-ORD-99102",
+  "invoice_ref": null,
+  "product": "Riso Scotti Carnaroli 1kg",
+  "quantity": 6,
+  "amount": 93.0,
+  "claim_type": "damage",
+  "confidence": 0.85,
+  "raw_notes": "Invoice not cited by retailer; DDT 4521 referenced"
+}

@@ -1,0 +1,10 @@
+{
+  "order_ref": "RS-2026-00481",
+  "invoice_ref": "FT-2026/1187",
+  "product": "Riso Scotti Arborio 1kg",
+  "quantity": 12,
+  "amount": 186.0,
+  "claim_type": "shortage",
+  "confidence": 0.92,
+  "raw_notes": "PO spacing typo in email; invoice FT-2026/1187 present"
+}
