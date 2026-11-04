@@ -452,3 +452,145 @@ The step 4 cases should cover:
 - two causes on one line
 - cases against bags (unit of measure)
 - an orphan invoice
+  ------------
+
+  Automated Dispatch and Risk-Based Employee Approvals
+Objective
+Automate dispatch by default. Employees intervene only when the system cannot safely authorize the shipment under verified facts and approved company rules.
+
+Principle: Zero-touch for normal operations; human-in-the-loop for genuine exceptions.
+Step 8: Dispatch authorization — how it works
+1. Collect verified loading evidence. Obtain scans, truck ID, pallet IDs, product SKUs, batches, quantities and quality-release status from the warehouse workflow.
+2. Check hard constraints in deterministic code. Confirm the correct truck and route, matching manifest and physical-load records, eligible batches, valid quantities and absence of duplicate dispatch.
+3. Automatically authorize standard dispatches. If all mandatory conditions pass and company policy permits it, record the dispatch without requesting an additional employee approval.
+4. Generate transaction records. Create the shipment and DDT / simulated DESADV from verified, authorized dispatched quantities, preserving references to the approved order and loading evidence. Invoice using the approved commercial terms and the applicable invoicing policy.
+5. Handle exceptions. If a check fails, block the affected operation. Grok may propose corrective options, but deterministic code checks their feasibility and company authorization rules before execution.
+6. Escalate only when required. Assign a specific employee role and action when a physical correction, policy exception, customer agreement or regulatory/quality authorization is needed.
+7. Revalidate after correction. Check the updated load and commitments again before dispatch; log the decision, action and evidence.
+Exception rules
+Situation	Automated response	Employee involvement
+Correct pallets, truck, batches and quantities; checks complete	Authorize dispatch and generate shipment/DDT	No additional approval if company policy permits
+Missing pallet	Look for verified replacement stock or a feasible revised plan	Physical intervention if needed; approval if commitments or rules change
+Wrong pallet or wrong truck	Block loading; instruct warehouse to correct and rescan	Physical correction required; not necessarily supervisor approval
+Truck over capacity	Find another compatible vehicle or feasible plan	Only where assignment or customer commitments require approval
+Quality-held batch	Block that batch entirely	QA must authorize any quality release
+Partial delivery	Check retailer agreements and existing authorizations	Approval/customer agreement if the change is not already permitted
+Unverified or incomplete loading	Keep dispatch blocked until trustworthy verification is received	Verification or investigation required
+
+
+Risk-based approval engine
+- Low risk — automatic: Routine operations, verified data, standard rules and no exception requiring special authorization.
+- Medium risk — automatic investigation, conditional execution: System proposes and validates corrections; executes only if explicitly permitted by predefined rules. Otherwise, route to the relevant employee.
+- High risk — mandatory authorization: Quality releases, unapproved partial deliveries, changes to retailer commitments, significant financial corrections, or any other action defined by company policy.
+These categories and monetary thresholds must be configurable. Do not assume they are Riso Scotti's actual policies.
+Important physical-world safeguard
+Software checks cannot prove a truck departed or a sealed package contains what its label claims. The system must use reliable warehouse scans/packing controls and a trusted dispatch or departure event. Grok cannot invent physical confirmations, bypass quality holds, or authorize a shipment by changing a record.
+Implementation guidance for the team's CRM / Mini ERP
+- Show routine shipments as automatically verified / authorized without creating unnecessary employee tasks.
+- For exceptions, show problem → evidence → viable options → responsible role → required approval → recheck.
+- Keep separate states for planned, picked, verified loaded, authorized for dispatch, physically dispatched, and retailer received.
+- Use deterministic Python to enforce capacity, stock, SKU, batch, quantities, financial and approval constraints; use Grok for evidence interpretation and proposal generation; reserve decisions requiring authorization for employees.
+- Preserve an audit trail of evidence, policy checks, automatic decisions, approvals and changes.
+- Maintain distinct pre-invoice checks and post-delivery receipt/payment reconciliation.
+Target outcome: Fewer manual approvals on clean shipments, fast and auditable responses to exceptions, and consistent shipping and invoicing records.
+--------
+
+AI Operations for Food Manufacturers — Positioning Brief
+Riso Scotti / Grok Hackathon — Track B | 4 November 2026
+Our positioning
+One simple interface. Every food-retailer transaction connected. Routine work automated; people involved only when needed.
+
+We do not replace the ERP, WMS or accounting system. We add a food-specific AI operations layer that coordinates the entire order-to-payment process and resolves exceptions across systems.
+
+We are building an AI-powered transaction and exception management layer for food manufacturers supplying supermarkets and large retailers (GDO). It connects a retailer order to approved commercial terms, released inventory, product batches, truck planning, pallet loading, delivery documents, invoices, retailer receipts, payments, and disputes.
+
+What we aim to cover end to end: retailer order intake and validation -> approved commercial terms -> inventory and batch/quality checks -> truck planning -> picking -> verified loading -> dispatch -> DDT/DESADV -> invoice PDF and simulated FatturaPA XML -> retailer receipt -> payment -> reconciliation -> dispute resolution and audit trail. Each step uses the same linked transaction history, rather than isolated copies of documents.
+
+How people use it: a clear, fast, role-specific interface shows only the facts, status, supporting evidence and next action that matter. Clean transactions run automatically under explicit rules. Grok investigates ambiguous exceptions and suggests viable next steps; deterministic code verifies quantities, stock, truck capacity, prices and approvals. Employees intervene only for physical verification, missing evidence, unapproved commitments, quality/safety decisions, material financial changes or other configured exceptions. Fast and near-zero-touch are product goals, not yet measured results.
+Why this is relevant to Riso Scotti
+Public reporting supports alignment with Riso Scotti's strategic interests, not proof of a current software gap:
+1. AI and scenario analysis: In a March 2023 interview, Riso Scotti logistics director Luca Priori described evaluating AI for analyzing alternative scenarios from large datasets, alongside logistics and production automation. iKN Italy.
+2. Warehouse modernization: February 2026 reporting described Riso Scotti's automated Pavia logistics hub, with intensive storage, AGVs and System Logistics' Systore software, aimed at reliable and efficient flows. Supply Chain Italy.
+3. January 22, 2026 — digital B2B growth and integration: Riso Scotti announced a partnership with Rosso Fine Food to develop international B2B sales through digital platforms and relationships with professional buyers and distributors. Riso Scotti digital specialist Lucia Raina described an international B2B channel intended to be governed, measurable and integrated with commercial strategy, rather than purely a marketing initiative. Our connection: expanding digital commercial channels can make consistent order, fulfillment, delivery and financial records increasingly valuable. What it does not establish: the article is about sales-channel digitalization, not a disclosed project to automate back-office exception handling or evidence that the current back office is inefficient. Foodweb — 22 January 2026.
+Why these sources matter together: they show an existing emphasis on AI-enabled scenario analysis, modernized physical logistics, and integrated digital B2B growth. Our platform targets the coordination layer spanning commercial, logistics and financial transactions—an adjacent opportunity, not a confirmed deficiency.
+
+What we must validate with Riso Scotti: Whether employees actually spend significant time tracing and resolving cross-system order, delivery, invoicing or retailer-claim exceptions; which tasks Dynamics 365 and other systems already automate; and whether our interface can genuinely reduce time and clicks. We must not claim their current tools cannot already perform these functions.
+Why we could compete with established software
+Existing solution	What it already does well	Our proposed differentiation
+Microsoft Dynamics 365 (the team's reported ERP context)	Enterprise orders, inventory, logistics and finance processes	A single, intuitive, role-specific workspace, connected order-to-payment evidence, zero-touch routine checks and clear employee actions for exceptional cases.
+SAP	Sophisticated ERP, warehouse and manufacturing operations	One-click food-retailer transaction timeline and faster evidence collection for specific exception workflows, if proven in benchmarks.
+Oracle	Mature order, supply-chain and financial capabilities, including emerging AI workflows	Simple next-action UI, deterministic validity checks, and selective human intervention instead of blanket manual approvals.
+Salesforce	CRM, workflow automation and customer service	Preconfigured food/GDO workflows that coordinate logistics and finance as well as customer interactions.
+WMS/TMS and EDI software	Physical warehouse execution, transportation planning and structured document exchange	End-to-end operational orchestration from sales order to invoice and dispute, while leaving physical execution to systems of record.
+
+
+These are hypotheses to benchmark, not established competitive wins. Major vendors already have powerful automation and AI. We should integrate with them, not try to replicate the full ERP, WMS or TMS.
+Why our employee experience could be better
+Current pain hypothesis: capable enterprise systems often require users to navigate separate order, warehouse, logistics and finance contexts. The expensive moment is not necessarily a routine transaction—it is an exception that spans several teams and documents. This is a hypothesis from user discussions, not a measured problem at Riso Scotti.
+
+Our proposed one-workspace experience:
+- One order page: show approved quantity and terms, batch status, truck, pallet/loading proof, dispatched quantity, DDT, invoice, receipt, payment and open cases together.
+- A prioritized action inbox: show who must act, why, what evidence is present or missing, and the deadline or financial exposure.
+- Zero-touch happy path: auto-check records, reserve/plan within authorized rules, process valid loading evidence, generate matching documents and reconcile compatible facts without routine approval clicks.
+- Exception-first interaction: Grok proposes options with evidence; code rejects infeasible suggestions; authorized staff approve only decisions outside existing policy or requiring judgment.
+- Preview before executing: show the consequences for delivery commitments, stock, truck plan, documents and finance, then record a reversible or auditable outcome where supported.
+- Minimal training goal: role-specific buttons and plain explanations instead of exposing employees to every technical subsystem.
+Hard boundary: software cannot substitute for authentic warehouse scans, actual departure/receipt evidence, QA decisions, customer consent or required fiscal authorizations. Autonomy means eliminating unnecessary administration—not inventing events or bypassing controls.
+What 'we take care of everything' actually means
+We orchestrate the full business workflow and its exceptions, from approved retailer order through payment reconciliation. We do not claim to replace production machinery, trucks, physical warehouse staff, fiscal authorities or all enterprise systems.
+Stage	Our responsibility	Employee involvement
+Order and contract	Read approved order, validate terms, identify conflicts	Only unresolved commercial changes
+Inventory/production	Use released stock and production/status events; flag shortages	QA or operations for nonstandard decisions
+Truck/pallet	Choose feasible truck, create manifest, verify supplied loading scans	Physical scanning and exceptional corrections
+Dispatch/DDT	Automatically authorize only with trustworthy completion evidence and policy-compliant checks	Only when exception or mandatory authorization applies
+Invoice/FatturaPA	Calculate from authoritative shipment and approved prices; generate PDF and simulated XML	Only missing fiscal info, exceptions, required approvals
+Receipt/payment	Match supplied confirmations, payment and claims against records	Only missing/disputed evidence or material discrepancy
+Exceptions	Assemble evidence, propose viable solutions, assign ownership, recheck	Approval where justified; routine resolutions may be automated under policy
+
+
+The prototype currently simulates several stages; actual customer-system integration and legally effective invoice submission remain future work.
+Our concrete use case
+Example: supermarket orders 1,000 packages; only 900 units are released for dispatch.
+1. Detect: Deterministic checks flag a 100-unit fulfillment gap without treating it as an invoice error.
+2. Investigate: Grok receives the approved order, usable stock, batch restrictions, delivery commitment, truck capacity and relevant evidence.
+3. Recommend: It proposes valid options—such as a policy-permitted partial delivery, a later delivery date, or an alternate released batch—without inventing stock or customer consent.
+4. Authorize: Python validates hard constraints. An employee approves only a commercial, quality, safety or financial decision that requires authorization.
+5. Execute: The system updates the supported shipment plan and audit trail after approval; warehouse scans verify actual pallets and loading before dispatch is recorded.
+6. Document: DDT/DESADV-style data and invoice are derived from the authorized shipment and approved pricing. A human-readable PDF and simulated FatturaPA XML are generated only when required information and checks are available. No SdI submission is implied.
+7. Reconcile: Compare approved order, picking, loaded goods, dispatch, DDT, invoice, retailer receipt and payment against the correct source record for each stage. A correct invoice for 900 units can coexist with a 100-unit unfulfilled order; a retailer reporting only 850 received is a separate discrepancy.
+8. Resolve: An evidence-linked exception goes to the responsible employee with a feasible action, approval requirements and a subsequent verification step.
+Core distinction: Not simply “an alert appeared,” but problem → evidence → feasible options → authorized action → verified outcome.
+Why other food manufacturers could benefit
+Food manufacturers selling to major retailers may need to coordinate product lots, expiry and quality restrictions, pallet traceability, retailer-specific delivery instructions, promotional prices, EDI/DDT, Italian e-invoicing, shortages, retailer claims and payment deductions. These domain-specific records make a targeted exception workflow more useful than a generic chatbot.
+
+Our potential initial wedge: retailer delivery discrepancies and deductions, because investigation time, resolution speed and preventable financial losses can be measured. Reusable retailer and product rules could support expansion to other food producers—if validated in pilots.
+What the prototype already demonstrates vs. what remains unproven
+Reported in the team's Cursor development summaries (not independently audited): simulated truck assignment, picking, loading verification, shipment and DDT generation, invoice calculation, retailer receipt/payment records, linked transaction reconciliation, persistent exception cases, employee approvals, and PDF/simulated XML outputs; 77 automated tests reported passing at the last update.
+
+Still to prove: End-to-end integration with teammates' order-management module and Grok agent; actual Dynamics 365 connectivity; official FatturaPA schema validation and required fiscal fields; real EDI/SdI exchange; operational performance under concurrent use; and measured time/cost savings versus the customer's existing workflow.
+What we'd measure in a pilot
+- Minutes and employee handoffs needed to resolve an exception.
+- Time spent finding evidence and number of screens/systems used.
+- Percentage of clean transactions processed without manual intervention.
+- Correctness of recommendations and of approved downstream record changes.
+- Retailer deductions investigated or avoided, with documented financial impact.
+The key question for Riso Scotti: “Can you walk us through one recent order, shipment or invoice exception that wasn't resolved automatically—what information did employees need, which systems did they use, and how long did it take?”
+Pitch for the judges (about 45 seconds)
+Food manufacturers like Riso Scotti are already digitizing commercial channels and automating logistics. But the hardest operational problems can sit between systems: an order changes, a pallet is missing, the truck departs short, or the retailer disputes an invoice.
+
+We are building one simple AI operations workspace for the entire food-retailer transaction—from retailer order and released batches to truck loading, delivery documents, invoice, receipt and payment.
+
+Normal operations run automatically. When an exception appears, Grok gathers the facts, explains the impact, proposes feasible solutions and gives the right employee one clear action when approval is genuinely necessary. Deterministic checks enforce stock, pricing, quality and document consistency.
+
+We are not replacing Microsoft Dynamics 365 or warehouse automation. We are connecting and simplifying the work across them, so food manufacturers can resolve issues faster, reduce unnecessary manual effort and maintain a complete audit trail. Our hackathon prototype demonstrates the workflow; our next step is to measure the time savings against a real process.
+
+Very short pitch (15 seconds)
+We connect the entire food-retailer order-to-payment journey in one easy interface. Routine tasks run automatically; Grok investigates exceptions and employees approve only what truly needs human judgment. We integrate with existing ERP and logistics systems instead of replacing them.
+
+One-line message: One transaction. One clear interface. Automatic when possible. Human only when necessary.
+
+Original complementary message: Your systems manage transactions. We help your employees resolve what goes wrong between them.
+Sources
+- iKN Italy — Riso Scotti logistics director on technology and AI (20 March 2023)
+- Supply Chain Italy — Riso Scotti automated Pavia hub (20 February 2026)
+- Foodweb — Riso Scotti digital B2B export (22 January 2026)
