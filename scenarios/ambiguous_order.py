@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -38,6 +39,7 @@ from crm.actions import decide
 from crm.briefing import brief
 from dispute.claim_reader import call_grok as live_read_claim
 from dispute.service import handle_claim
+from dispute.verdict import DEFAULT_PLAYBOOK as PLAYBOOK
 from dispute.verdict import call_grok_verdict as live_verdict
 from order.service import receive_order
 from shipping import warehouse
@@ -87,6 +89,8 @@ def run(*, live: bool = False, me: bool = False, out_dir: Path | None = None, qu
     tap = GrokTap(live, recorded)
     out = Path(out_dir or tempfile.mkdtemp(prefix="brc-scenario-"))
     out.mkdir(parents=True, exist_ok=True)
+    playbook = out / "playbook.md"  # decisions are written to this copy, never to the tracked Playbook
+    shutil.copy(PLAYBOOK, playbook)
     erp = fresh_erp(db)
     people: list[dict[str, Any]] = []
     label = "live Grok" if live else "recorded Grok answer"
@@ -102,7 +106,7 @@ def run(*, live: bool = False, me: bool = False, out_dir: Path | None = None, qu
             approve = input("    approve? [y/n] ").strip().lower().startswith("y")
             reason = input("    one line on why: ").strip() or why
             who = input("    your name: ").strip() or "you"
-        result = decide(erp, case_id, approve=approve, by=who, reason=reason, **extra)
+        result = decide(erp, case_id, approve=approve, by=who, reason=reason, playbook_path=playbook, **extra)
         people.append({"case_id": case_id, "by": who, "approve": approve, "reason": reason, "done": result["done"]})
         say(f"    {who}: {'approved' if approve else 'rejected'} ({reason}) -> {result['done']}")
         return result
@@ -181,7 +185,7 @@ def run(*, live: bool = False, me: bool = False, out_dir: Path | None = None, qu
     return {"order_qty": qty, "invoice_total": inv["total"], "claim_status": final["status"],
             "outcome": outcome.get("kind"), "credit": outcome.get("amount"), "people": people,
             "grok_calls": [{"step": x["step"], "live": x["live"]} for x in tap.calls], "trace_gaps": problems,
-            "out_dir": str(out)}
+            "out_dir": str(out), "playbook": str(playbook)}
 
 
 def main(argv: list[str] | None = None) -> int:

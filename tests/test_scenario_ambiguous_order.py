@@ -47,6 +47,7 @@ def test_an_invented_figure_in_the_verdict_puts_the_claim_on_a_desk(tmp_path: Pa
     res = run(out_dir=tmp_path, quiet=True, recorded=_with(verdict={"amount": 600.0}))
     assert [p["by"] for p in res["people"]] == ["Giulia, order desk", "Sara, credit desk"]
     assert res["credit"] == 444.0  # code kept the figure the documents support
+    assert "| ESS-AMB-001 | damage | accept (approved) |" in Path(res["playbook"]).read_text()  # the copy learns
 
 
 def test_grok_reading_six_packs_is_shown_to_the_person(tmp_path: Path) -> None:
