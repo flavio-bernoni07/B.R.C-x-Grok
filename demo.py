@@ -11,7 +11,8 @@
               with no person (nothing is ambiguous); then an unclear claim goes to a person
 4. Cash:      Esselunga pays less: one deduction is our own credit note (matched), the other
               becomes a claim that a person decides
-5. Digest:    the weekly summary for the accountant and managers
+5. Planning:  this week's buy-or-wait calls, a lot checked from its photo, the stock projection
+6. Digest:    the weekly summary for the accountant and managers
 """
 
 from __future__ import annotations
@@ -44,7 +45,8 @@ def step(title: str) -> None:
     print(f"\n== {title}")
 
 
-def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None, quiet: bool = False) -> dict:
+def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None, quiet: bool = False,
+        with_planning: bool = True) -> dict:
     say = (lambda *a: None) if quiet else print
     if live and not grok.has_key():
         raise SystemExit("--live needs XAI_API_KEY or GROK_API_KEY")
@@ -167,8 +169,40 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
         f"€{sum(d['amount'] for d in ag['open_deductions']):,.2f}")
     result["cash"] = {"open": ag["open_total"], "deductions": [d["status"] for d in line["deductions"]]}
 
+    if with_planning:
+        if not quiet:
+            step("5. Forecast and quality")
+        from planning.advisor import advice
+        from planning.demand import production_suggestion, stock_projection
+        from planning.memo import weekly_memo
+        from planning.quality import check_lot, make_sample
+
+        calls = advice(["Carnaroli", "Arborio", "Selenio", "Long B"])
+        note = weekly_memo(calls)
+        say("Monday memo for the paddy buyer (" + note["by"] + "):")
+        for line in note["memo"].splitlines()[2:6]:
+            say("  " + line)
+        tray = out / "lot_LOT-PADDY-17.png"
+        make_sample(tray, whole=72, broken=18, chalky=2, clumps=1, seed=5)
+        lot = check_lot(erp, tray, variety="Carnaroli", lot="LOT-PADDY-17", tonnes=30)
+        r = lot["report"]
+        say(f"Lot LOT-PADDY-17, 30 t Carnaroli: broken {r['broken_pct']}%, whole-grain yield {r['whole_yield']} "
+            f"against {r['contract_whole_yield']}: cut €{r['price_cut_eur_t']:.2f}/t (€{r['lot_value_cut_eur']:,.2f}), "
+            f"goes to {r['destination']}")
+        if lot["status"] == "awaiting_person":
+            from crm.actions import decide
+
+            decide(erp, lot["case_id"], approve=True, by="Lab, Pavia", reason="Second sample confirms the broken count")
+            say("  The lab confirms the sample; the contract cut applies")
+        rows = stock_projection(erp, "8000000000001", start=date(2026, 11, 9), weeks=6)
+        tip = production_suggestion(rows)
+        say(f"Carnaroli 1 kg, next 6 weeks: {', '.join(f'{x['week']} {x['closing']:,.0f}' for x in rows[:4])}")
+        if tip:
+            say(f"  Predictive planning: {tip['why']}; plan about {tip['qty']:,} packs before {tip['make_before']}")
+        result["planning"] = {"calls": [c["call"] for c in calls], "lot": lot["status"], "suggestion": tip}
+
     if not quiet:
-        step("5. Weekly digest")
+        step("6. Weekly digest")
     digest = build_digest(erp, title="Weekly digest, week of 2 Nov 2026")
     say(digest)
     result.update({"pending_signoffs": len(signoff.pending(erp)), "audit_events": len(erp.audit()),

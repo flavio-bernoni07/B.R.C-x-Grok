@@ -14,6 +14,8 @@ GET  /api/invoices?status=
 GET  /api/claims?status=
 GET  /api/receivables?as_of=YYYY-MM-DD
 GET  /api/stock
+GET  /api/projection?item_code=CAR-1KG&start=YYYY-MM-DD
+GET  /api/advice                       this week's buy-or-wait call per paddy variety
 GET  /api/digest
 POST /api/ask                          {"question": str}  the chatbot
 POST /api/inbox                        {"text": str, "source"?: str}
@@ -73,6 +75,14 @@ class Api:
             return aging(erp, date.fromisoformat(query.get("as_of") or date.today().isoformat()))
         if parts == ["api", "stock"]:
             return _stock(erp)
+        if parts == ["api", "projection"]:
+            from crm.ask import _projection
+
+            return _projection(erp, query.get("item_code") or "CAR-1KG", query.get("start"))
+        if parts == ["api", "advice"]:
+            from planning.advisor import advice
+
+            return advice()
         if parts == ["api", "digest"]:
             return {"markdown": build_digest(erp)}
         raise LookupError(path)

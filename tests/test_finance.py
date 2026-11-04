@@ -110,7 +110,7 @@ def test_kpis_after_the_demo(tmp_path: Path) -> None:
     from core.erp import Erp
 
     db = tmp_path / "demo.sqlite"
-    demo.run(db=str(db), out_dir=tmp_path / "out", quiet=True)
+    demo.run(db=str(db), out_dir=tmp_path / "out", quiet=True, with_planning=False)
     k = kpis(Erp(db))
     assert k["no_person"]["orders"] == {"done": 0, "of": 1}  # Order rule: a person confirms every order
     assert k["no_person"]["deductions"] == {"done": 1, "of": 2}

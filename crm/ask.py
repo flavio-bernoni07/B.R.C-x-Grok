@@ -69,6 +69,19 @@ def _stock(erp: Erp, item_code: str | None = None) -> list[dict[str, Any]]:
     return out
 
 
+def _projection(erp: Erp, item_code: str = "CAR-1KG", start: str | None = None) -> list[dict[str, Any]]:
+    from datetime import date
+
+    from planning.demand import production_suggestion, stock_projection
+
+    product = erp.product(item_code=item_code)
+    if not product:
+        raise KeyError(item_code)
+    rows = stock_projection(erp, product["gtin"], start=date.fromisoformat(start) if start else date.today())
+    tip = production_suggestion(rows)
+    return [r | {"item_code": item_code} for r in rows] + ([{"suggestion": tip}] if tip else [])
+
+
 def _trace(erp: Erp, order_ref: str) -> list[dict[str, Any]]:
     from core.trace import chain, render
 
@@ -89,6 +102,7 @@ VIEWS: dict[str, tuple[Callable[..., list[dict[str, Any]]], set[str], str]] = {
     "deductions": (_deductions, set(), "deductions retailers took that we are disputing"),
     "stock": (_stock, {"item_code"}, "stock per product: released, planned, held, committed, available"),
     "trace": (_trace, {"order_ref"}, "every document and decision behind one order"),
+    "projection": (_projection, {"item_code", "start"}, "stock per week for the next 8 weeks and a production suggestion"),
     "numbers": (_numbers, set(), "the KPIs: share handled with no person, fill rate, cash, credits"),
 }
 
@@ -99,6 +113,7 @@ KEYWORD_VIEWS = [
     ("claims", ["claim", "reclam", "dispute"]),
     ("invoices", ["invoice", "fattur"]),
     ("trace", ["trace", "why", "history", "chain"]),
+    ("projection", ["run out", "projection", "next weeks", "production", "esaur"]),
     ("numbers", ["kpi", "numbers", "fill rate", "how much", "cash", "zero-touch", "no person"]),
     ("orders", ["order", "ordin"]),
 ]

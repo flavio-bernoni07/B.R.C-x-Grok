@@ -32,7 +32,7 @@ def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture()
 def db(tmp_path: Path) -> Path:
     path = tmp_path / "demo.sqlite"
-    demo.run(db=str(path), out_dir=tmp_path / "out", quiet=True)
+    demo.run(db=str(path), out_dir=tmp_path / "out", quiet=True, with_planning=False)
     return path
 
 

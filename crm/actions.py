@@ -10,6 +10,7 @@ person's decision and then runs what the decision means in that row:
 - shipping invoice   -> approved: the held invoice goes out as is; rejected: it stays held
 - dispute verdict    -> the credit note or reply is written, the Playbook learns
 - inbox message      -> the message goes to the lane the person picked
+- quality lot check  -> approved: the lot is used as reported and its hold released; rejected: refused
 """
 
 from __future__ import annotations
@@ -105,6 +106,19 @@ def decide(
             return {"case_id": case_id, "done": f"{res['outcome']['kind']} written", "result": res}
         res = reject_verdict(erp, case_id, by=by, reason=reason, playbook_path=book)
         return {"case_id": case_id, "done": "verdict overturned, claim reopened", "result": res}
+
+    if row == "quality":
+        from core.stock import record_event
+
+        signoff.decide(erp, case_id, approve=approve, by=by, reason=reason)
+        batch = case["proposal"].get("batch")
+        report = case["proposal"]["report"]
+        if approve:
+            if batch:
+                record_event(erp, "hold_released", batch=batch, note=f"lab confirmed lot {report['lot']}: {reason}")
+            return {"case_id": case_id, "done": f"lot accepted: {report['destination']}, "
+                                                f"price cut €{report['price_cut_eur_t']:.2f}/t"}
+        return {"case_id": case_id, "done": "lot refused: it stays on hold"}
 
     if row == "inbox":
         from crm.inbox import dispatch

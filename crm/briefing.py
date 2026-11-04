@@ -54,6 +54,14 @@ def _code_brief(erp: Erp, case: dict[str, Any]) -> dict[str, Any]:
                 "proposal": f"{v.get('decision', '?').capitalize()}{amount}. Sources: {sources or 'none'}.",
                 "question": (case["reasons"] or ["Decide this claim?"])[0].capitalize() + ": agree with Grok?",
                 "links": [ref]}
+    if row == "quality":
+        r = p.get("report") or {}
+        return {"what_happened": f"Lot {r.get('lot')} ({r.get('variety')}, {r.get('tonnes')} t): broken {r.get('broken_pct')}%, "
+                                 f"chalky {r.get('chalky_pct')}%, whole-grain yield {r.get('whole_yield')} against "
+                                 f"{r.get('contract_whole_yield')} in the contract.",
+                "proposal": f"{str(r.get('decision', '')).capitalize()}: {r.get('destination')}, "
+                            f"price cut €{r.get('price_cut_eur_t', 0):.2f}/t.",
+                "question": "Does the lab confirm the sample?", "links": [p.get("doc_id", "")]}
     if row == "inbox":
         return {"what_happened": f"A message arrived; it reads as {p.get('lane')}.",
                 "proposal": f"Send it to {p.get('lane')}.",
