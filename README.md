@@ -70,7 +70,8 @@ We wrote the cases ourselves to cover threeway's blind spots, so the jury's test
 ## Run it
 
 ```bash
-./test.sh                     # every test (146), no key needed
+./test.sh                     # every test (146), no key needed; the first run creates .venv with every package
+source .venv/bin/activate     # then run the rest with the project's Python (system python3 lacks a38 and the rest)
 python demo.py                # the golden order end to end, offline (--live calls Grok: XAI_API_KEY or GROK_API_KEY, or in a gitignored .env.local)
 python -m scenarios.ambiguous_order   # an ambiguous order: Grok fixes the EDI, a person confirms, a crushed pallet, a €444 claim (--live, --me to decide yourself)
 python -m bench.score         # us against threeway
