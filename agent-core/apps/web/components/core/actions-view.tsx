@@ -162,7 +162,7 @@ function Evidence({ c }: { readonly c: Signoff }) {
   );
 }
 
-/** What Approve / Reject does for this row — the judgment the person is making. */
+/** What Approve / Reject does for this row: the judgment the person is making. */
 function DecisionConsequences({ c }: { readonly c: Signoff }) {
   const p = obj(c.proposal) ?? {};
   if (c.row === "dispute") {
@@ -180,14 +180,14 @@ function DecisionConsequences({ c }: { readonly c: Signoff }) {
         <b className="text-ink">Your call</b>
         <ul className="mt-1 list-disc space-y-0.5 pl-5">
           <li>
-            <b>Approve</b> — agree with Grok ({decisionLabel(decision)}
+            <b>Approve</b>: agree with Grok ({decisionLabel(decision)}
             {amount}): {outcome}. Your “why” trains the Playbook.
           </li>
           <li>
-            <b>Reject</b> — nothing is sent; the claim reopens. Your “why” is logged as an overturn.
+            <b>Reject</b>: nothing is sent; the claim reopens. Your “why” is logged as an overturn.
           </li>
           <li>
-            <b>Request clarification</b> — case stays open; the ask is in the audit trail.
+            <b>Request clarification</b>: case stays open; the ask is in the audit trail.
           </li>
         </ul>
       </div>
@@ -201,10 +201,10 @@ function DecisionConsequences({ c }: { readonly c: Signoff }) {
         <b className="text-ink">Your call</b>
         <ul className="mt-1 list-disc space-y-0.5 pl-5">
           <li>
-            <b>Approve</b> — warehouse runs: {labels}.
+            <b>Approve</b>: warehouse runs: {labels}.
           </li>
           <li>
-            <b>Reject</b> — the exception stays open; nothing is executed.
+            <b>Reject</b>: the exception stays open; nothing is executed.
           </li>
         </ul>
       </div>
@@ -215,10 +215,10 @@ function DecisionConsequences({ c }: { readonly c: Signoff }) {
       <b className="text-ink">Your call</b>
       <ul className="mt-1 list-disc space-y-0.5 pl-5">
         <li>
-          <b>Approve</b> — send the ORDRSP and hand the order to Shipping.
+          <b>Approve</b>: send the ORDRSP and hand the order to Shipping.
         </li>
         <li>
-          <b>Reject</b> — no ORDRSP; the order stays blocked.
+          <b>Reject</b>: no ORDRSP; the order stays blocked.
         </li>
       </ul>
     </div>
@@ -312,15 +312,25 @@ function TruckForOrder({ orderRef }: { readonly orderRef: string }) {
     <div className="space-y-1.5">
       <Facts
         items={[
-          ["Truck", text(truck.truck_id ?? truck.truckId ?? truck.id)],
+          ["Truck", text(truck.truck ?? truck.truck_id ?? truck.truckId ?? truck.id)],
+          ...(arr(truck.orders).length > 1 ? ([["Shared with", arr(truck.orders).map(text).filter((r) => r !== orderRef).join(", ")]] as [ReactNode, ReactNode][]) : []),
           ["Stops", stops.join(" → ") || "–"],
           ["Distance", km != null ? `${qty(km)} km` : "–"],
           ["Fuel", fuel != null ? `${eur(fuel)} (estimate)` : "–"],
           ["CO2", co2 != null ? `${qty(co2)} kg (estimate)` : "–"],
+          ...(truck.note ? ([["Note", text(truck.note)]] as [ReactNode, ReactNode][]) : []),
+          ...(obj(root.savings)
+            ? ([
+                [
+                  "Shared trucks save, whole day",
+                  `${qty(pick(root.savings, "km"))} km, ${eur(pick(root.savings, "eur", "fuel_eur"))}, ${qty(pick(root.savings, "co2_kg"))} kg CO2 (estimate)`,
+                ],
+              ] as [ReactNode, ReactNode][])
+            : []),
           ...(base
             ? ([
                 [
-                  "One truck per order",
+                  "Whole day, one truck per order",
                   `${qty(pick(base, "km", "distance_km"))} km, ${eur(pick(base, "eur", "fuel_eur", "fuelEur"))}, ${qty(pick(base, "co2_kg", "co2Kg"))} kg CO2`,
                 ],
               ] as [ReactNode, ReactNode][])
@@ -331,15 +341,38 @@ function TruckForOrder({ orderRef }: { readonly orderRef: string }) {
   );
 }
 
+/** Stock for the order's lines, checked again when the case is opened (not only when the order arrived). */
+function useStockNow(orderRef: string, status: string) {
+  const [items, setItems] = useState<ReturnType<typeof checks>>();
+  useEffect(() => {
+    if (!orderRef || status !== "pending") return;
+    fetch(`/api/orders/${encodeURIComponent(orderRef)}/stock-now`)
+      .then((r) => r.json())
+      .then((d: { checks?: { label: string; ok: boolean; detail: string; source: string }[] }) =>
+        setItems((d.checks ?? []).map((x) => ({ label: x.label, ok: x.ok, detail: `${x.detail} (${x.source})` }))),
+      )
+      .catch(() => setItems([{ label: "Stock right now", ok: false, detail: "could not be checked: the server did not answer" }]));
+  }, [orderRef, status]);
+  return items;
+}
+
 function ReadyToShip({ c }: { readonly c: Signoff }) {
   const p = obj(c.proposal) ?? {};
   const changes = arr(p.grokbot);
   const ref = c.subjectRef ?? "";
+  const now = useStockNow(ref, c.status);
+  const stored = checks(c);
+  const failing = (now ?? []).filter((x) => !x.ok);
   return (
     <Panel title="Ready to ship" aside={ref}>
       <div className="space-y-3 text-[13px]">
-        <Section title="Checks passed">
-          <CheckList items={checks(c)} />
+        {failing.length ? (
+          <p className="rounded-[10px] bg-st-attention/50 px-3 py-2">
+            <b>Stock changed since the order arrived.</b> Approving now would promise stock that is not free: {failing.map((x) => x.detail).join("; ")}.
+          </p>
+        ) : null}
+        <Section title={stored.every((x) => x.ok) && !failing.length ? "Checks passed" : "Checks"}>
+          <CheckList items={[...(now ?? []), ...stored.map((x) => (x.label.startsWith("Stock for") ? { ...x, label: `${x.label}, when the order arrived` } : x))]} />
         </Section>
         <Section title="What Grok changed">
           {changes.length ? (
@@ -404,6 +437,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
     const data = ((await res?.json().catch(() => ({}))) ?? {}) as { error?: string; case?: Signoff; result?: unknown };
     setBusy(false);
     if (!res || !res.ok) return onDone({ ok: false, message: data.error ?? "The decision did not go through. Nothing was changed." });
+    window.dispatchEvent(new Event("brc:changed"));
     const message =
       kind === "clarify"
         ? "Clarification requested. The case stays open and the request is in the audit trail."
@@ -615,7 +649,7 @@ export function ActionsView({ policy }: { readonly policy: string }) {
     <Page>
       <PageHeader
         title="Actions"
-        sub={`When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject and write why — that line trains the Playbook. ${policy}.`}
+        sub={`When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject and write why: that line trains the Playbook. ${policy}.`}
       >
         <Segmented
           value={filter}

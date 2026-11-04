@@ -10,7 +10,7 @@ import type { ImpactSummary } from "@agent/lib/core/impact";
 import type { OverviewSnapshot } from "@agent/lib/core/overview";
 import type { MarketSnapshot } from "@agent/lib/rice";
 import type { Signoff } from "@agent/lib/core/erp";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Panel, Stat, day, eur } from "@/components/kit";
 import { AuditList } from "./audit";
 import { SignoffQueue } from "./signoff";
@@ -69,7 +69,7 @@ export function OverviewCard({ output }: { readonly output: unknown }) {
 const EXAMPLES = [
   "Which orders need attention today?",
   "Will we have enough Carnaroli stock next week?",
-  "Why is order ESS-GOLD-001 delayed?",
+  "Why is order ESS-AMB-001 delayed?",
   "Which invoices have discrepancies?",
 ];
 
@@ -179,7 +179,7 @@ export function ImpactCard({ output }: { readonly output: unknown }) {
 }
 
 /** The first message of the Home thread: the title, example questions, then the state of things. */
-export function OverviewIntro({ onAsk }: { readonly onAsk: Ask }) {
+export function OverviewIntro({ onAsk, composer }: { readonly onAsk: Ask; readonly composer?: ReactNode }) {
   const [impact, setImpact] = useState<ImpactSummary>();
   const [waiting, setWaiting] = useState<Signoff[]>();
   const [fuel, setFuel] = useState<number>();
@@ -203,7 +203,8 @@ export function OverviewIntro({ onAsk }: { readonly onAsk: Ask }) {
   return (
     <div className="space-y-5">
       <div className="space-y-3">
-        <h2 className="font-bold text-[24px] tracking-[-0.035em]">Ask anything about your operations</h2>
+        <h2 className={composer ? "pt-2 font-bold text-[30px] tracking-[-0.04em]" : "font-bold text-[24px] tracking-[-0.035em]"}>Ask anything about your operations</h2>
+        {composer ? <div className="[&_textarea]:min-h-[72px] [&_textarea]:text-[16px]">{composer}</div> : null}
         <div className="flex flex-wrap gap-2">
           {EXAMPLES.map((text) => (
             <button

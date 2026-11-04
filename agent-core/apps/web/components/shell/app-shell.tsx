@@ -21,7 +21,7 @@ const NAV = [
 // Retailer dots in the banner's order: Flex Green, Opal, a warm note, a quiet grey-green.
 const DOTS = ["#bfff80", "#9fc6bf", "#f2c46b", "#a2b9a2", "#d7e4e0"];
 
-type ShellData = { pending: number; retailers: { gln: string; name: string }[] };
+type ShellData = { pending: number; retailers: { gln: string; name: string }[]; grok?: { key: boolean; recorded_demo: boolean } };
 
 export function AppShell({ children }: { readonly children: ReactNode }) {
   const path = usePathname();
@@ -36,9 +36,12 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
         .catch(() => {});
     load();
     const t = setInterval(load, 15_000);
+    // A decision anywhere in the app (Actions, a chat card) refreshes the badge at once.
+    window.addEventListener("brc:changed", load);
     return () => {
       live = false;
       clearInterval(t);
+      window.removeEventListener("brc:changed", load);
     };
   }, [path]);
 
@@ -100,7 +103,17 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
           </div>
         ) : null}
 
-        <div className="mt-auto flex items-center gap-2 px-2 pt-4 max-md:hidden">
+        {data.grok ? (
+          <div className="mt-auto px-2 pt-4 text-[11px] leading-snug text-ink-68 max-md:hidden">
+            <div className="flex items-center gap-1.5">
+              <i className={cn("block size-[6px] shrink-0 rounded-full", data.grok.key ? "bg-st-ok-ink" : "bg-ink-68/50")} />
+              {data.grok.key ? "Grok key set: the chat answers live" : "Grok not connected: code checks only"}
+            </div>
+            {data.grok.recorded_demo ? <div className="mt-0.5">Demo world: simulated orders, recorded Grok answers</div> : null}
+          </div>
+        ) : null}
+
+        <div className={cn("flex items-center gap-2 px-2 pt-3 max-md:hidden", data.grok ? "" : "mt-auto")}>
           <span className="flex size-[30px] items-center justify-center rounded-full bg-hh-dark font-bold text-[11px] text-hh-window">RS</span>
           <span className="text-[12px] leading-tight text-ink-68">
             Riso Scotti
