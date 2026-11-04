@@ -21,6 +21,19 @@ Detail: [order-dec.md](order-dec.md)
 | Wed 4 Nov | One Grok client, `agent/grok.py`, used by every row (Dispute moved onto it) | grok-agent-dec.md step 1 | Flavio, all rows |
 | Wed 4 Nov | Benchmark: 22 labelled cases, ours 21/22 against threeway 14/22 on whether to act, 21/22 against 10/22 on causes (`python -m bench.score`) | The track's first criterion | Flavio, shipping |
 
+## Dispute
+
+Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions only (full pipeline in the subdocument).
+
+| When | Decision | Why | Who |
+|---|---|---|---|
+| Wed 4 Nov | Grok decides and cites sources; **code** writes TD04 / EDI INVOIC 381 / amounts / evidence reply | Jury needs every euro from a document; no invented totals | dispute |
+| Wed 4 Nov | **threeway** runs inside every dispute (`pull_facts`); DESADV lines count as goods received (GRN) | Same match idea as the track baseline; Shipping also reconciles earlier | dispute |
+| Wed 4 Nov | No euro threshold. Sign-off only when the case is ambiguous (unsure / no source / missing doc / off-Playbook). Demo runner defaults `--approved-by demo` so mentor demos still emit TD04 or reject reply | Amount alone does not make a case unclear; Flavio all-rows rule | dispute (+ Flavio) |
+| Wed 4 Nov | Remittance reason `PRI` / `PRI/UNK` (and short-pay price text) → `claim_type: pricing` | Portal often labels short pays as other; pricing Playbook must apply | dispute |
+| Wed 4 Nov | Dispute ends in **credit note (TD04)** or **evidence reply** — never a new invoice | Retailer claim path; no rebound debit | dispute |
+| Wed 4 Nov | Facts from shared Mini ERP when Shipping exported them; else mock catalog fixtures (`data/disputes/erp/catalog.json`) until live docs cover the claim | Rows must hand off; fixtures keep Dispute demoable alone | dispute (+ core / shipping) |
+
 ## Forecast and quality (Flavio)
 
 ### TL;DR
