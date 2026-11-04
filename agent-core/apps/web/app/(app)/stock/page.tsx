@@ -1,5 +1,5 @@
-import { StockView } from "@/components/core/stock-view";
+import { redirect } from "next/navigation";
 
-export default function StockPage() {
-  return <StockView />;
+export default function Page() {
+  redirect("/operations?tab=inventory");
 }

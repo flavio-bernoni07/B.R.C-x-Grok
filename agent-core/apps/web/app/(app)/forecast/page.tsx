@@ -1,5 +1,5 @@
-import { ForecastView } from "@/components/rice/forecast-view";
+import { redirect } from "next/navigation";
 
-export default function ForecastPage() {
-  return <ForecastView />;
+export default function Page() {
+  redirect("/operations?tab=inventory");
 }

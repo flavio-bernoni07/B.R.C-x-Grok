@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { type Erp, nowIso, type Signoff } from "./erp";
 
-export const ROWS = ["order", "shipping", "dispute"] as const;
+export const ROWS = ["order", "shipping", "dispute", "purchasing"] as const;
 export type Row = (typeof ROWS)[number];
 
 export class SignoffError extends Error {}

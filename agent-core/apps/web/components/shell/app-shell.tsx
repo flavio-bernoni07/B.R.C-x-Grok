@@ -8,26 +8,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import {
-  BrandTile,
-  DisputesIcon,
-  ForecastIcon,
-  OrdersIcon,
-  OverviewIcon,
-  ShippingIcon,
-  SignoffIcon,
-  StockIcon,
-} from "@/components/kit/icons";
+import { BrandTile, OrdersIcon, OverviewIcon, SignoffIcon, StockIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Overview", icon: OverviewIcon, match: (p: string) => p === "/" || p === "/s" || p.startsWith("/s/") },
+  { href: "/", label: "Home", icon: OverviewIcon, match: (p: string) => p === "/" || p === "/s" || p.startsWith("/s/") },
   { href: "/orders", label: "Orders", icon: OrdersIcon },
-  { href: "/shipping", label: "Shipping", icon: ShippingIcon },
-  { href: "/disputes", label: "Disputes", icon: DisputesIcon },
-  { href: "/signoff", label: "Sign-off", icon: SignoffIcon, badge: true },
-  { href: "/stock", label: "Stock", icon: StockIcon },
-  { href: "/forecast", label: "Paddy prices", icon: ForecastIcon },
+  { href: "/operations", label: "Operations", icon: StockIcon },
+  { href: "/actions", label: "Actions", icon: SignoffIcon, badge: true },
 ] as const;
 
 // Retailer dots in the banner's order: Flex Green, Opal, a warm note, a quiet grey-green.
@@ -63,6 +51,8 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
           <BrandTile />
           <span className="max-md:hidden">B.R.C x Grok</span>
         </Link>
+
+        <SidebarSearch />
 
         <nav className="flex flex-col gap-0.5 max-md:flex-row">
           {NAV.map((n, i) => {
@@ -123,6 +113,65 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
       <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[16px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">
         {children}
       </main>
+    </div>
+  );
+}
+
+type Hit = { label: string; sub: string; href: string };
+
+/** Search by order, retailer, invoice, claim or truck; results drop down under the box. */
+function SidebarSearch() {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<Hit[]>([]);
+  const [open, setOpen] = useState(false);
+  const path = usePathname();
+
+  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    if (q.trim().length < 2) return setHits([]);
+    let live = true;
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d: { hits?: Hit[] }) => live && setHits(d.hits ?? []))
+        .catch(() => live && setHits([]));
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+
+  return (
+    <div className="relative mb-3 px-0.5 max-md:mb-0 max-md:w-[180px] max-md:shrink-0">
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Search orders, trucks..."
+        className="h-8 w-full rounded-[10px] bg-white/70 px-2.5 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.1)] outline-none placeholder:text-ink-68 focus:bg-white"
+      />
+      {open && q.trim().length >= 2 ? (
+        <ul className="absolute top-9 right-0 left-0 z-30 max-h-80 overflow-y-auto rounded-[12px] bg-hh-seasalt p-1 shadow-[0_10px_30px_-12px_rgb(32_49_25/0.35),inset_0_0_0_1px_rgb(32_49_25/0.08)] max-md:w-[260px]">
+          {hits.length ? (
+            hits.map((h) => (
+              <li key={`${h.href}|${h.label}`}>
+                <Link href={h.href} className="block rounded-[8px] px-2 py-1.5 hover:bg-hh-honeydew">
+                  <span className="block truncate font-bold text-[13px]">{h.label}</span>
+                  <span className="block truncate text-[11px] text-ink-68">{h.sub}</span>
+                </Link>
+              </li>
+            ))
+          ) : (
+            <li className="px-2 py-1.5 text-[12px] text-ink-68">Nothing found.</li>
+          )}
+        </ul>
+      ) : null}
     </div>
   );
 }
