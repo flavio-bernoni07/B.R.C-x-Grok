@@ -21,8 +21,9 @@ from typing import Any
 from core.erp import Erp, now_iso
 
 PROMOTE_AFTER = 3
-PATTERN_KEYS = ("task", "case_type", "threeway_reason", "proofs", "checks")
-WEIGHTS = {"case_type": 3, "threeway_reason": 3, "proofs": 2, "retailer": 1, "product": 1, "amount_band": 1, "checks": 2}
+PATTERN_KEYS = ("task", "case_type", "threeway_reason", "reconcile_causes", "proofs", "checks")
+WEIGHTS = {"case_type": 3, "threeway_reason": 2, "reconcile_causes": 3, "proofs": 2, "retailer": 1,
+           "product": 1, "amount_band": 1, "checks": 2}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_cases (case_id TEXT PRIMARY KEY, task TEXT NOT NULL, subject_ref TEXT,
@@ -50,6 +51,8 @@ def dispute_signature(claim: dict[str, Any], facts: dict[str, Any]) -> dict[str,
     """What makes two disputes 'the same kind of case'."""
     threeway = facts.get("threeway") or {}
     reasons = sorted({l.get("reason") or "matched" for l in threeway.get("lines") or []}) or ["no threeway"]
+    reconcile = facts.get("reconcile") or {}
+    reconcile_causes = ",".join(reconcile.get("causes") or [])
     proofs = sorted({p.get("kind") for p in facts.get("proofs") or [] if p.get("kind") in {"pod", "recadv", "ddt",
                                                                                             "warehouse_event", "damage_photo"}})
     reservation = any("reservation" in (p.get("summary") or "") for p in facts.get("proofs") or [])
@@ -64,6 +67,7 @@ def dispute_signature(claim: dict[str, Any], facts: dict[str, Any]) -> dict[str,
         "retailer": (facts.get("order") or {}).get("customer"),
         "product": ((facts.get("order") or {}).get("lines") or [{}])[0].get("item_code"),
         "threeway_reason": "; ".join(reasons),
+        "reconcile_causes": reconcile_causes,
         "amount_band": amount_band(claim.get("amount")),
         "proofs": ",".join(proofs),
         "checks": ",".join(flags),
@@ -178,8 +182,10 @@ def maybe_draft_rule(erp: Erp, signature: dict[str, Any], decision: str) -> str 
     if len(agreeing) < PROMOTE_AFTER or len(agreeing) != len(same):
         return None
     rule_id = erp.next_id("playbook_rule", "R-")
-    text = (f"When a {pattern['case_type']} claim has threeway '{pattern['threeway_reason']}', proofs "
-            f"[{pattern['proofs'] or 'none'}] and flags [{pattern['checks'] or 'none'}]: {decision}.")
+    causes = pattern.get("reconcile_causes") or "none"
+    text = (f"When a {pattern['case_type']} claim has threeway '{pattern['threeway_reason']}', "
+            f"reconcile [{causes}], proofs [{pattern['proofs'] or 'none'}] and flags "
+            f"[{pattern['checks'] or 'none'}]: {decision}.")
     erp.db.execute(
         "INSERT INTO playbook_rules(rule_id, task, pattern, action, status, support, text, created_at) VALUES(?,?,?,?,?,?,?,?)",
         (rule_id, signature["task"], json.dumps(pattern), json.dumps({"decision": decision}), "draft",
@@ -196,6 +202,55 @@ def approve_rule(erp: Erp, rule_id: str, *, by: str, reason: str) -> None:
                    (by, reason, rule_id))
     erp.db.commit()
     erp.log(f"person:{by}", "agent.rule_approved", rule_id, detail=reason)
+
+
+def activate_from_person(
+    erp: Erp,
+    signature: dict[str, Any],
+    decision: str,
+    *,
+    by: str,
+    reason: str,
+    support_case_id: str | None = None,
+) -> str:
+    """A person signed off this kind of case → that pattern becomes an active rule.
+
+    Approving the verdict *is* approving the rule for this fingerprint, so the next
+    matching claim can close without a person (demo beat: Case A → Sara → Case B alone).
+    The slower path (3 alike decisions → draft → separate approve) still exists for
+    Grok-only runs via maybe_draft_rule.
+    """
+    if not reason.strip():
+        raise ValueError("write one line on why: it becomes the rule's approval reason")
+    ensure_schema(erp)
+    pattern = _pattern(signature)
+    for existing in rules(erp):
+        if existing["pattern"] != pattern:
+            continue
+        if existing["status"] == "active":
+            return existing["rule_id"]
+        if existing["status"] == "draft":
+            approve_rule(erp, existing["rule_id"], by=by, reason=reason)
+            return existing["rule_id"]
+
+    rule_id = erp.next_id("playbook_rule", "R-")
+    causes = pattern.get("reconcile_causes") or "none"
+    text = (
+        f"When a {pattern['case_type']} claim has threeway '{pattern['threeway_reason']}', "
+        f"reconcile [{causes}], proofs [{pattern['proofs'] or 'none'}] and flags "
+        f"[{pattern['checks'] or 'none'}]: {decision}."
+    )
+    support = [support_case_id] if support_case_id else []
+    erp.db.execute(
+        "INSERT INTO playbook_rules(rule_id, task, pattern, action, status, support, text, "
+        "approved_by, approved_reason, created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (rule_id, signature["task"], json.dumps(pattern), json.dumps({"decision": decision}), "active",
+         json.dumps(support), text, by, reason.strip(), now_iso()),
+    )
+    erp.db.commit()
+    erp.log(f"person:{by}", "agent.rule_activated_from_signoff", rule_id,
+            detail={"pattern": pattern, "decision": decision, "reason": reason.strip()})
+    return rule_id
 
 
 def demote_rule(erp: Erp, rule_id: str, *, why: str) -> None:

@@ -80,6 +80,8 @@ def test_golden_order_runs_through_every_row(tmp_path: Path) -> None:
     assert result["shipping"] == "sent"
     assert result["golden_claim"] == "closed"
     assert result["unclear_claim"] == "awaiting_person"
+    assert result["learned_claim"] == "closed"
+    assert result.get("learned_rule_id")
     assert result["pending_signoffs"] == 0
     assert list(tmp_path.glob("ESS-GOLD-001_TD04.xml"))
     assert "credit notes issued: 1" in result["digest"]

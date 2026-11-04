@@ -141,8 +141,21 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
         done = approve_verdict(erp, case["case_id"], by="Sara, credit desk",
                                reason="Late gate-in, quantities agree: reply with the evidence", playbook_path=playbook,
                                issue_date=date(2026, 11, 7))
-        say(f"Sara approves; {done['outcome']['kind']} written; the case is added to the Playbook's past cases")
+        say(f"Sara approves; {done['outcome']['kind']} written; learned rule {done['learned_rule_id']}")
+        result["learned_rule_id"] = done["learned_rule_id"]
     result["unclear_claim"] = claim2["status"]
+
+    # Same kind of ambiguous claim on another order: the learned rule decides, no person.
+    twin = json.loads((DISPUTES / "extractions" / "06_ambiguous_twin.json").read_text())
+    claim3 = handle_claim(
+        erp, (DISPUTES / "claims" / "06_ambiguous_otif_twin.txt").read_text(), out_dir=out,
+        read_caller=None if live else (lambda _t: dict(twin)),
+        verdict_caller=None if live else (lambda _m: json.loads(json.dumps(unclear_verdict))),
+        received_on=date(2026, 11, 7),
+    )
+    say(f"Claim {claim3['claim_id']} (same kind, order RS26113): {claim3['status']}"
+        + (f", rule {claim3['verdict']['points'][0]['source']['ref']}" if claim3["status"] == "closed" else ""))
+    result["learned_claim"] = claim3["status"]
 
     if not quiet:
         step("4. Cash")

@@ -12,14 +12,15 @@ from agent import learning, replay
 from core.erp import Erp
 from core.stock import record_event
 from core.world import fresh_erp
-from dispute.service import handle_claim, offline_callers, reject_verdict
+from dispute.service import approve_verdict, handle_claim, offline_callers, reject_verdict
 from order.service import confirm_order, receive_order
 from shipping.service import ingest_confirmed_order, invoice_shipment, record_delivery, ship_order
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "data" / "world" / "golden"
-SIG = {"task": "dispute.verdict", "case_type": "shortage", "threeway_reason": "matched", "proofs": "pod",
-       "checks": "reservation_on_ddt", "retailer": "Esselunga", "product": "CAR-1KG", "amount_band": "500-2000"}
+SIG = {"task": "dispute.verdict", "case_type": "shortage", "threeway_reason": "matched",
+       "reconcile_causes": "", "proofs": "pod", "checks": "reservation_on_ddt",
+       "retailer": "Esselunga", "product": "CAR-1KG", "amount_band": "500-2000"}
 
 
 @pytest.fixture(autouse=True)
@@ -78,6 +79,50 @@ def _shipped():
     record_delivery(erp, s["desadv_ref"], signed_by="CeDi", received={"8000000000001": 10560},
                     note="1 pallet mancante", when="2026-11-06")
     return erp
+
+
+def test_person_signoff_teaches_the_next_similar_claim(tmp_path: Path) -> None:
+    """Case A unclear → Sara approves → Case B same kind closes alone via learned rule."""
+    import json
+
+    erp = fresh_erp()
+    playbook = tmp_path / "playbook.md"
+    shutil.copy(ROOT / "data" / "disputes" / "playbook.md", playbook)
+    unclear = json.loads((ROOT / "data" / "disputes" / "extractions" / "05_ambiguous.json").read_text())
+    twin = json.loads((ROOT / "data" / "disputes" / "extractions" / "06_ambiguous_twin.json").read_text())
+    verdict = json.loads((ROOT / "data" / "disputes" / "verdicts" / "05_ambiguous_reject.json").read_text())
+    for key in ("claim", "playbook_path", "contract_path", "amount_notes", "known_amounts"):
+        verdict.pop(key, None)
+    read_a = lambda _t: dict(unclear)
+    read_b = lambda _t: dict(twin)
+    verdict_c = lambda _m: json.loads(json.dumps(verdict))
+
+    first = handle_claim(
+        erp, (ROOT / "data" / "disputes" / "claims" / "05_ambiguous_otif_or_shortage.txt").read_text(),
+        out_dir=tmp_path / "a", read_caller=read_a, verdict_caller=verdict_c,
+        received_on=date(2026, 11, 7),
+    )
+    assert first["status"] == "awaiting_person"
+    done = approve_verdict(
+        erp, first["case_id"], by="Sara", reason="Late gate-in, quantities agree: reply with the evidence",
+        playbook_path=playbook, issue_date=date(2026, 11, 7),
+    )
+    assert done["learned_rule_id"]
+    assert learning.match_rule(erp, learning.case_for(erp, first["claim_id"])["signature"])
+
+    def no_grok(_messages):
+        raise AssertionError("Grok must not be called when the learned rule matches")
+
+    second = handle_claim(
+        erp, (ROOT / "data" / "disputes" / "claims" / "06_ambiguous_otif_twin.txt").read_text(),
+        out_dir=tmp_path / "b", read_caller=read_b, verdict_caller=no_grok,
+        received_on=date(2026, 11, 7),
+    )
+    assert second["status"] == "closed"
+    assert second["outcome"]["kind"] == "reject_reply"
+    assert second["verdict"]["points"][0]["source"]["ref"] == done["learned_rule_id"]
+    assert learning.case_for(erp, second["claim_id"])["decided_by"] == "rule"
+    assert done["learned_rule_id"] in second["verdict"]["summary"]
 
 
 def test_an_active_rule_decides_with_no_grok_call(tmp_path: Path) -> None:

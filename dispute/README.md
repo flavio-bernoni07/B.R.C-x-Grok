@@ -33,9 +33,10 @@ python -m pytest tests/test_claim_reader.py -q
 
 ## Pull the facts
 
-`pull_facts.py` takes claim-reader output (or a hand-written extraction JSON), looks up order / DESADV / invoice / proofs in the mock Mini ERP catalog (`data/disputes/erp/catalog.json`), and runs three-way matching.
+`pull_facts.py` takes claim-reader output (or a hand-written extraction JSON), looks up order / DESADV / invoice / proofs in the mock Mini ERP catalog (`data/disputes/erp/catalog.json`) or a live export, and runs **two** matchers:
 
-**Three-way:** vendored copy of [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) core in `dispute/_threeway_core.py` (MIT, see `THREEWAY_LICENSE.txt`). Same idea as the track baseline: join on order + item, tolerate tiny qty/€ diffs, one reason per flagged line. DESADV lines are treated as goods received.
+- **Baseline threeway:** vendored [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) in `dispute/_threeway_core.py` (MIT, see `THREEWAY_LICENSE.txt`) — one reason per flagged line.
+- **Shipping reconcile:** `shipping.reconcile.reconcile_documents` — names every cause (same code as `bench.score`). Exposed on `facts.reconcile`; verdicts should cite `kind: reconcile`.
 
 ### Run (no Grok needed)
 
@@ -96,14 +97,38 @@ until a person approves it with `--approved-by NAME`.
 # No API key → offline fixtures (extraction+verdict); with key → live claim_reader+verdict.
 # Writes JSON under data/disputes/runs/<claim-stem>/ (or OUT_DIR=… / --out-dir).
 # Passes --approved-by demo by default so needs_sign_off verdicts still emit TD04/reject reply.
+
+# Jury / Mini ERP only (no catalog.json merge) after: python3 demo.py --db data/demo.sqlite
+./scripts/run_dispute_claim.sh data/world/golden/claim_email.txt --erp-db data/demo.sqlite --offline
+python3 -m dispute.service --db data/demo.sqlite data/world/golden/claim_email.txt \
+  --out-dir /tmp/jury --offline data/world/golden/grok_offline.json
 ```
 
-Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing` in `claim_reader` (and via threeway price-gap safety net in `pull_facts`).
+Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing` in `claim_reader` (and via threeway / reconcile price-gap safety nets in `pull_facts`).
 
 ## On the Mini ERP
 
-`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus these fixtures), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` writes it after a person's OK and adds the case to the Playbook's past cases; `reject_verdict()` reopens the claim. Tests: `tests/test_dispute_service.py`.
+`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus fixtures unless `include_fixtures=False`), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` / `reject_verdict()` close the loop. Tests: `tests/test_dispute_service.py`, `tests/test_dispute_desk.py`.
+
+## Sign-off desk (case pack)
+
+When a claim is handed off, the desk puts everything in one place so the person
+does not hunt for documents:
+
+```bash
+python3 -m dispute.desk --db data/demo.sqlite list
+# each row: why_handed_off, blocking_question, decision, evidence_count
+
+python3 -m dispute.desk --db data/demo.sqlite show SO-0001
+# briefing + why handed off + evidence index (order, DESADV, invoice, DDT, reconcile…)
+
+python3 -m dispute.desk --db data/demo.sqlite show SO-0001 --pack-dir /tmp/SO-0001
+# writes README.md, briefing.json, evidence.json, verdict.json, facts.json
+
+python3 -m dispute.desk --db data/demo.sqlite approve SO-0001 --by Sara --reason "Late gate-in"
+# also activates a learned rule so the next same-kind claim can close alone
+```
 
 ### Out of scope
 
-Sign-off web UI (for now a person approves from the CLI with `--approved-by`), real Mini ERP / SQLite persistence beyond writing outcome files.
+Shared CRM **web** UI (desk CLI + `crm/` API cover the same queue for now).

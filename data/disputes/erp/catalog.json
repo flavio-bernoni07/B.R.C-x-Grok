@@ -97,6 +97,26 @@
           "uom": "CTN"
         }
       ]
+    },
+    {
+      "doc_id": "ORD-RS26113",
+      "order_ref": "RS26113",
+      "aliases": ["RS-26113", "RS 26113"],
+      "customer": "Iper",
+      "buyer_gln": "8000005000005",
+      "seller_gln": "8000000165222",
+      "order_date": "2026-11-02",
+      "delivery_slot": "06:00-08:00",
+      "lines": [
+        {
+          "item_code": "ARB-1KG-CTN12",
+          "product": "Riso Scotti Arborio 1kg",
+          "pack_size": 12,
+          "quantity": 30,
+          "unit_price": 15.5,
+          "uom": "CTN"
+        }
+      ]
     }
   ],
   "desadv": [
@@ -162,6 +182,22 @@
       "desadv_ref": "DESADV-2026-26112",
       "order_ref": "RS26112",
       "ship_date": "2026-11-03",
+      "arrival_declared": "10:40",
+      "lines": [
+        {
+          "item_code": "ARB-1KG-CTN12",
+          "product": "Riso Scotti Arborio 1kg",
+          "quantity": 28,
+          "uom": "CTN"
+        }
+      ],
+      "notes": "Arrived outside retailer slot; DESADV qty 28 of 30 ordered"
+    },
+    {
+      "doc_id": "DESADV-26113-A",
+      "desadv_ref": "DESADV-2026-26113",
+      "order_ref": "RS26113",
+      "ship_date": "2026-11-04",
       "arrival_declared": "10:40",
       "lines": [
         {
@@ -268,6 +304,24 @@
           "uom": "CTN"
         }
       ]
+    },
+    {
+      "doc_id": "INV-FT-2026-26113",
+      "invoice_ref": "FT-2026/26113",
+      "aliases": ["FT-2026-26113"],
+      "order_ref": "RS26113",
+      "invoice_date": "2026-11-04",
+      "currency": "EUR",
+      "total": 434.0,
+      "lines": [
+        {
+          "item_code": "ARB-1KG-CTN12",
+          "product": "Riso Scotti Arborio 1kg",
+          "quantity": 28,
+          "unit_price": 15.5,
+          "uom": "CTN"
+        }
+      ]
     }
   ],
   "proofs": [
@@ -341,6 +395,22 @@
       "order_ref": "RS26112",
       "kind": "ddt",
       "ref": "DDT-26112",
+      "signed": true,
+      "quantity_confirmed": 28,
+      "summary": "Signed DDT 28 CTN; unclear handwriting on PO field"
+    },
+    {
+      "doc_id": "WH-EVT-26113",
+      "order_ref": "RS26113",
+      "kind": "warehouse_event",
+      "ref": "GATE-IPER-2026-11-04",
+      "summary": "Gate-in 10:40 vs booked slot 06:00-08:00; OTIF miss logged"
+    },
+    {
+      "doc_id": "DDT-26113",
+      "order_ref": "RS26113",
+      "kind": "ddt",
+      "ref": "DDT-26113",
       "signed": true,
       "quantity_confirmed": 28,
       "summary": "Signed DDT 28 CTN; unclear handwriting on PO field"

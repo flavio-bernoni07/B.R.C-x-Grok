@@ -275,7 +275,8 @@ _SOURCE_LABELS = {
     "pod": "Proof of delivery",
     "warehouse_event": "Warehouse / gate event",
     "contract": "Contract / promo clause",
-    "threeway": "Order–ship–invoice match",
+    "threeway": "Order–ship–invoice match (baseline threeway)",
+    "reconcile": "Order–ship–invoice reconcile (Shipping)",
     "damage_photo": "Damage photo / portal",
     "other": "Supporting document",
 }
@@ -348,6 +349,16 @@ def build_reject_reply(
                 f"(ordered {line.get('ordered')}, shipped/received {line.get('received')}, "
                 f"invoiced {line.get('invoiced')})",
             )
+        reconcile = facts.get("reconcile") or {}
+        for line in reconcile.get("lines") or []:
+            for cause in line.get("causes") or []:
+                add_entry(
+                    "reconcile",
+                    str(cause.get("code") or line.get("item_code") or "line"),
+                    f"{cause.get('text')} (€{cause.get('eur', 0)}; "
+                    f"ordered {line.get('ordered')}, received {line.get('received')}, "
+                    f"invoiced {line.get('invoiced')})",
+                )
 
     seen_keys: set[str] = set()
     unique_lines: list[str] = []
