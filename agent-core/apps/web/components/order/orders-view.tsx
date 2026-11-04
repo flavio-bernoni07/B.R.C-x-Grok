@@ -4,10 +4,25 @@ import type { InboxFilter, InboxRow } from "@agent/lib/order/inbox";
 import type { OrderWorkspace } from "@agent/lib/order/workspace";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { runOrderSimulation } from "@/app/(app)/orders/actions";
 import { day, PageHeader, Panel, Pill, Segmented } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
 import { OrderWorkspaceBody, STATUS_TONE } from "./workspace";
+
+function SimulateSubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="h-[34px] rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+    >
+      {pending ? "Running simulation…" : "Run order simulation"}
+    </button>
+  );
+}
 
 const FILTERS: { value: InboxFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -65,10 +80,18 @@ export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] 
   const [listError, setListError] = useState(false);
   const [ws, setWs] = useState<OrderWorkspace | null>(null);
   const [wsState, setWsState] = useState<"idle" | "loading" | "error" | "missing">("idle");
-  const [simBusy, setSimBusy] = useState(false);
   const [simMsg, setSimMsg] = useState<string>();
   const [listTick, setListTick] = useState(0);
   const skipFirstFetch = useRef(!!initialRows?.length || initialRows?.length === 0);
+
+  useEffect(() => {
+    const total = params.get("total");
+    const waiting = params.get("waiting");
+    if (params.get("sim") === "1" && total) {
+      setSimMsg(`Desk cleared. Loaded ${total} orders · ${waiting ?? "?"} waiting in Actions.`);
+      if (initialRows) setRows(initialRows);
+    }
+  }, [params, initialRows]);
 
   useEffect(() => {
     // First paint already has SSR rows for all/empty-q — don't blank the list waiting on client JS.
@@ -100,35 +123,6 @@ export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] 
       ctrl.abort();
     };
   }, [filter, q, listTick]);
-
-  const runSimulation = async () => {
-    setSimBusy(true);
-    setSimMsg(undefined);
-    try {
-      const res = await fetch("/api/orders/simulate", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSimMsg(data.error ?? `Simulation failed (${res.status})`);
-        return;
-      }
-      const s = data.summary as { total?: number; awaiting_person?: number } | undefined;
-      setSimMsg(
-        s
-          ? `Desk cleared. Loaded ${s.total ?? "?"} orders · ${s.awaiting_person ?? "?"} waiting in Actions.`
-          : "Desk cleared and simulation loaded.",
-      );
-      setListTick((n) => n + 1);
-      try {
-        window.dispatchEvent(new Event("brc:changed"));
-      } catch {
-        /* ignore */
-      }
-    } catch (err) {
-      setSimMsg((err as Error).message);
-    } finally {
-      setSimBusy(false);
-    }
-  };
 
   useEffect(() => {
     if (!selected) {
@@ -165,14 +159,9 @@ export function OrdersView({ initialRows }: { readonly initialRows?: InboxRow[] 
               : "Loading orders…"
         }
       >
-        <button
-          type="button"
-          disabled={simBusy}
-          onClick={() => void runSimulation()}
-          className="h-[34px] rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-        >
-          {simBusy ? "Running simulation…" : "Run order simulation"}
-        </button>
+        <form action={runOrderSimulation}>
+          <SimulateSubmitButton />
+        </form>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
