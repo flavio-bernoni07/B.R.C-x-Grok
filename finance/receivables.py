@@ -143,6 +143,24 @@ def record_remittance(
     ensure_schema(erp)
     advice = parse_remadv(text)
     doc_id = erp.add_document("REMADV", advice["remittance_ref"], text)
+    return apply_remittance(erp, advice, doc_id, out_dir=out_dir, verdict_caller=verdict_caller,
+                            received_on=received_on)
+
+
+def apply_remittance(
+    erp: Erp,
+    advice: dict[str, Any],
+    doc_id: str,
+    *,
+    out_dir: Path | str,
+    verdict_caller: Callable[[list[dict[str, str]]], dict[str, Any]] | None = None,
+    received_on: date | None = None,
+) -> dict[str, Any]:
+    """Post a parsed remittance (from REMADV, or read from an email by Grok and checked by code)."""
+    from agent import grok
+    from dispute.service import handle_claim
+
+    ensure_schema(erp)
     payment_id = erp.next_id("payment", "PAY-")
     erp.db.execute("INSERT INTO payments(payment_id, remittance_ref, payer_gln, value_date, total, source_doc) "
                    "VALUES(?,?,?,?,?,?)", (payment_id, advice["remittance_ref"], advice["payer_gln"],
@@ -266,3 +284,46 @@ def on_claim_closed(erp: Erp, claim_id: str, decision: str) -> None:
     ensure_schema(erp)
     if erp._one("SELECT 1 AS x FROM deductions WHERE claim_id = ? AND status = 'claim_opened'", (claim_id,)):
         settle_deduction(erp, claim_id, accepted=decision in {"accept", "partial"})
+
+
+def read_remittance_email(erp: Erp, text: str, *, caller: Any = None) -> dict[str, Any] | None:
+    """Grok reads a messy remittance email into the REMADV shape. Code checks that every
+    invoice exists and every amount is written in the email; otherwise None (a person reads it)."""
+    from agent import grok
+    from agent.checks import amount_in_text
+
+    if caller is None and not grok.has_key():
+        return None
+    messages = [
+        {"role": "system", "content": (
+            "You read remittance advices that retailers send to Riso Scotti. Return one JSON object: "
+            "{\"remittance_ref\": string or null, \"value_date\": \"YYYY-MM-DD\" or null, \"docs\": [{\"invoice_ref\": string, "
+            "\"due\": number or null, \"paid\": number, \"adjustments\": [{\"code\": \"CN|PR|SH|DM|LT|PC|OTHER\", "
+            "\"amount\": number, \"note\": string}]}]}. Copy references and amounts exactly as written; never compute new ones.")},
+        {"role": "user", "content": text},
+    ]
+
+    def validate(payload: dict[str, Any]) -> list[str]:
+        problems = []
+        docs = payload.get("docs")
+        if not isinstance(docs, list) or not docs:
+            return ["docs must be a non-empty list"]
+        for d in docs:
+            if not erp.invoice(str(d.get("invoice_ref"))):
+                problems.append(f"invoice {d.get('invoice_ref')} does not exist")
+            figures = [d.get("due"), d.get("paid")] + [a.get("amount") for a in d.get("adjustments") or []]
+            missing = [x for x in figures if x is not None and not amount_in_text(float(x), text)]
+            if missing:
+                problems.append(f"amounts not written in the email: {missing}")
+        return problems
+
+    try:
+        payload = grok.chat_json(messages, task="finance.read_remittance", validate=validate, caller=caller)
+    except (grok.GrokAnswerRejected, grok.MissingApiKeyError, RuntimeError):
+        return None
+    return {"remittance_ref": payload.get("remittance_ref") or "EMAIL", "value_date": payload.get("value_date"),
+            "payer_gln": None, "total": None,
+            "docs": [{"doc_type": "380", "invoice_ref": d["invoice_ref"], "due": d.get("due"), "paid": float(d["paid"]),
+                      "adjustments": [{"code": a.get("code") or "OTHER", "amount": float(a["amount"]),
+                                       "note": a.get("note") or ""} for a in d.get("adjustments") or []]}
+                     for d in payload["docs"]]}

@@ -19,7 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from agent import grok
-from agent.checks import unknown_numbers
+from agent.checks import unknown_amounts
 from core import signoff
 from core.erp import Erp
 from core.stock import allocate, batches
@@ -203,7 +203,7 @@ def explain_flags(report_text: str, facts_text: str, *, caller: Any = None) -> t
         text = str(payload.get("explanation") or "")
         if not text:
             return ["explanation is empty"]
-        extra = unknown_numbers(text, report_text + " " + facts_text)
+        extra = unknown_amounts(text, report_text + " " + facts_text)
         return [f"figures not in the facts: {sorted(extra)}"] if extra else []
 
     try:
