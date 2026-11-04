@@ -31,6 +31,7 @@ The full walkthrough, box by box, is in [docs/process-map.md](docs/process-map.m
 - Everyone uses the same fake world in `data/`, and the same golden order that goes through every row.
 - Sync every 3 hours, 10 minutes: what changed in what you receive or hand over, what blocks you, one finding the others need.
 - WhatsApp is for pings. If it matters to someone else, it goes in the repo.
+- Coding agents (Claude Code, Codex, Cursor) read `AGENTS.md`: at the root for orientation, plus `agent-core/AGENTS.md` (Rice Agent, eve, web UI) and `planning/AGENTS.md` (Python forecaster). Update them when you change how something works.
 
 ## What we have to deliver
 

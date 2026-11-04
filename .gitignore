@@ -6,3 +6,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Forecast caches (rebuilt from data/raw)
+data/out/

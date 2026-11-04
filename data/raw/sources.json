@@ -1,0 +1,26 @@
+{
+  "eu_rice": {
+    "file": "eu_rice_prices_it.csv",
+    "name": "EU Agri-food Data Portal, Italian rice prices",
+    "url": "https://api.tech.ec.europa.eu/agrifood/api/rice/prices?memberStateCodes=IT&beginDate=01/09/2015&endDate=04/11/2026",
+    "rows": 13762,
+    "latest": "2026-10-19",
+    "retrieved": "2026-11-04T14:18:09+00:00"
+  },
+  "ecb_fx": {
+    "file": "ecb_usd_eur_monthly.csv",
+    "name": "ECB euro reference rate, USD per EUR, monthly average",
+    "url": "https://data-api.ecb.europa.eu/service/data/EXR/M.USD.EUR.SP00.A?format=csvdata",
+    "rows": 334,
+    "latest": "2026-10-01",
+    "retrieved": "2026-11-04T14:18:10+00:00"
+  },
+  "worldbank_rice": {
+    "file": "worldbank_rice_monthly.csv",
+    "name": "World Bank Pink Sheet, monthly commodity prices (rice)",
+    "url": "https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Historical-Data-Monthly.xlsx",
+    "rows": 202,
+    "latest": "2026-10-01",
+    "retrieved": "2026-11-04T14:18:11+00:00"
+  }
+}
