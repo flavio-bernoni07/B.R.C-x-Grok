@@ -1,0 +1,11 @@
+{
+  "_comment": "Demo retailers. BUYER001 is the GLN the Order fixtures already use for Esselunga. VAT ids and SdI codes are placeholders.",
+  "retailers": [
+    {"gln": "BUYER001", "name": "Esselunga", "vat_id": "IT00000000001", "address": "Via Giambologna 1", "cap": "20096", "comune": "Pioltello", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Melzo"},
+    {"gln": "8000000000100", "name": "Carrefour Italia", "vat_id": "IT00000000002", "address": "Via Caldera 21", "cap": "20153", "comune": "Milano", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Carrefour Nord"},
+    {"gln": "8000000000117", "name": "Conad Ancona", "vat_id": "IT00000000003", "address": "Via Flaminia 2", "cap": "60126", "comune": "Ancona", "provincia": "AN", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Ancona"},
+    {"gln": "8000000000124", "name": "Coop Italia", "vat_id": "IT00000000004", "address": "Via del Lavoro 6", "cap": "40033", "comune": "Casalecchio di Reno", "provincia": "BO", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Coop Nord"},
+    {"gln": "8000000000131", "name": "Auchan", "vat_id": "IT00000000005", "address": "Strada 8 Palazzo N", "cap": "20089", "comune": "Rozzano", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Auchan"}
+  ],
+  "supplier": {"gln": "SUPPLIER001", "name": "Riso Scotti S.p.A."}
+}

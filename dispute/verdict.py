@@ -15,13 +15,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
+from agent import grok
 from dispute.claim_reader import (
     ClaimExtraction,
     MissingApiKeyError,
@@ -449,39 +448,7 @@ def build_verdict_prompt(
 
 
 def call_grok_verdict(messages: list[dict[str, str]], *, api_key: str) -> dict[str, Any]:
-    url = f"{_base_url()}/chat/completions"
-    body = {
-        "model": _model(),
-        "temperature": 0,
-        "messages": messages,
-    }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"xAI API HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"xAI API request failed: {exc}") from exc
-
-    envelope = json.loads(raw)
-    try:
-        content = envelope["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Unexpected xAI response shape: {envelope!r}") from exc
-    if not isinstance(content, str):
-        raise RuntimeError("xAI message content is not a string")
-    return _extract_json_object(content)
+    return grok.chat_json(messages, task="dispute.verdict", api_key_value=api_key)
 
 
 def decide_verdict(
