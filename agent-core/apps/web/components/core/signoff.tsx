@@ -79,6 +79,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
     setBusy(false);
     if (!res.ok) return setError(data.error ?? `Failed (${res.status})`);
     if (data.case) setC(data.case);
+    window.dispatchEvent(new Event("brc:changed"));
     setResult(data.result);
     onDecided?.(data);
   };

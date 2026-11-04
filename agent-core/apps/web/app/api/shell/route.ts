@@ -1,6 +1,7 @@
 import { pending } from "@agent/lib/core/signoff";
 import type { Erp } from "@agent/lib/core/erp";
 import { getReadyErp } from "@agent/lib/db/app";
+import { grokStatus } from "@agent/lib/grok/status";
 
 /** Retailers with the most orders first (the banner shows Esselunga on top). */
 function retailersByOrders(erp: Erp) {
@@ -14,5 +15,5 @@ function retailersByOrders(erp: Erp) {
 
 export async function GET() {
   const erp = await getReadyErp();
-  return Response.json({ pending: pending(erp).length, retailers: retailersByOrders(erp) });
+  return Response.json({ pending: pending(erp).length, retailers: retailersByOrders(erp), grok: grokStatus(erp) });
 }

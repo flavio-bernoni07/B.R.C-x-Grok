@@ -45,13 +45,16 @@ export function AgentChat({
   sessionless = false,
   intro,
   initialPrompt,
+  heroComposer = false,
 }: {
   readonly sessionId?: string;
   readonly sessionless?: boolean;
   /** First message of the thread, shown before anything is asked; the conversation continues below it. */
-  readonly intro?: (ask: AskAgent) => ReactNode;
+  readonly intro?: (ask: AskAgent, hero: { composer: ReactNode | null }) => ReactNode;
   /** Sent once when the chat opens, e.g. an "Ask Grok" link from another page. */
   readonly initialPrompt?: string;
+  /** Home: the input sits at the top of the intro until the first question is asked. */
+  readonly heroComposer?: boolean;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
@@ -109,6 +112,7 @@ export function AgentChat({
   const hasConversationContent =
     intro !== undefined || sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isResuming || hasConversationContent;
+  const heroActive = heroComposer && intro !== undefined && agent.messages.length === 0 && !isResuming;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
   // A session that ended outside eve never settles its requests, so they stay open, yet it
   // accepts no answer. Once the server says so, stop offering them.
@@ -202,11 +206,15 @@ export function AgentChat({
         "relative flex h-full flex-col overflow-hidden bg-hh-seasalt text-ink",
       )}
     >
-      {showConversationLayout ? (
+      {showConversationLayout && !heroActive ? (
         <ChatHeader canStartNewChat={activeSessionId !== undefined} />
       ) : null}
 
-      {showConversationLayout ? (
+      {heroActive ? (
+        <div className="h-full overflow-y-auto">
+          <div className="mx-auto w-full max-w-[860px] px-4 pt-10 pb-10 sm:px-6">{intro?.((text, ctx) => void sendText(text, ctx), { composer })}</div>
+        </div>
+      ) : showConversationLayout ? (
         <Conversation
           className="min-h-0 flex-1"
           initial={sessionId === undefined ? undefined : false}
@@ -222,7 +230,7 @@ export function AgentChat({
             {intro ? (
               <Message className="max-w-full" from="assistant">
                 <MessageContent className="w-full">
-                  {intro((text, context) => void sendText(text, context))}
+                  {intro((text, context) => void sendText(text, context), { composer: null })}
                 </MessageContent>
               </Message>
             ) : null}
@@ -254,7 +262,7 @@ export function AgentChat({
         </Conversation>
       ) : null}
 
-      <div
+      {heroActive ? null : <div
         className={cn(
           "mx-auto w-full px-4 sm:px-6",
           showConversationLayout
@@ -268,7 +276,7 @@ export function AgentChat({
           </div>
         )}
         <div className="w-full">{composer}</div>
-      </div>
+      </div>}
     </main>
   );
 }

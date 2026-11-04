@@ -201,15 +201,38 @@ function TruckForOrder({ orderRef }: { readonly orderRef: string }) {
   );
 }
 
+/** Stock for the order's lines, checked again when the case is opened (not only when the order arrived). */
+function useStockNow(orderRef: string, status: string) {
+  const [items, setItems] = useState<ReturnType<typeof checks>>();
+  useEffect(() => {
+    if (!orderRef || status !== "pending") return;
+    fetch(`/api/orders/${encodeURIComponent(orderRef)}/stock-now`)
+      .then((r) => r.json())
+      .then((d: { checks?: { label: string; ok: boolean; detail: string; source: string }[] }) =>
+        setItems((d.checks ?? []).map((x) => ({ label: x.label, ok: x.ok, detail: `${x.detail} (${x.source})` }))),
+      )
+      .catch(() => setItems([{ label: "Stock right now", ok: false, detail: "could not be checked: the server did not answer" }]));
+  }, [orderRef, status]);
+  return items;
+}
+
 function ReadyToShip({ c }: { readonly c: Signoff }) {
   const p = obj(c.proposal) ?? {};
   const changes = arr(p.grokbot);
   const ref = c.subjectRef ?? "";
+  const now = useStockNow(ref, c.status);
+  const stored = checks(c);
+  const failing = (now ?? []).filter((x) => !x.ok);
   return (
     <Panel title="Ready to ship" aside={ref}>
       <div className="space-y-3 text-[13px]">
-        <Section title="Checks passed">
-          <CheckList items={checks(c)} />
+        {failing.length ? (
+          <p className="rounded-[10px] bg-st-attention/50 px-3 py-2">
+            <b>Stock changed since the order arrived.</b> Approving now would promise stock that is not free: {failing.map((x) => x.detail).join("; ")}.
+          </p>
+        ) : null}
+        <Section title={stored.every((x) => x.ok) && !failing.length ? "Checks passed" : "Checks"}>
+          <CheckList items={[...(now ?? []), ...stored.map((x) => (x.label.startsWith("Stock for") ? { ...x, label: `${x.label}, when the order arrived` } : x))]} />
         </Section>
         <Section title="What Grok changed">
           {changes.length ? (
@@ -274,6 +297,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
     const data = ((await res?.json().catch(() => ({}))) ?? {}) as { error?: string; case?: Signoff; result?: unknown };
     setBusy(false);
     if (!res || !res.ok) return onDone({ ok: false, message: data.error ?? "The decision did not go through. Nothing was changed." });
+    window.dispatchEvent(new Event("brc:changed"));
     const message =
       kind === "clarify"
         ? "Clarification requested. The case stays open and the request is in the audit trail."
