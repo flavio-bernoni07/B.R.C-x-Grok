@@ -91,9 +91,9 @@ The app the jury sees is in `agent-core/` (Next.js with the eve agent on Grok, o
 cd agent-core
 pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
-pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
-pnpm dev:web                  # http://localhost:3000, then Operations > Warehouse & Shipping > "Plan the trucks with Grok"
-pnpm test                     # the app's tests (127)
+pnpm db:reset                 # Mini ERP with the golden order, 6 Nov dispatch day, and portal demo orders ORD-3001/3002
+pnpm dev:web                  # http://localhost:3000; retailer chat at /portal; Actions → Disputes for the inbox
+pnpm test                     # the app's tests (150)
 ```
 
 The Python rows are the reference the app is ported from:

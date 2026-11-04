@@ -35,6 +35,9 @@ export type Signoff = Omit<typeof s.signoffs.$inferSelect, "proposal" | "reasons
   proposal: Json | null;
   reasons: string[] | null;
 };
+export type PortalConversation = typeof s.portalConversations.$inferSelect;
+export type PortalMessage = Omit<typeof s.portalMessages.$inferSelect, "meta"> & { meta: Json | null };
+export type Notification = typeof s.notifications.$inferSelect;
 
 export const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00");
 
@@ -385,6 +388,108 @@ export class Erp {
       .map((r) => this.signoff(r.id)!);
   }
 
+  // ----- customer portal (conversations + inbox notifications) ---------------
+  savePortalConversation(c: {
+    conversationId: string;
+    retailerGln: string;
+    claimId?: string | null;
+    idempotencyKey?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }) {
+    this.db
+      .insert(s.portalConversations)
+      .values({
+        conversationId: c.conversationId,
+        retailerGln: c.retailerGln,
+        claimId: c.claimId ?? null,
+        idempotencyKey: c.idempotencyKey ?? null,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })
+      .run();
+  }
+
+  updatePortalConversation(
+    conversationId: string,
+    fields: Partial<Pick<PortalConversation, "claimId" | "idempotencyKey" | "updatedAt">>,
+  ) {
+    this.db.update(s.portalConversations).set(fields).where(eq(s.portalConversations.conversationId, conversationId)).run();
+  }
+
+  portalConversation(conversationId: string): PortalConversation | undefined {
+    return this.db.select().from(s.portalConversations).where(eq(s.portalConversations.conversationId, conversationId)).get();
+  }
+
+  portalConversationsFor(retailerGln: string): PortalConversation[] {
+    return this.db
+      .select()
+      .from(s.portalConversations)
+      .where(eq(s.portalConversations.retailerGln, retailerGln))
+      .orderBy(asc(s.portalConversations.createdAt))
+      .all();
+  }
+
+  addPortalMessage(m: {
+    messageId: string;
+    conversationId: string;
+    role: string;
+    content: string;
+    at: string;
+    meta?: unknown;
+  }) {
+    this.db
+      .insert(s.portalMessages)
+      .values({
+        messageId: m.messageId,
+        conversationId: m.conversationId,
+        role: m.role,
+        content: m.content,
+        at: m.at,
+        meta: dumps(m.meta ?? null),
+      })
+      .run();
+  }
+
+  portalMessages(conversationId: string): PortalMessage[] {
+    return this.db
+      .select()
+      .from(s.portalMessages)
+      .where(eq(s.portalMessages.conversationId, conversationId))
+      .orderBy(asc(s.portalMessages.at))
+      .all()
+      .map((r) => ({ ...r, meta: loads<Json>(r.meta) }));
+  }
+
+  saveNotification(n: {
+    notificationId: string;
+    kind: string;
+    subjectRef?: string | null;
+    title: string;
+    body?: string | null;
+    assignedRole?: string | null;
+    createdAt: string;
+  }) {
+    this.db
+      .insert(s.notifications)
+      .values({
+        notificationId: n.notificationId,
+        kind: n.kind,
+        subjectRef: n.subjectRef ?? null,
+        title: n.title,
+        body: n.body ?? null,
+        assignedRole: n.assignedRole ?? null,
+        read: 0,
+        createdAt: n.createdAt,
+      })
+      .run();
+  }
+
+  notifications(filter: { unreadOnly?: boolean } = {}): Notification[] {
+    const rows = this.db.select().from(s.notifications).orderBy(asc(s.notifications.createdAt)).all();
+    return filter.unreadOnly ? rows.filter((r) => !r.read) : rows;
+  }
+
   /**
    * Wipe operational Order / Shipping / Sign-off state so a simulation starts as the company's
    * first orders. Master data (products, retailers, batches, production events) stays.
@@ -410,6 +515,9 @@ export class Erp {
       this.db.delete(s.orders).run();
       this.db.delete(s.documents).run();
       this.db.delete(s.audit).run();
+      this.db.delete(s.portalMessages).run();
+      this.db.delete(s.portalConversations).run();
+      this.db.delete(s.notifications).run();
       this.db.delete(s.counters).run();
     });
   }
