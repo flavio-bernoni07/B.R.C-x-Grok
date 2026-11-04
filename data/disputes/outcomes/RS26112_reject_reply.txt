@@ -1,0 +1,26 @@
+Subject: Dispute decision — REJECT — order RS26112 / invoice FT-2026/26112
+
+Dear Auchan,
+
+We reviewed your claim against our order, DESADV, invoice and warehouse evidence.
+
+Decision: REJECT
+Proposed credit: none (decision=reject).
+
+Summary:
+Claim is ambiguous (shortage vs OTIF) with no formal qty count; documents show late gate-in and DESADV short of order already invoiced at shipped qty. No credit without a clear claim amount.
+
+Evidence cited:
+- [desadv] DESADV-2026-26112: Order RS26112 resolved; DESADV/invoice agree at 28 CTN — shipped 28; invoice FT-2026/26112 matches
+- [warehouse_event] GATE-AUCHAN-2026-11-03: Gate-in 10:40 outside booked slot 06:00-08:00 (OTIF miss logged) — OTIF miss; no liquidated damages € in contract excerpt
+- [playbook] other-ambiguous: Playbook: ambiguous / other without grounded amount → reject or escalate — Do not invent order/invoice or penalty euros
+- [proof:warehouse_event] GATE-AUCHAN-2026-11-03: Gate-in 10:40 vs booked slot 06:00-08:00; OTIF miss logged
+- [proof:ddt] DDT-26112: Signed DDT 28 CTN; unclear handwriting on PO field
+- [desadv] DESADV-2026-26112: order RS26112
+
+This reply was assembled by dispute.outcome from verdict + facts document refs.
+Document numbers and amounts above are copied from those structures (not invented).
+Sign-off desk / Playbook follow-up is out of scope for this module.
+
+Kind regards,
+Riso Scotti — Dispute desk (demo)

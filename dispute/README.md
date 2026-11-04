@@ -69,6 +69,22 @@ python3 -m pytest tests/test_verdict.py -q
 Playbook: `data/disputes/playbook.md`  
 Contract excerpt: `data/disputes/contract_excerpt.md`
 
-### Out of scope (later PRs)
+## Credit note / reject reply
 
-TD04 / credit note generation, sign-off web UI, real Mini ERP / SQLite wiring.
+`outcome.py` turns a verdict into documents (code writes amounts — never invents):
+
+- **accept / partial** → FatturaPA **TD04** XML via [`a38`](https://github.com/Truelite/python-a38) + EDI INVOIC credit hint (`BGM+381`)
+- **reject** → evidence reply listing DESADV / DDT / threeway / contract / warehouse refs from the verdict (+ facts when available)
+
+```bash
+pip install -r requirements.txt
+python3 -m dispute.outcome --verdict data/disputes/verdicts/01_shortage_accept.json --issue-date 2026-11-04
+python3 -m dispute.outcome --verdict data/disputes/verdicts/05_ambiguous_reject.json
+python3 -m pytest tests/test_outcome.py -q
+```
+
+Outputs land in `data/disputes/outcomes/` (override with `--out-dir`).
+
+### Out of scope
+
+Sign-off web UI (Playbook threshold only), real Mini ERP / SQLite persistence beyond writing outcome files.

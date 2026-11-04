@@ -1,0 +1,34 @@
+{
+  "kind": "reject_reply",
+  "decision": "reject",
+  "amount": null,
+  "order_ref": "RS26112",
+  "invoice_ref": "FT-2026/26112",
+  "credit_note_number": null,
+  "paths": {
+    "reject_reply": "data/disputes/outcomes/RS26112_reject_reply.txt"
+  },
+  "evidence_refs": [
+    {
+      "kind": "desadv",
+      "ref": "DESADV-2026-26112",
+      "detail": "shipped 28; invoice FT-2026/26112 matches",
+      "text": "Order RS26112 resolved; DESADV/invoice agree at 28 CTN"
+    },
+    {
+      "kind": "warehouse_event",
+      "ref": "GATE-AUCHAN-2026-11-03",
+      "detail": "OTIF miss; no liquidated damages € in contract excerpt",
+      "text": "Gate-in 10:40 outside booked slot 06:00-08:00 (OTIF miss logged)"
+    },
+    {
+      "kind": "playbook",
+      "ref": "other-ambiguous",
+      "detail": "Do not invent order/invoice or penalty euros",
+      "text": "Playbook: ambiguous / other without grounded amount → reject or escalate"
+    }
+  ],
+  "notes": [
+    "Sign-off UI out of scope; escalate via Playbook if needs_sign_off."
+  ]
+}

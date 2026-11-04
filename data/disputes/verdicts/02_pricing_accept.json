@@ -1,0 +1,50 @@
+{
+  "decision": "accept",
+  "amount": 72.0,
+  "confidence": 0.88,
+  "needs_sign_off": false,
+  "summary": "Invoice unit €1.85 vs promo €1.49 on 200 packs; credit €72.00.",
+  "points": [
+    {
+      "text": "Invoice price above RS-PROMO-AUT26 promo price",
+      "amount": 72.0,
+      "source": {
+        "kind": "contract",
+        "ref": "RS-PROMO-AUT26",
+        "detail": "(1.85 − 1.49) × 200 = 72.00"
+      }
+    },
+    {
+      "text": "Threeway flags invoice price vs PO",
+      "amount": null,
+      "source": {
+        "kind": "threeway",
+        "ref": "Invoice price differs from the PO price",
+        "detail": "PO 1.49 invoice 1.85"
+      }
+    },
+    {
+      "text": "POD confirms full qty received intact",
+      "amount": null,
+      "source": {
+        "kind": "pod",
+        "ref": "POD-CF-77821",
+        "detail": "quantity_confirmed 200"
+      }
+    }
+  ],
+  "playbook_path": "data/disputes/playbook.md",
+  "contract_path": "data/disputes/contract_excerpt.md",
+  "amount_notes": [],
+  "known_amounts": [72.0, 1.49, 1.85, 370.0],
+  "claim": {
+    "order_ref": "PO77821",
+    "invoice_ref": "INV2026-0891",
+    "product": "Scotti Basmati 500g",
+    "quantity": 200,
+    "amount": 72.0,
+    "claim_type": "pricing",
+    "confidence": 0.9,
+    "raw_notes": "Promo short-pay"
+  }
+}

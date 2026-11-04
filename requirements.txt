@@ -1,3 +1,4 @@
-# Runtime uses the stdlib only (urllib + dataclasses).
+# Runtime: a38 is the PyPI name for Truelite/python-a38 (FatturaPA TD04).
+a38>=0.1.8,<0.2
 # Dev / CI:
 pytest>=8.0,<9
