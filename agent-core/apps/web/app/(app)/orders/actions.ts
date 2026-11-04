@@ -13,5 +13,6 @@ export async function runOrderSimulation() {
   const waiting = results.filter((r) => r.ok && r.result?.status === "awaiting_person").length;
   revalidatePath("/orders");
   revalidatePath("/actions");
-  redirect(`/orders?sim=1&total=${results.length}&waiting=${waiting}`);
-}
+  // Land on Actions so Send-off / Price / Quantity schede show the fresh gates immediately.
+  redirect(`/actions?sim=1&total=${results.length}&waiting=${waiting}`);
+

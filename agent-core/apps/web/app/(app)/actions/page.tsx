@@ -1,13 +1,31 @@
 import { Suspense } from "react";
+import { getReadyErp } from "@agent/lib/db/app";
+import { orderBoard } from "@agent/lib/order/board";
 import { SignoffView } from "@/components/core/signoff-view";
 
 export const dynamic = "force-dynamic";
 
-/** Actions = Sign-off Pending desk with Send-off / Price / Quantity schede. */
-export default function ActionsPage() {
+/** Actions = Sign-off desk with Board / Send-off / Price / Quantity / Pending / Decided. */
+export default async function ActionsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const sim = typeof sp.sim === "string" ? sp.sim : undefined;
+  const total = typeof sp.total === "string" ? sp.total : undefined;
+  const waiting = typeof sp.waiting === "string" ? sp.waiting : undefined;
+  const simBanner =
+    sim === "1" && total
+      ? `Simulation loaded ${total} orders · ${waiting ?? "?"} waiting on this desk (Send-off / Price / Quantity).`
+      : undefined;
+
+  const erp = await getReadyErp();
+  const initialCases = erp.signoffs().slice().reverse();
+  const initialBoard = orderBoard(erp);
   return (
-    <Suspense>
-      <SignoffView />
+    <Suspense fallback={<div className="h-48 animate-pulse rounded-[12px] bg-hh-honeydew" />}>
+      <SignoffView initialCases={initialCases} initialBoard={initialBoard} simBanner={simBanner} />
     </Suspense>
   );
 }

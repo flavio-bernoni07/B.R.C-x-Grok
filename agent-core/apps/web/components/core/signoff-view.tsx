@@ -45,9 +45,18 @@ function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" | "pend
 }
 
 /** Actions desk: Board + Send-off / Price / Quantity schede. */
-export function SignoffView() {
-  const [cases, setCases] = useState<Signoff[]>([]);
-  const [board, setBoard] = useState<OrderBoardRow[]>([]);
+export function SignoffView({
+  initialCases,
+  initialBoard,
+  simBanner,
+}: {
+  readonly initialCases?: Signoff[];
+  readonly initialBoard?: OrderBoardRow[];
+  readonly simBanner?: string;
+} = {}) {
+  /** SSR seeds the desk so simulation results show even when client fetch/HMR is flaky. */
+  const [cases, setCases] = useState<Signoff[]>(() => initialCases ?? []);
+  const [board, setBoard] = useState<OrderBoardRow[]>(() => initialBoard ?? []);
   const [tab, setTab] = useState<DeskTab>("board");
   const [selected, setSelected] = useState<string>();
   const [by, setBy] = useState("");
@@ -66,6 +75,13 @@ export function SignoffView() {
       .catch(() => {});
   }, []);
   useEffect(load, [load]);
+  // Keep SSR props in sync after a full navigation (e.g. post-simulation).
+  useEffect(() => {
+    if (initialCases) setCases(initialCases);
+  }, [initialCases]);
+  useEffect(() => {
+    if (initialBoard) setBoard(initialBoard);
+  }, [initialBoard]);
 
   useEffect(() => {
     try {
@@ -196,6 +212,11 @@ export function SignoffView() {
           ]}
         />
       </PageHeader>
+
+      {simBanner ? (
+        <p className="mb-3 rounded-[10px] bg-st-ok px-3 py-2 text-[13px] text-st-ok-ink">{simBanner}</p>
+      ) : null}
+      {bulkMsg ? <p className="mb-3 text-[12.5px] text-ink-78">{bulkMsg}</p> : null}
 
       {tab === "board" ? (
         <Panel title="Order board" aside={`${board.length} orders`}>
