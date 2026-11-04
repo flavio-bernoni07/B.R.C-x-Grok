@@ -31,6 +31,22 @@ pip install -r requirements.txt
 python -m pytest tests/test_claim_reader.py -q
 ```
 
+## Pull the facts
+
+`pull_facts.py` takes claim-reader output (or a hand-written extraction JSON), looks up order / DESADV / invoice / proofs in the mock Mini ERP catalog (`data/disputes/erp/catalog.json`), and runs three-way matching.
+
+**Three-way:** vendored copy of [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) core in `dispute/_threeway_core.py` (MIT, see `THREEWAY_LICENSE.txt`). Same idea as the track baseline: join on order + item, tolerate tiny qty/€ diffs, one reason per flagged line. DESADV lines are treated as goods received.
+
+### Run (no Grok needed)
+
+```bash
+python3 -m dispute.pull_facts data/disputes/extractions/01_shortage.json
+python3 -m pytest tests/test_pull_facts.py -q
+```
+
+Optional live path (needs API key):  
+`python3 -m dispute.pull_facts --from-claim-email data/disputes/claims/01_shortage_messy_it.txt`
+
 ### Out of scope (later PRs)
 
-Verdict + sources, facts puller, TD04 / credit note, Mini ERP wiring.
+Verdict + sources, TD04 / credit note, real Mini ERP / SQLite wiring.
