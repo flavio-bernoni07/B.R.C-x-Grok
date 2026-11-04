@@ -45,6 +45,10 @@ def _save_outcome(erp: Erp, claim_id: str, outcome: Any) -> None:
         erp.log("code", f"dispute.{key}", claim_id, source_doc=doc_id)
     erp.set_claim(claim_id, status="closed" if outcome.kind != "awaiting_sign_off" else "awaiting_sign_off",
                   outcome=outcome.to_dict())
+    if outcome.kind != "awaiting_sign_off":
+        from finance.receivables import on_claim_closed
+
+        on_claim_closed(erp, claim_id, outcome.decision)
 
 
 COMPLAINT_WINDOW_DAYS = 30  # contract_excerpt.md §4

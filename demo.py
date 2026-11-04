@@ -9,7 +9,9 @@
               fixed through an exception case) -> dispatch 10,800 -> TD01 + INVOIC 380 -> reconcile
 3. Dispute:   the retailer reports a missing pallet, the signed DDT backs it -> credit note
               with no person (nothing is ambiguous); then an unclear claim goes to a person
-4. Digest:    the weekly summary for the accountant and managers
+4. Cash:      Esselunga pays less: one deduction is our own credit note (matched), the other
+              becomes a claim that a person decides
+5. Digest:    the weekly summary for the accountant and managers
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from core.digest import build_digest
 from core.stock import record_event
 from core.world import fresh_erp
 from dispute.service import approve_verdict, handle_claim, offline_callers
+from finance.receivables import aging, record_remittance
 from order.service import confirm_order, receive_order
 from shipping import cases, warehouse
 from shipping.receiving import record_receiving_advice
@@ -140,7 +143,32 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     result["unclear_claim"] = claim2["status"]
 
     if not quiet:
-        step("4. Weekly digest")
+        step("4. Cash")
+    offline = json.loads((GOLDEN / "grok_offline.json").read_text())
+    paid = record_remittance(erp, (GOLDEN / "REMADV_ESS-GOLD-001.edi").read_text(), out_dir=out,
+                             verdict_caller=None if live else (lambda _m: json.loads(json.dumps(offline["deduction_verdict"]))),
+                             received_on=date(2026, 11, 30))
+    line = paid["lines"][0]
+    say(f"Remittance {paid['remittance_ref']}: Esselunga pays €{line['paid']:,.2f} on {line['invoice_ref']}")
+    for d in line["deductions"]:
+        if d["status"] == "matched_credit":
+            say(f"  €{d['amount']:.2f} deducted = our credit note {d['credit_note']}: matched, no person")
+        else:
+            case = erp.signoff(d["case_id"]) if d.get("case_id") else None
+            say(f"  €{d['amount']:.2f} deducted with no credit note behind it: claim {d['claim_id']}"
+                + (f", sign-off {case['case_id']}: {'; '.join(case['reasons'])}" if case else f", {d['claim_status']}"))
+            if case:
+                approve_verdict(erp, case["case_id"], by="Sara, credit desk",
+                                reason="No contract clause for flyer contributions: ask Esselunga to repay",
+                                playbook_path=playbook, issue_date=date(2026, 11, 30))
+                say("  Sara approves: Esselunga gets the evidence and a request to repay; the €300 is tracked")
+    ag = aging(erp, date(2026, 11, 30))
+    say(f"Open receivables: €{ag['open_total']:,.2f}, of which disputed deductions "
+        f"€{sum(d['amount'] for d in ag['open_deductions']):,.2f}")
+    result["cash"] = {"open": ag["open_total"], "deductions": [d["status"] for d in line["deductions"]]}
+
+    if not quiet:
+        step("5. Weekly digest")
     digest = build_digest(erp, title="Weekly digest, week of 2 Nov 2026")
     say(digest)
     result.update({"pending_signoffs": len(signoff.pending(erp)), "audit_events": len(erp.audit()),

@@ -43,7 +43,22 @@ def chain(erp: Erp, order_ref: str) -> dict[str, Any]:
         exception_cases = [c for c in (json.loads(r["data"]) for r in rows) if c.get("order_ref") == order_ref]
     except Exception:  # noqa: BLE001 - the shipping tables exist only once a truck was planned
         pass
+    payments: list[dict[str, Any]] = []
+    deductions: list[dict[str, Any]] = []
+    try:
+        refs = [i["invoice_ref"] for i in invoices]
+        if refs:
+            marks = ",".join("?" for _ in refs)
+            payments = erp._all(f"SELECT p.payment_id, p.remittance_ref, p.value_date, p.source_doc, l.invoice_ref, "
+                                f"l.amount_paid FROM payment_lines l JOIN payments p USING(payment_id) "
+                                f"WHERE l.invoice_ref IN ({marks}) ORDER BY p.payment_id", tuple(refs))
+            deductions = erp._all(f"SELECT * FROM deductions WHERE invoice_ref IN ({marks}) ORDER BY deduction_id", tuple(refs))
+    except Exception:  # noqa: BLE001 - finance tables exist once a remittance was recorded
+        pass
     return {
+        "payments": payments,
+        "deductions": [{k: d[k] for k in ("deduction_id", "amount", "reason_code", "note", "status", "credit_ref", "claim_id")}
+                       for d in deductions],
         "order": {"order_ref": order_ref, "status": order["status"], "buyer": order["buyer_gln"],
                   "orders_doc": order["source_doc"], "orders_file": (orders_doc or {}).get("path"),
                   "ordrsp_doc": order["ordrsp_ref"]},
@@ -94,6 +109,12 @@ def gaps(erp: Erp) -> list[str]:
             problems.append(f"{claim['claim_id']}: no claim email")
         if claim["status"] == "closed" and not erp.documents(ref=claim["claim_id"]):
             problems.append(f"{claim['claim_id']}: closed with no outcome document")
+    try:
+        for pay in erp._all("SELECT * FROM payments"):
+            if not erp.document(pay["source_doc"]):
+                problems.append(f"{pay['payment_id']}: no remittance document")
+    except Exception:  # noqa: BLE001
+        pass
     for case in erp.signoffs():
         if case["status"] != "pending" and not case["decision_reason"]:
             problems.append(f"{case['case_id']}: decided without a reason")
@@ -121,6 +142,12 @@ def render(c: dict[str, Any]) -> str:
     for cl in c["claims"]:
         out.append(f"  claim    {cl['claim_id']} ({cl['email_doc']}): {cl['decision']} {cl['amount']}, "
                    f"sources {', '.join(cl['sources'])}; {cl['status']}; outputs {', '.join(cl['outputs'])}")
+    for p in c["payments"]:
+        out.append(f"  payment  {p['payment_id']} ({p['source_doc']}, remittance {p['remittance_ref']}, {p['value_date']}): "
+                   f"€{p['amount_paid']:,.2f} on {p['invoice_ref']}")
+    for d in c["deductions"]:
+        out.append(f"  deducted €{d['amount']:,.2f} {d['reason_code']} {d['note']}: {d['status']}"
+                   + (f" (credit note {d['credit_ref']})" if d["credit_ref"] else f" (claim {d['claim_id']})"))
     for s in c["claim_signoffs"]:
         out.append(f"  sign-off {s['case_id']}: {s['status']} by {s['decided_by']}: {s['decision_reason']}")
     out.append(f"  {len(c['audit'])} logged actions: "
