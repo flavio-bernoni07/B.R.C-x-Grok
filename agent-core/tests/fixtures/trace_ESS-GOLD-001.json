@@ -1,0 +1,242 @@
+{
+ "payments": [],
+ "deductions": [],
+ "order": {
+  "order_ref": "ESS-GOLD-001",
+  "status": "invoiced",
+  "buyer": "BUYER001",
+  "orders_doc": "DOC-00001",
+  "orders_file": "ORDERS_ESS-GOLD-001.edi",
+  "ordrsp_doc": "DOC-00002"
+ },
+ "signoffs": [
+  {
+   "case_id": "SO-00001",
+   "kind": "confirm",
+   "status": "approved",
+   "decided_by": "Giulia, order desk",
+   "decision_reason": "Stock and contract price check out"
+  }
+ ],
+ "production": [
+  {
+   "event_id": "EVT-00002",
+   "kind": "batch_finished",
+   "batch": "LOT-C-0417",
+   "qty": 6000.0,
+   "note": "Carnaroli 1 kg, line 1"
+  },
+  {
+   "event_id": "EVT-00003",
+   "kind": "batch_finished",
+   "batch": "LOT-C-0418",
+   "qty": 6000.0,
+   "note": "Carnaroli 1 kg, line 1"
+  },
+  {
+   "event_id": "EVT-00008",
+   "kind": "quality_hold",
+   "batch": "LOT-C-0418",
+   "qty": 1200.0,
+   "note": "lab sample: 9% chalky grains"
+  }
+ ],
+ "exception_cases": [
+  {
+   "case_id": "CASE-00001",
+   "type": "WRONG_TRUCK",
+   "status": "executed",
+   "approved_by": "person:Marco, warehouse lead"
+  }
+ ],
+ "shipments": [
+  {
+   "desadv": "DESADV-ESS-GOLD-001-1",
+   "desadv_doc": "DOC-00003",
+   "ddt": "DDT-ESS-GOLD-001-1",
+   "ship_date": "2026-11-05",
+   "batches": [
+    "LOT-C-0417",
+    "LOT-C-0418"
+   ],
+   "qty": 10800.0,
+   "notes": "CAR-1KG: 1200 of 12000 not shipped (quality hold on LOT-C-0418-HOLD)"
+  }
+ ],
+ "invoices": [
+  {
+   "invoice": "FT-2026/0001",
+   "desadv": "DESADV-ESS-GOLD-001-1",
+   "fatturapa_doc": "DOC-00005",
+   "status": "sent",
+   "total": 24710.4
+  }
+ ],
+ "proofs": [
+  {
+   "doc_id": "POD-DESADV-ESS-GOLD-001-1",
+   "kind": "pod",
+   "summary": "Signed DDT DDT-ESS-GOLD-001-1 by Esselunga CeDi Melzo on 2026-11-06: CAR-1KG 10560 received of 10800 shipped, with reservation: 1 pallet mancante (240 pz)"
+  }
+ ],
+ "claims": [
+  {
+   "claim_id": "CLM-00001",
+   "email_doc": "DOC-00007",
+   "status": "closed",
+   "decision": "accept",
+   "amount": 528.0,
+   "sources": [
+    "DDT-ESS-GOLD-001-1",
+    "FT-2026/0001",
+    "Shortage / OSD"
+   ],
+   "outputs": [
+    "DOC-00008 FatturaPA TD04",
+    "DOC-00009 INVOIC 381",
+    "DOC-00010 outcome"
+   ]
+  }
+ ],
+ "claim_signoffs": [],
+ "audit": [
+  {
+   "at": null,
+   "actor": "code",
+   "action": "signoff.requested",
+   "source_doc": "SO-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "order.checks_passed",
+   "source_doc": "DOC-00001"
+  },
+  {
+   "at": null,
+   "actor": "person:Giulia, order desk",
+   "action": "signoff.approved",
+   "source_doc": "SO-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "order.ordrsp_sent",
+   "source_doc": "DOC-00002"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.ingested",
+   "source_doc": "DOC-00002"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.planned",
+   "source_doc": "MAN-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.picking_list",
+   "source_doc": null
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.exception.WRONG_TRUCK",
+   "source_doc": "EXC-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.case_opened",
+   "source_doc": "CASE-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.case_executed",
+   "source_doc": "CASE-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.loaded",
+   "source_doc": "LOAD-00001"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.dispatched",
+   "source_doc": "DOC-00003"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.invoiced",
+   "source_doc": "DOC-00005"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.invoice_sent",
+   "source_doc": "DOC-00005"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "shipping.reconciled",
+   "source_doc": null
+  },
+  {
+   "at": null,
+   "actor": "retailer",
+   "action": "shipping.delivered",
+   "source_doc": "POD-DESADV-ESS-GOLD-001-1"
+  },
+  {
+   "at": null,
+   "actor": "retailer",
+   "action": "dispute.claim_received",
+   "source_doc": "DOC-00007"
+  },
+  {
+   "at": null,
+   "actor": "grok",
+   "action": "dispute.claim_read",
+   "source_doc": "DOC-00007"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "dispute.facts_pulled",
+   "source_doc": null
+  },
+  {
+   "at": null,
+   "actor": "grok",
+   "action": "dispute.verdict",
+   "source_doc": null
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "dispute.td04_xml",
+   "source_doc": "DOC-00008"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "dispute.edi_invoic_381",
+   "source_doc": "DOC-00009"
+  },
+  {
+   "at": null,
+   "actor": "code",
+   "action": "dispute.outcome_json",
+   "source_doc": "DOC-00010"
+  }
+ ]
+}

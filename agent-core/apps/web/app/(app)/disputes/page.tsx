@@ -1,5 +1,5 @@
-import { DisputesView } from "@/components/dispute";
+import { redirect } from "next/navigation";
 
-export default function DisputesPage() {
-  return <DisputesView />;
+export default function Page() {
+  redirect("/actions");
 }

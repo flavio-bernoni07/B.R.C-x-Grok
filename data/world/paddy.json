@@ -1,0 +1,18 @@
+{
+  "_comment": "DEMO DATA, invented for the hackathon: paddy in our silos and paddy contracted with farmers but not delivered yet, per variety, in tonnes. Product to variety and net rice kg per unit come from OPS-WORKSPACE-PROMPT.md section 5A. Basmati is imported, so it is not bought as paddy.",
+  "demo": true,
+  "as_of": "2026-11-04",
+  "varieties": [
+    {"variety": "Arborio", "silo_t": 120, "contracted_not_delivered_t": 60},
+    {"variety": "Carnaroli", "silo_t": 70, "contracted_not_delivered_t": 30}
+  ],
+  "products": {
+    "ARB-1KG": {"variety": "Arborio", "kg_per_unit": 1.0},
+    "ARB-VAC-1KG": {"variety": "Arborio", "kg_per_unit": 1.0},
+    "ARB-1KG-CTN12": {"variety": "Arborio", "kg_per_unit": 12.0},
+    "CAR-1KG": {"variety": "Carnaroli", "kg_per_unit": 1.0},
+    "CAR-1KG-CTN12": {"variety": "Carnaroli", "kg_per_unit": 12.0},
+    "RSP-FUNGHI-210": {"variety": "Arborio", "kg_per_unit": 0.18},
+    "BAS-500G": {"variety": "Basmati", "kg_per_unit": 0.5, "excluded": "imported, not bought as paddy from Italian farmers"}
+  }
+}

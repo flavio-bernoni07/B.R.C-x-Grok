@@ -6,11 +6,12 @@
 import { getReadyErp } from "@agent/lib/db/app";
 import { decideSignoff as decideDispute } from "@agent/lib/dispute/decide";
 import { decideSignoff as decideOrder } from "@agent/lib/order/decide";
+import { decideSignoff as decidePurchasing } from "@agent/lib/purchasing/decide";
 import { decideSignoff as decideShipping } from "@agent/lib/shipping/decide";
 import { ingestConfirmedOrder } from "@agent/lib/shipping/service";
 import type { ConfirmedOrderHandoff } from "@agent/lib/order/service";
 
-const BY_ROW = { order: decideOrder, shipping: decideShipping, dispute: decideDispute } as const;
+const BY_ROW = { order: decideOrder, shipping: decideShipping, dispute: decideDispute, purchasing: decidePurchasing } as const;
 
 export async function POST(request: Request, { params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;

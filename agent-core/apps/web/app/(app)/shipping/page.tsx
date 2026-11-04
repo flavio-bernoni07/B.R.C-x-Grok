@@ -1,5 +1,5 @@
-import { ShippingView } from "@/components/shipping";
+import { redirect } from "next/navigation";
 
-export default function ShippingPage() {
-  return <ShippingView />;
+export default function Page() {
+  redirect("/operations?tab=warehouse");
 }

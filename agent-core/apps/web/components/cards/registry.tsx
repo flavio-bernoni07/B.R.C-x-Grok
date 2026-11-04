@@ -9,11 +9,12 @@ import type { Signoff } from "@agent/lib/core/erp";
 import type { EveToolPart } from "eve/react";
 import type { ReactNode } from "react";
 import { AuditCard } from "@/components/core/audit";
-import { OverviewCard } from "@/components/core/overview";
+import { ImpactCard, OverviewCard } from "@/components/core/overview";
 import { SignoffCard, SignoffQueue } from "@/components/core/signoff";
 import { StockCard } from "@/components/core/stock";
 import { Panel } from "@/components/kit";
 import { cards as disputeCards } from "@/components/dispute";
+import { cards as operationsCards } from "@/components/operations";
 import { cards as orderCards } from "@/components/order";
 import { cards as riceCards } from "@/components/rice";
 import { cards as shippingCards } from "@/components/shipping";
@@ -22,6 +23,7 @@ type Card = (props: { output: unknown }) => ReactNode;
 
 const coreCards: Record<string, Card> = {
   overview_snapshot: OverviewCard,
+  impact_summary: ImpactCard,
   stock_status: StockCard,
   audit_trail: AuditCard,
   signoff_queue: ({ output }) => (
@@ -32,7 +34,7 @@ const coreCards: Record<string, Card> = {
   signoff_get: ({ output }) => <SignoffCard signoff={(output as { case: Signoff }).case} />,
 };
 
-export const CARDS: Record<string, Card> = { ...coreCards, ...orderCards, ...shippingCards, ...disputeCards, ...riceCards };
+export const CARDS: Record<string, Card> = { ...coreCards, ...orderCards, ...shippingCards, ...disputeCards, ...riceCards, ...operationsCards };
 
 export function isCardTool(part: EveToolPart): boolean {
   return part.name in CARDS && part.state === "completed" && part.output != null;
