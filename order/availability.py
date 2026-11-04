@@ -74,3 +74,27 @@ def get_availability(
 ) -> AvailabilityResult:
     active = provider or StubAvailabilityProvider()
     return active.get_availability(query)
+
+
+class ErpAvailabilityProvider:
+    """Reads available-to-promise from the shared Mini ERP (core/stock.py).
+
+    available = released stock + planned batches ready by the requested date
+              - confirmed orders not shipped yet. Held batches never count.
+    """
+
+    def __init__(self, erp: Any) -> None:
+        self.erp = erp
+
+    def get_availability(self, query: AvailabilityQuery) -> AvailabilityResult:
+        from core.stock import available_to_promise
+
+        if not self.erp.product(gtin=query.gtin):
+            return AvailabilityResult(gtin=query.gtin, available_qty=0.0, source="erp_unknown_gtin", found=False)
+        atp = available_to_promise(self.erp, query.gtin, query.requested_date)
+        return AvailabilityResult(
+            gtin=query.gtin,
+            available_qty=float(atp["atp"]),
+            source=f"erp_atp(released {atp['released']:g} + planned {atp['planned']:g} - committed {atp['committed']:g})",
+            found=True,
+        )

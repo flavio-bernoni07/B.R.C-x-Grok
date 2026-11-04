@@ -41,3 +41,8 @@ python3 -m pytest tests/test_order_parser.py tests/test_order_pipeline.py -q
 | `data/orders/edi/ordine_ess_bad_price.edi` | Wrong PRI → draft mail + `await_price_human` |
 | `data/orders/contract_scotti_esselunga.json` | Demo contract |
 | `data/orders/availability_stub.json` | Stock stub for Core to replace |
+
+## On the Mini ERP
+
+`order/service.py` runs the same pipeline on the shared Mini ERP: `receive_order()` reads stock through `ErpAvailabilityProvider`, runs the Grokbot loops in `order/grokbot.py` (an EDI fix goes back to Parse, a split goes back to the stock check, a price mismatch gets a mail with exactly the code's figures), and stops at a person. `confirm_order()` writes the ORDRSP and returns the hand-over for Shipping; `resolve_price_case()` takes a manual EDI or parks the order. Tests: `tests/test_order_service.py`.
+
