@@ -2,7 +2,7 @@
 
 import type { BenchResult } from "@agent/lib/bench/score";
 import type { ShippingFile, ShippingListRow } from "@agent/lib/shipping/service";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { PageHeader, Panel, Pill } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { rowPill } from "./format";
@@ -14,7 +14,7 @@ import { BenchSummary, BenchTable, ShippingSteps, ShippingTable } from "./shippi
  * detail panel with each step (plan, scan, dispatch, invoice, reconcile, case, Grok's proposal,
  * approval). Approval happens on the Sign-off page.
  */
-export function ShippingView() {
+export function ShippingView({ embedded = false }: { readonly embedded?: boolean } = {}) {
   const [rows, setRows] = useState<ShippingListRow[]>();
   const [bench, setBench] = useState<BenchResult>();
   const [showBench, setShowBench] = useState(false);
@@ -81,10 +81,11 @@ export function ShippingView() {
   const threewayMissed = rows?.filter((r) => r.reconcile?.threeway_wrong).length ?? 0;
   const current = rows?.find((r) => r.order_ref === selected);
 
+  const Wrap = embedded ? EmbeddedWrap : Page;
   return (
-    <Page>
+    <Wrap>
       <PageHeader
-        title="Shipping"
+        title={embedded ? "Shipments and invoices" : "Shipping"}
         sub={
           rows
             ? `${rows.length} orders in shipping, ${flagged} with a cause to follow up, ${threewayMissed} where threeway gives a different answer. The invoice bills what shipped; code names every cause; an employee approves every exception resolution.`
@@ -134,6 +135,11 @@ export function ShippingView() {
           </Panel>
         ) : null}
       </div>
-    </Page>
+    </Wrap>
   );
+}
+
+/** Inside the Operations page: no second scrolling page. */
+function EmbeddedWrap({ children }: { readonly children: ReactNode }) {
+  return <div className="space-y-5">{children}</div>;
 }

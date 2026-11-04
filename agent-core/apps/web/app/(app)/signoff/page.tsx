@@ -1,5 +1,5 @@
-import { SignoffView } from "@/components/core/signoff-view";
+import { redirect } from "next/navigation";
 
-export default function SignoffPage() {
-  return <SignoffView />;
+export default function Page() {
+  redirect("/actions");
 }
