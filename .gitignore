@@ -6,3 +6,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Mini ERP files written by the demo or by hand
+*.sqlite

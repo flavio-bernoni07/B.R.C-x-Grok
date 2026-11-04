@@ -17,6 +17,11 @@
 
 ## What I decided
 
+- The Mini ERP is `core/erp.py`: one SQLite file, tables for products, retailers, batches, production events, orders, shipments, invoices, proofs, claims, documents, sign-offs and an audit log. `core/world.py` loads `data/world/`.
+- Stock only changes through production events (`core/stock.py`). Available to promise = released + planned by the date − confirmed and not shipped. Held batches never count and never ship.
+- One sign-off queue for all rows (`core/signoff.py`). A decision needs who and why; dispute decisions are added to the Playbook's past cases.
+- The golden order is `data/world/golden/`, run by `demo.py` and by `tests/test_dispute_service.py`.
+
 ## What I need from others
 
 - From every owner: the exact format of what their step writes to the Mini ERP

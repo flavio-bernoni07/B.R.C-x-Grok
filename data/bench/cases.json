@@ -1,0 +1,868 @@
+{
+ "_comment": "Labelled reconciliation cases. Each label says what really happened, written when the case was written, before either matcher ran. Causes: short_delivery, over_delivery, overbilled, underbilled, price_difference, orphan_invoice, orphan_receipt, not_shipped, uom_unknown. attention = someone at Riso Scotti must act (fix an invoice, re-ship, chase a reference).",
+ "cases": [
+  {
+   "id": "C01",
+   "kind": "clean",
+   "description": "40 cartons ordered, shipped and invoiced at the order price",
+   "po": [
+    {
+     "order_ref": "RS-26-1001",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1001",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1001",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C02",
+   "kind": "clean",
+   "description": "two lines, both shipped and invoiced as ordered",
+   "po": [
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "BAS-500G",
+     "quantity": 600,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "BAS-500G",
+     "quantity": 600,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1002",
+     "item_code": "BAS-500G",
+     "quantity": 600,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C03",
+   "kind": "clean",
+   "description": "12,000 packs at the volume price",
+   "po": [
+    {
+     "order_ref": "RS-26-1003",
+     "item_code": "CAR-1KG",
+     "quantity": 12000,
+     "unit_price": 2.2,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1003",
+     "item_code": "CAR-1KG",
+     "quantity": 12000,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1003",
+     "item_code": "CAR-1KG",
+     "quantity": 12000,
+     "unit_price": 2.2,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C04",
+   "kind": "split delivery",
+   "description": "80 cartons in two despatches of 50 and 30, one invoice",
+   "po": [
+    {
+     "order_ref": "RS-26-1004",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 80,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1004",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 50,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1004",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1004",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 80,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C05",
+   "kind": "split delivery",
+   "description": "two despatches and two invoices that add up",
+   "po": [
+    {
+     "order_ref": "RS-26-1005",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 80,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1005",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 50,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1005",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1005",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 50,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1005",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C06",
+   "kind": "short shipment invoiced correctly",
+   "description": "28 of 40 cartons shipped, 28 invoiced: Riso Scotti still owes 12",
+   "po": [
+    {
+     "order_ref": "RS-26-1006",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1006",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 28,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1006",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 28,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C07",
+   "kind": "short shipment invoiced correctly",
+   "description": "10,800 of 12,000 packs shipped after a quality hold, 10,800 invoiced",
+   "po": [
+    {
+     "order_ref": "RS-26-1007",
+     "item_code": "CAR-1KG",
+     "quantity": 12000,
+     "unit_price": 2.2,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1007",
+     "item_code": "CAR-1KG",
+     "quantity": 10800,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1007",
+     "item_code": "CAR-1KG",
+     "quantity": 10800,
+     "unit_price": 2.2,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C08",
+   "kind": "short shipment invoiced correctly",
+   "description": "one of two lines short, invoiced as shipped",
+   "po": [
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "BAS-500G",
+     "quantity": 600,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "BAS-500G",
+     "quantity": 480,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-1008",
+     "item_code": "BAS-500G",
+     "quantity": 480,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C09",
+   "kind": "overbilling",
+   "description": "40 shipped, 45 invoiced",
+   "po": [
+    {
+     "order_ref": "RS-26-1009",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1009",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1009",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 45,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "overbilled"
+    ]
+   }
+  },
+  {
+   "id": "C10",
+   "kind": "overbilling",
+   "description": "28 of 40 shipped but the invoice bills the 40 ordered (like RS-2026-00481)",
+   "po": [
+    {
+     "order_ref": "RS-26-1010",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1010",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 28,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1010",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "overbilled",
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C11",
+   "kind": "price gap",
+   "description": "promo price 1.49 on the order, list price 1.85 on the invoice (like PO77821)",
+   "po": [
+    {
+     "order_ref": "RS-26-1011",
+     "item_code": "BAS-500G",
+     "quantity": 200,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1011",
+     "item_code": "BAS-500G",
+     "quantity": 200,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1011",
+     "item_code": "BAS-500G",
+     "quantity": 200,
+     "unit_price": 1.85,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "price_difference"
+    ]
+   }
+  },
+  {
+   "id": "C12",
+   "kind": "price gap",
+   "description": "carton price 15.50 ordered, 16.20 invoiced",
+   "po": [
+    {
+     "order_ref": "RS-26-1012",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1012",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1012",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 16.2,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "price_difference"
+    ]
+   }
+  },
+  {
+   "id": "C13",
+   "kind": "two causes on one line",
+   "description": "10 packs too many invoiced, and at the list price instead of the promo",
+   "po": [
+    {
+     "order_ref": "RS-26-1013",
+     "item_code": "BAS-500G",
+     "quantity": 200,
+     "unit_price": 1.49,
+     "uom": "EA"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1013",
+     "item_code": "BAS-500G",
+     "quantity": 200,
+     "uom": "EA"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1013",
+     "item_code": "BAS-500G",
+     "quantity": 210,
+     "unit_price": 1.85,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "overbilled",
+     "price_difference"
+    ]
+   }
+  },
+  {
+   "id": "C14",
+   "kind": "two causes on one line",
+   "description": "short shipment invoiced for the right quantity but at the wrong price",
+   "po": [
+    {
+     "order_ref": "RS-26-1014",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1014",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 28,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1014",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 28,
+     "unit_price": 16.0,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "price_difference",
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C15",
+   "kind": "typo in a reference",
+   "description": "DESADV and invoice carry RS-2026-0O481 (letter O) for order RS-2026-00481",
+   "po": [
+    {
+     "order_ref": "RS-2026-00481",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-2026-0O481",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-2026-0O481",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C16",
+   "kind": "typo in a reference",
+   "description": "the invoice writes RS2026 00482 for RS-2026-00482",
+   "po": [
+    {
+     "order_ref": "RS-2026-00482",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-2026-00482",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS2026 00482",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C17",
+   "kind": "item code written differently",
+   "description": "the invoice writes CAR1KGCTN12 for CAR-1KG-CTN12",
+   "po": [
+    {
+     "order_ref": "RS-26-1017",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1017",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 30,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1017",
+     "item_code": "CAR1KGCTN12",
+     "quantity": 30,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C18",
+   "kind": "cartons against units",
+   "description": "ordered and shipped as 40 cartons, invoiced as 480 packs at the per-pack price",
+   "po": [
+    {
+     "order_ref": "RS-26-1018",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1018",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1018",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 480,
+     "unit_price": 1.2917,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  },
+  {
+   "id": "C19",
+   "kind": "cartons against units",
+   "description": "38 of 40 cartons shipped, invoiced correctly as 456 packs",
+   "po": [
+    {
+     "order_ref": "RS-26-1019",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1019",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 38,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1019",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 456,
+     "unit_price": 1.2917,
+     "uom": "EA"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "short_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C20",
+   "kind": "orphan invoice",
+   "description": "an invoice line for an order that does not exist",
+   "po": [
+    {
+     "order_ref": "RS-26-1020",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1020",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1020",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    },
+    {
+     "order_ref": "RS-26-9999",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 10,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "orphan_invoice"
+    ]
+   }
+  },
+  {
+   "id": "C21",
+   "kind": "over-delivery",
+   "description": "46 cartons shipped and invoiced against 40 ordered",
+   "po": [
+    {
+     "order_ref": "RS-26-1021",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1021",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 46,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1021",
+     "item_code": "CAR-1KG-CTN12",
+     "quantity": 46,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": true,
+    "causes": [
+     "over_delivery"
+    ]
+   }
+  },
+  {
+   "id": "C22",
+   "kind": "within tolerance",
+   "description": "39 of 40 shipped and invoiced: inside the contract's 2-unit tolerance",
+   "po": [
+    {
+     "order_ref": "RS-26-1022",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 40,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "received": [
+    {
+     "order_ref": "RS-26-1022",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 39,
+     "uom": "CTN"
+    }
+   ],
+   "invoiced": [
+    {
+     "order_ref": "RS-26-1022",
+     "item_code": "ARB-1KG-CTN12",
+     "quantity": 39,
+     "unit_price": 15.5,
+     "uom": "CTN"
+    }
+   ],
+   "expected": {
+    "attention": false,
+    "causes": []
+   }
+  }
+ ]
+}

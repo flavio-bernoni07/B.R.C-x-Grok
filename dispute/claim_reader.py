@@ -16,12 +16,13 @@ import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from agent import grok
+from agent.grok import MissingApiKeyError
 
 
 class ClaimType(str, Enum):
@@ -72,32 +73,20 @@ class ClaimExtraction:
         return data
 
 
-class MissingApiKeyError(RuntimeError):
-    """Raised when no xAI/Grok API key is configured for a live extraction."""
-
-
 def _api_key() -> str | None:
-    for name in ("XAI_API_KEY", "GROK_API_KEY"):
-        value = os.environ.get(name, "").strip()
-        if value:
-            return value
-    return None
+    return grok.api_key()
 
 
 def _base_url() -> str:
-    return os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")
+    return grok.base_url()
 
 
-DEFAULT_XAI_MODEL = "grok-4-latest"
+DEFAULT_XAI_MODEL = grok.DEFAULT_MODEL
 
 
 def _model() -> str:
-    """Resolve chat model: XAI_MODEL, else GROK_MODEL, else DEFAULT_XAI_MODEL."""
-    for name in ("XAI_MODEL", "GROK_MODEL"):
-        value = os.environ.get(name, "").strip()
-        if value:
-            return value
-    return DEFAULT_XAI_MODEL
+    """Resolve chat model: XAI_MODEL_DISPUTE_READ_CLAIM, else XAI_MODEL, else GROK_MODEL, else DEFAULT_XAI_MODEL."""
+    return grok.model_for("dispute.read_claim")
 
 
 def _null_str(value: Any) -> str | None:
@@ -158,34 +147,12 @@ def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
     )
 
 
-def _extract_json_object(text: str) -> dict[str, Any]:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end <= start:
-            raise
-        data = json.loads(text[start : end + 1])
-    if not isinstance(data, dict):
-        raise ValueError("Grok response JSON must be an object")
-    return data
+_extract_json_object = grok.extract_json_object
 
 
 def call_grok(claim_text: str, *, api_key: str) -> dict[str, Any]:
     """Call xAI chat completions and return the parsed JSON object from the model."""
-    url = f"{_base_url()}/chat/completions"
     body = {
-        "model": _model(),
-        "temperature": 0,
         "messages": [
             {
                 "role": "system",
@@ -200,33 +167,7 @@ def call_grok(claim_text: str, *, api_key: str) -> dict[str, Any]:
             },
         ],
     }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"xAI API HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"xAI API request failed: {exc}") from exc
-
-    envelope = json.loads(raw)
-    try:
-        content = envelope["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Unexpected xAI response shape: {envelope!r}") from exc
-    if not isinstance(content, str):
-        raise RuntimeError("xAI message content is not a string")
-    return _extract_json_object(content)
+    return grok.chat_json(body["messages"], task="dispute.read_claim", api_key_value=api_key)
 
 
 def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:

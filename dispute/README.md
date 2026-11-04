@@ -79,12 +79,20 @@ Contract excerpt: `data/disputes/contract_excerpt.md`
 ```bash
 pip install -r requirements.txt
 python3 -m dispute.outcome --verdict data/disputes/verdicts/01_shortage_accept.json --issue-date 2026-11-04
-python3 -m dispute.outcome --verdict data/disputes/verdicts/05_ambiguous_reject.json
+python3 -m dispute.outcome --verdict data/disputes/verdicts/05_ambiguous_reject.json --approved-by EMP-DISPUTE-01
 python3 -m pytest tests/test_outcome.py -q
 ```
 
 Outputs land in `data/disputes/outcomes/` (override with `--out-dir`).
 
+There is no euro threshold. An ambiguous verdict (`needs_sign_off`, with the reasons in
+`sign_off_reasons`) writes nothing for the retailer: the outcome stays `awaiting_sign_off`
+until a person approves it with `--approved-by NAME`.
+
+## On the Mini ERP
+
+`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus these fixtures), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` writes it after a person's OK and adds the case to the Playbook's past cases; `reject_verdict()` reopens the claim. Tests: `tests/test_dispute_service.py`.
+
 ### Out of scope
 
-Sign-off web UI (Playbook threshold only), real Mini ERP / SQLite persistence beyond writing outcome files.
+Sign-off web UI (for now a person approves from the CLI with `--approved-by`), real Mini ERP / SQLite persistence beyond writing outcome files.

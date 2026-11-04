@@ -56,6 +56,27 @@ class MiniErpStore:
             source_path=catalog_path,
         )
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], *, label: str | None = None) -> MiniErpStore:
+        """Build from a catalog-shaped dict, e.g. shipping.service.export_for_dispute()."""
+        return cls(
+            orders=list(data.get("orders") or []),
+            desadv=list(data.get("desadv") or []),
+            invoices=list(data.get("invoices") or []),
+            proofs=list(data.get("proofs") or []),
+            source_path=Path(label) if label else None,
+        )
+
+    def merged_with(self, other: MiniErpStore) -> MiniErpStore:
+        """This store's documents first, then the other's (fixtures behind live records)."""
+        return MiniErpStore(
+            orders=self.orders + other.orders,
+            desadv=self.desadv + other.desadv,
+            invoices=self.invoices + other.invoices,
+            proofs=self.proofs + other.proofs,
+            source_path=self.source_path or other.source_path,
+        )
+
     def find_order(self, order_ref: str | None) -> tuple[dict[str, Any] | None, LookupMiss | None]:
         if not order_ref:
             return None, LookupMiss("order", None, "No order_ref on claim")

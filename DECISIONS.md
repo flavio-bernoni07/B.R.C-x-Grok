@@ -10,10 +10,16 @@ Detail: [order-dec.md](order-dec.md)
 
 | When | Decision | Why | Who |
 |---|---|---|---|
-| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no €500 gate on Order; no usual-qty check | Order team design from discussion | order |
+| Wed 4 Nov | Order row: parse flags → stock hook → PRI vs contract → Grok on exceptions; human sign-off always before ORDRSP; no euro threshold on Order; no usual-qty check | Order team design from discussion | order |
 | Wed 4 Nov | After Grokbot on parse_flags, re-enter Parse EDI on the corrected message; after Grokbot on qty_short, re-enter availability check — no skip to sign-off | Corrections must pass code checks again | order |
 | Wed 4 Nov | Price mismatch: after draft mail, separate human step (manual EDI or park pending + assign new ORDERS later) — not the always-confirm sign-off; re-enters Parse when data arrives | Wrong price needs retailer correction path, not silent confirm | order |
 | Wed 4 Nov | Dispute row detail in dispute-dec.md: claim_reader → pull_facts/threeway → verdict+sources → optional sign-off → TD04/INVOIC 381 or evidence reply | Same schemino style as Order for the team | dispute |
+| Wed 4 Nov | No euro threshold anywhere. A person signs off whenever a case is ambiguous: Grok unsure or confidence under 0.55, a point with no source, a claim type not in the Playbook, a document not found, an amount not in the documents. A clear case goes out whatever the amount. In Dispute, code blocks the credit note or reply until a person approves | The amount does not make a case unclear, the facts do | Flavio, all rows |
+| Wed 4 Nov | One Mini ERP for every row: `core/erp.py` (SQLite), stock from production events (`core/stock.py`), one sign-off queue (`core/signoff.py`) where the person must write why | The rows could not hand anything to each other; every record keeps its source document | Flavio, core |
+| Wed 4 Nov | Order code back on main (reverted commit 68fe04a), now reading stock from the Mini ERP, with the three Grokbot cases wired and the person confirming every order | The design was approved; the revert left Order with no code | Flavio, order |
+| Wed 4 Nov | `shipping/` rebuilt from the v0.5.0 write-up below (trucks, scans, dispatch, cases), plus TD01 + INVOIC 380 and reconciliation that names every cause. No euro threshold: an employee in the case role approves every exception resolution | Nicola's code is not in the repo; the demo needs one order end to end | Flavio, shipping |
+| Wed 4 Nov | One Grok client, `agent/grok.py`, used by every row (Dispute moved onto it) | grok-agent-dec.md step 1 | Flavio, all rows |
+| Wed 4 Nov | Benchmark: 22 labelled cases, ours 21/22 against threeway 14/22 on whether to act, 21/22 against 10/22 on causes (`python -m bench.score`) | The track's first criterion | Flavio, shipping |
 
 ## Forecast and quality (Flavio)
 
@@ -130,7 +136,7 @@ Hours are in the build budget above. Steps 2 and 3 can swap if the team needs th
 - how much paddy farmers still hold, against normal for the date
 - how many weeks of paddy we already have in the silos
 
-The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. Every purchase is above €500, so a person signs every one.
+The backtest checks whether the advisor is any good. We pretend it is September 2016 and let it decide week by week until 2026, seeing only the data that existed in that week. Then we compare it with the simple rule "buy the same amount every week". The result is one number: euros saved per tonne. This is our result against a baseline for the jury, on real prices. Grok writes the weekly memo from these numbers. A person signs every purchase.
 
 **3. Stock projection.** For each product and each week:
 
@@ -236,7 +242,7 @@ Rules we locked in:
 - The invoice uses the dispatched quantity at the approved price. The older ordered quantity is history.
 - A short shipment with a matching invoice is a fulfillment gap, not a billing error.
 - The same shipment cannot be invoiced twice.
-- A person reviews billing errors, and also a fulfillment gap above the 500 EUR placeholder.
+- A person reviews billing errors, and any fulfilment gap that is ambiguous. There is no euro threshold (team decision, 4 Nov); v0.5.0 still has a 500 EUR placeholder, to remove when the code moves into `shipping/`.
 - Sample VAT is 4% on the rice SKUs and 10% on the ready risotto. An unknown product gets no guessed rate.
 - Prices, quantities, VAT, weights, pallet sizes, and GTINs are never invented.
 
@@ -361,6 +367,10 @@ The contract for the other teammates is `INTEGRATION.md`. How to run the module 
 ### Left for other lanes
 
 Real EDI, FatturaPA XML, submission to SdI, credit notes, GPS, a route optimizer, hardware scanners, external logistics APIs, a second Grok agent, and the CRM screen stay outside this module. A planned manifest is a plan. A case does not send a message, release a quality hold, unblock dispatch, or issue a financial document.
+
+### In this repo now (Flavio, 4 Nov evening)
+
+The functions above are rebuilt in `shipping/` from this write-up, on the shared Mini ERP: `register_trucks`, `plan_truck_loads`, `cancel_truck_plan`, `revise_truck_plan`, `create_picking_list`, `verify_scans`, `confirm_loading`, `authorize_dispatch` (`shipping/warehouse.py`), `open_exception_cases`, `grok_case_package`, `submit_resolution_proposal`, `assign_exception`, `view_exception_case`, `decide_resolution`, `execute_resolution`, `recheck_exception_case` (`shipping/cases.py`), and `ship_order` as the path with no scans. The same rules hold, with one change: there is no 500 EUR placeholder, an employee in the case role approves every resolution. New on top: `ingest_confirmed_order` and `export_for_dispute` (the two hand-overs), `record_delivery` (proof of delivery), the FatturaPA TD01 and INVOIC 380, and `propose_with_grok`, which sends the case package to Grok. Tests: `tests/test_shipping.py`.
 
 ### Review and next steps (Flavio, 4 Nov)
 

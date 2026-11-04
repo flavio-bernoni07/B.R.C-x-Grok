@@ -1,0 +1,12 @@
+{
+  "_comment": "Starting stock, loaded as production events so every unit has a source. Dates are for the demo week of 4 Nov 2026.",
+  "events": [
+    {"kind": "batch_finished", "batch": "LOT-A-0311", "gtin": "8000000000000", "qty": 25000, "note": "Arborio 1 kg, line 2"},
+    {"kind": "batch_finished", "batch": "LOT-C-0417", "gtin": "8000000000001", "qty": 6000, "note": "Carnaroli 1 kg, line 1"},
+    {"kind": "batch_finished", "batch": "LOT-C-0418", "gtin": "8000000000001", "qty": 6000, "note": "Carnaroli 1 kg, line 1"},
+    {"kind": "batch_planned", "batch": "LOT-C-0419", "gtin": "8000000000001", "qty": 4000, "available_from": "2026-11-09", "note": "Carnaroli 1 kg, next run"},
+    {"kind": "batch_finished", "batch": "LOT-AC-0101", "gtin": "18000000000003", "qty": 400, "note": "Arborio cartons"},
+    {"kind": "batch_finished", "batch": "LOT-B-0901", "gtin": "8003660012345", "qty": 5000, "note": "Basmati 500 g"},
+    {"kind": "batch_finished", "batch": "LOT-R-0055", "gtin": "8000000000049", "qty": 3000, "note": "Risotto pronto"}
+  ]
+}

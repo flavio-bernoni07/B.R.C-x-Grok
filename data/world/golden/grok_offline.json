@@ -1,0 +1,28 @@
+{
+  "_comment": "Recorded Grok answers for the golden claim, so the demo runs with the network off. They pass the same code checks as a live answer. Run with a key to call Grok live instead.",
+  "read_claim": {
+    "order_ref": "ESS-GOLD-001",
+    "invoice_ref": "FT-2026/0001",
+    "product": "Carnaroli 1 kg",
+    "quantity": 240,
+    "amount": 528.0,
+    "claim_type": "shortage",
+    "confidence": 0.93,
+    "raw_notes": "Retailer counted 10,560 against 10,800 on the DESADV; reservation written on the DDT at unloading"
+  },
+  "verdict": {
+    "decision": "accept",
+    "amount": 528.0,
+    "confidence": 0.9,
+    "needs_sign_off": false,
+    "summary": "The signed DDT carries a reservation for one missing pallet of 240 packs, and the invoice bills the 10,800 on the DESADV. Credit 240 x 2.20.",
+    "points": [
+      {"text": "The retailer signed the DDT with a reservation: 10,560 received of 10,800 shipped, one pallet missing", "amount": 528.0,
+       "source": {"kind": "pod", "ref": "DDT-ESS-GOLD-001-1", "detail": "POD-DESADV-ESS-GOLD-001-1"}},
+      {"text": "Invoice FT-2026/0001 bills 10,800 packs at 2.20, the quantity on the DESADV", "amount": null,
+       "source": {"kind": "invoice", "ref": "FT-2026/0001", "detail": "invoice line CAR-1KG"}},
+      {"text": "Playbook shortage rule: proof of delivery beats the despatch advice when the reservation was written at unloading", "amount": null,
+       "source": {"kind": "playbook", "ref": "Shortage / OSD", "detail": "prefer signed DDT/POD"}}
+    ]
+  }
+}

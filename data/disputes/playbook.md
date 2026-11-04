@@ -4,12 +4,19 @@ Grok **must read this Playbook before proposing a verdict**. Rules below are the
 working set for the hackathon demo. Amounts always come from documents / threeway /
 the claim — never invent euro totals.
 
-## Sign-off thresholds (placeholders)
+## When a person signs off
 
-- Auto-propose without human sign-off when **amount ≤ €500**, confidence is high,
-  every point has a source, and the claim type is covered below.
-- Escalate to a person when: amount **> €500**, Grok is unsure, a point has **no
-  source**, or the case type is **not in this Playbook**.
+There is **no euro threshold**. A clear case goes out on its own, whatever the amount.
+If anything is ambiguous, a person always decides. Set `needs_sign_off` to true when:
+
+- you are unsure, or your confidence is under 0.55
+- a point has **no source**
+- the claim type is **not covered below** (`other`)
+- the claim was hard to read, or an order, DESADV or invoice could not be found
+- an amount cannot be tied to the claim, the documents or threeway
+- the documents disagree in a way these rules do not settle
+
+Code checks the same list and sends the case to a person even if you say false.
 
 ## Claim-type rules
 
@@ -39,8 +46,9 @@ the claim — never invent euro totals.
   decision text without inventing a euro figure (`amount` null on that point).
 
 ### Other / ambiguous
-- If claim type is unclear or docs are missing → **reject** or escalate (unsure),
-  list lookup misses, ask for clearer refs. Do not invent order/invoice numbers.
+- If claim type is unclear or docs are missing → always escalate to a person
+  (`needs_sign_off` true). Propose reject or ask for clearer refs, list the lookup
+  misses. Do not invent order/invoice numbers.
 
 ## Hard constraints
 
