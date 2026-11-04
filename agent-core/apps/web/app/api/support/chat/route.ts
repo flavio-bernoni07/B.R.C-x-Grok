@@ -1,11 +1,8 @@
-/**
- * Customer dispute chat turn. Scoped to the simulated retailer session cookie.
- */
+/** Customer dispute chat turn — same handleCustomerMessage workflow as before. */
 import { getReadyErp } from "@agent/lib/db/app";
-import { handleCustomerMessage, simulatedSession } from "@agent/lib/dispute/portal";
+import { DEMO_RETAILER_GLN, handleCustomerMessage, simulatedSession } from "@agent/lib/dispute/portal";
 import { cookies } from "next/headers";
 import { COOKIE } from "../session/route";
-import { DEMO_RETAILER_GLN } from "@agent/lib/dispute/portal";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -30,6 +27,5 @@ export async function POST(request: Request) {
     conversationId: body.conversation_id,
     idempotencyKey: body.idempotency_key,
   });
-  const status = result.submitted ? 200 : result.error === "unauthorized" ? 403 : 200;
-  return Response.json({ ...result, session }, { status });
+  return Response.json({ ...result, session });
 }

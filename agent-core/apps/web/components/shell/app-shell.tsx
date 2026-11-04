@@ -114,8 +114,8 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
         ) : null}
 
         <div className={cn("flex flex-col gap-2 px-2 pt-3 max-md:hidden", data.grok ? "" : "mt-auto")}>
-          <Link href="/portal" className="text-[11.5px] text-ink-68 underline-offset-2 hover:underline">
-            Retailer portal (simulated)
+          <Link href="/support" className="text-[11.5px] text-ink-68 underline-offset-2 hover:underline">
+            Retailer support chat (voice)
           </Link>
           <div className="flex items-center gap-2">
             <span className="flex size-[30px] items-center justify-center rounded-full bg-hh-dark font-bold text-[11px] text-hh-window">RS</span>

@@ -1,11 +1,12 @@
 /**
- * Customer-facing dispute portal: intake, auth scoping, idempotency, Actions inbox.
+ * Customer dispute chat: intake, auth, idempotency, Actions inbox, voice→confirm→persist path.
  */
 import { describe, expect, it } from "vitest";
 import { freshErp } from "../agent/lib/core/world";
 import { seedPortalDemoOrders } from "../agent/lib/demo/portal_orders";
 import {
   claimToPortalRecord,
+  CUSTOMER_CONV_KIND,
   decideCustomerDispute,
   DEMO_RETAILER_GLN,
   employeeDisputeWorkspace,
@@ -14,6 +15,7 @@ import {
   listEmployeePortalDisputes,
   simulatedSession,
 } from "../agent/lib/dispute/portal";
+import { voiceCapabilities } from "../agent/lib/dispute/voice";
 
 function erpWithPortal() {
   const erp = freshErp();
@@ -232,5 +234,37 @@ describe("customer dispute portal", () => {
     expect(s.simulated).toBe(true);
     expect(s.label).toMatch(/SIMULATED/);
     expect(s.retailer_name).toBe("Esselunga");
+  });
+
+  it("stores conversation as a document, not portal_* tables", async () => {
+    const erp = erpWithPortal();
+    const session = simulatedSession(erp);
+    const a = await handleCustomerMessage(erp, session, {
+      message: "ORD-3001 received only 1100 packages.",
+    });
+    expect(erp.documents({ kind: CUSTOMER_CONV_KIND, ref: a.conversation_id }).length).toBe(1);
+    const body = JSON.parse(erp.documents({ kind: CUSTOMER_CONV_KIND, ref: a.conversation_id })[0].body!);
+    expect(body.messages.some((m: { role: string }) => m.role === "customer")).toBe(true);
+    expect(body.messages.some((m: { role: string }) => m.role === "assistant")).toBe(true);
+  });
+
+  it("spoken complaint path: confirmed transcript text creates employee dispute", async () => {
+    // Voice STT only produces draft text; confirmed text uses the same chat workflow.
+    const caps = voiceCapabilities();
+    expect(caps.browser_speech_fallback).toBe(true);
+    expect(typeof caps.transcription).toBe("boolean");
+
+    const erp = erpWithPortal();
+    const session = simulatedSession(erp);
+    const transcript = "We ordered 1200 Carnaroli on ORD-3001 but received only 1100.";
+    const result = await handleCustomerMessage(erp, session, {
+      message: transcript,
+      idempotencyKey: "voice-draft-confirmed-1",
+    });
+    expect(result.submitted).toBe(true);
+    expect(result.dispute_id).toMatch(/^DSP-/);
+    expect(result.status).toBe("ACTION_REQUIRED");
+    expect(listEmployeePortalDisputes(erp).some((r) => r.dispute_id === result.dispute_id)).toBe(true);
+    expect(erp.notifications().some((n) => n.subjectRef === result.dispute_id)).toBe(true);
   });
 });

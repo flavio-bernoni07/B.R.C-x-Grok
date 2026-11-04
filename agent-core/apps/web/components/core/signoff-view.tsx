@@ -255,8 +255,8 @@ export function SignoffView() {
       {tab === "disputes" ? (
         <p className="mb-3 text-[13px] text-ink-78">
           Customer-reported disputes from the{" "}
-          <a className="underline underline-offset-2" href="/portal">
-            retailer portal
+          <a className="underline underline-offset-2" href="/support">
+            retailer support chat
           </a>
           . Claimed quantities are not treated as verified evidence. No credit note is issued from this tab alone.
         </p>

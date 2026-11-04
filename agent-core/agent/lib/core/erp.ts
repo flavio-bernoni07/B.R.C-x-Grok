@@ -35,8 +35,6 @@ export type Signoff = Omit<typeof s.signoffs.$inferSelect, "proposal" | "reasons
   proposal: Json | null;
   reasons: string[] | null;
 };
-export type PortalConversation = typeof s.portalConversations.$inferSelect;
-export type PortalMessage = Omit<typeof s.portalMessages.$inferSelect, "meta"> & { meta: Json | null };
 export type Notification = typeof s.notifications.$inferSelect;
 
 export const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00");
@@ -110,6 +108,10 @@ export class Erp {
     if (filter.ref) conds.push(eq(s.documents.ref, filter.ref));
     if (filter.kind) conds.push(eq(s.documents.kind, filter.kind));
     return this.db.select().from(s.documents).where(and(...conds)).orderBy(asc(s.documents.docId)).all();
+  }
+
+  updateDocument(docId: string, fields: { body?: string | null; path?: string | null; ref?: string | null }) {
+    this.db.update(s.documents).set(fields).where(eq(s.documents.docId, docId)).run();
   }
 
   // ----- master data ---------------------------------------------------------
@@ -388,79 +390,7 @@ export class Erp {
       .map((r) => this.signoff(r.id)!);
   }
 
-  // ----- customer portal (conversations + inbox notifications) ---------------
-  savePortalConversation(c: {
-    conversationId: string;
-    retailerGln: string;
-    claimId?: string | null;
-    idempotencyKey?: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }) {
-    this.db
-      .insert(s.portalConversations)
-      .values({
-        conversationId: c.conversationId,
-        retailerGln: c.retailerGln,
-        claimId: c.claimId ?? null,
-        idempotencyKey: c.idempotencyKey ?? null,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-      })
-      .run();
-  }
-
-  updatePortalConversation(
-    conversationId: string,
-    fields: Partial<Pick<PortalConversation, "claimId" | "idempotencyKey" | "updatedAt">>,
-  ) {
-    this.db.update(s.portalConversations).set(fields).where(eq(s.portalConversations.conversationId, conversationId)).run();
-  }
-
-  portalConversation(conversationId: string): PortalConversation | undefined {
-    return this.db.select().from(s.portalConversations).where(eq(s.portalConversations.conversationId, conversationId)).get();
-  }
-
-  portalConversationsFor(retailerGln: string): PortalConversation[] {
-    return this.db
-      .select()
-      .from(s.portalConversations)
-      .where(eq(s.portalConversations.retailerGln, retailerGln))
-      .orderBy(asc(s.portalConversations.createdAt))
-      .all();
-  }
-
-  addPortalMessage(m: {
-    messageId: string;
-    conversationId: string;
-    role: string;
-    content: string;
-    at: string;
-    meta?: unknown;
-  }) {
-    this.db
-      .insert(s.portalMessages)
-      .values({
-        messageId: m.messageId,
-        conversationId: m.conversationId,
-        role: m.role,
-        content: m.content,
-        at: m.at,
-        meta: dumps(m.meta ?? null),
-      })
-      .run();
-  }
-
-  portalMessages(conversationId: string): PortalMessage[] {
-    return this.db
-      .select()
-      .from(s.portalMessages)
-      .where(eq(s.portalMessages.conversationId, conversationId))
-      .orderBy(asc(s.portalMessages.at))
-      .all()
-      .map((r) => ({ ...r, meta: loads<Json>(r.meta) }));
-  }
-
+  // ----- inbox notifications (customer dispute chat → Actions) ---------------
   saveNotification(n: {
     notificationId: string;
     kind: string;
@@ -515,8 +445,6 @@ export class Erp {
       this.db.delete(s.orders).run();
       this.db.delete(s.documents).run();
       this.db.delete(s.audit).run();
-      this.db.delete(s.portalMessages).run();
-      this.db.delete(s.portalConversations).run();
       this.db.delete(s.notifications).run();
       this.db.delete(s.counters).run();
     });

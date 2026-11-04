@@ -1,12 +1,13 @@
 /**
- * Simulated retailer session for the hackathon customer portal.
- * Not a production login — the response always carries `simulated: true`.
+ * Simulated retailer session for the customer dispute chat (hackathon).
+ * Not a production login — response always includes `simulated: true`.
  */
 import { getReadyErp } from "@agent/lib/db/app";
 import { DEMO_RETAILER_GLN, simulatedSession } from "@agent/lib/dispute/portal";
+import { voiceCapabilities } from "@agent/lib/dispute/voice";
 import { cookies } from "next/headers";
 
-export const COOKIE = "brc_portal_retailer";
+export const COOKIE = "brc_support_retailer";
 
 export async function GET() {
   const erp = await getReadyErp();
@@ -17,6 +18,7 @@ export async function GET() {
     return Response.json({
       session,
       retailers: erp.retailers().map((r) => ({ gln: r.gln, name: r.name })),
+      voice: voiceCapabilities(),
       warning: "Simulated hackathon session — not a secure production customer portal.",
     });
   } catch (err) {
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     jar.set(COOKIE, session.retailer_id, { httpOnly: true, sameSite: "lax", path: "/" });
     return Response.json({
       session,
+      voice: voiceCapabilities(),
       warning: "Simulated hackathon session — not a secure production customer portal.",
     });
   } catch (err) {
