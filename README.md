@@ -2,25 +2,25 @@
 
 ![B.R.C x Grok dashboard: orders checked by code, invoices matched against what shipped, claims answered with sources](docs/img/banner.gif)
 
-A zero-touch back office on synthetic data + an architectural concept of how data flows from the factory to the administration.
+A zero-touch back office on synthetic data + how data flows from the factory to the administration.
 
-Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a person.
+Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a human input.
 
 ## The problem
 
-A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and contract price, the warehouse plans trucks and loads pallets, the office writes the delivery note, the invoice and the FatturaPA for SdI. Then the retailer counts less than the invoice says, or pays less, and someone answers the claim by digging through four documents. IT'S A LOT OF STUFF TO MANAGE!
+A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and contract price, the warehouse plans trucks and loads pallets, the office writes the delivery note, the invoice and the FatturaPA for SdI. Then maybe the retailer counts less than the invoice says and someone is forced to dig through four documents. IT'S A LOT OF STUFF TO MANAGE!
 
-The only automatic check is an exact text match. threeway, the track's baseline, joins order, delivery and invoice on order number plus item code, so:
+The only automatic check in Riso Scotti's CRM is an exact text match, "threeway". These are some problem we found when testing it:
 
-- a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a one-letter typo in a reference turns into two false alarms
+- a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a price error behind a quantity problem is never named
 
 We are in 2026... we can have better checks than a text matcher.
 
 ## Case study: an invisible error without Grok
 
-Esselunga orders 12,000 packs of Carnaroli 1 kg at €2.20 (contract CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
+Esselunga orders 12000 packs of Carnaroli 1 kg at €2.20 (CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
 | What goes wrong | Without our system | Money lost | With B.R.C x Grok |
 |---|---|---|---|
