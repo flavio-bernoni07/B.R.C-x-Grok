@@ -47,6 +47,47 @@ def _save_outcome(erp: Erp, claim_id: str, outcome: Any) -> None:
                   outcome=outcome.to_dict())
 
 
+COMPLAINT_WINDOW_DAYS = 30  # contract_excerpt.md §4
+
+
+def _iso_date(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def claim_checks(erp: Erp, claim_id: str, extraction: Any, facts: dict[str, Any],
+                 received_on: date) -> tuple[dict[str, Any], list[str]]:
+    """Facts code can settle on its own: the complaint window and duplicate claims.
+    Each failed check is a reason for a person; all of them go to Grok as facts."""
+    order = facts.get("order") or {}
+    order_ref = order.get("order_ref") or extraction.order_ref
+    delivered = [_iso_date(p.get("at")) for p in facts.get("proofs") or [] if p.get("kind") in {"pod", "recadv"}]
+    delivered = [d for d in delivered if d]
+    shipped = _iso_date((facts.get("desadv") or {}).get("ship_date"))
+    delivered_on = min(delivered) if delivered else shipped
+    checks: dict[str, Any] = {"received_on": received_on.isoformat(),
+                              "delivered_on": delivered_on.isoformat() if delivered_on else None,
+                              "complaint_window_days": COMPLAINT_WINDOW_DAYS}
+    reasons: list[str] = []
+    if delivered_on:
+        days = (received_on - delivered_on).days
+        checks["days_after_delivery"] = days
+        checks["inside_complaint_window"] = days <= COMPLAINT_WINDOW_DAYS
+        if days > COMPLAINT_WINDOW_DAYS:
+            reasons.append(f"the claim arrived {days} days after delivery; the contract allows "
+                           f"{COMPLAINT_WINDOW_DAYS} (§4)")
+    same = [c for c in erp.claims() if c["claim_id"] != claim_id and c["order_ref"] == order_ref
+            and c["status"] not in {"reopened", "received"}
+            and (c["extraction"] or {}).get("claim_type") == extraction.claim_type.value
+            and (c["extraction"] or {}).get("invoice_ref") == extraction.invoice_ref]
+    checks["earlier_claims_same_order_and_type"] = [c["claim_id"] for c in same]
+    for c in same:
+        reasons.append(f"claim {c['claim_id']} on the same order, invoice and type is already {c['status']}")
+    return checks, reasons
+
+
 def handle_claim(
     erp: Erp,
     email_text: str,
@@ -57,6 +98,7 @@ def handle_claim(
     verdict_caller: Callable[[list[dict[str, str]]], dict[str, Any]] | None = None,
     include_fixtures: bool = True,
     issue_date: date | None = None,
+    received_on: date | None = None,
 ) -> dict[str, Any]:
     doc_id = erp.add_document("claim email", None, email_text, path=source_name)
     claim_id = erp.next_id("claim", "CLM-")
@@ -68,20 +110,25 @@ def handle_claim(
     facts = pull_facts(extraction, store=_store(erp, include_fixtures))
     erp.log("code", "dispute.facts_pulled", claim_id, detail={"misses": [m.to_dict() for m in facts.misses],
                                                                "threeway": facts.threeway.summary if facts.threeway else None})
-    verdict = decide_verdict(extraction, facts, grok_caller=verdict_caller)
-    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict()}
+    facts_dict = facts.to_dict()
+    checks, check_reasons = claim_checks(erp, claim_id, extraction, facts_dict, received_on or date.today())
+    facts_dict["checks"] = checks
+    verdict = decide_verdict(extraction, facts_dict, grok_caller=verdict_caller)
+    reasons = verdict.sign_off_reasons + [r for r in check_reasons if r not in verdict.sign_off_reasons]
+    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict(), "checks": checks,
+                                        "sign_off_reasons": reasons, "needs_sign_off": bool(reasons)}
     erp.log("grok", "dispute.verdict", claim_id, detail={"decision": verdict.decision.value, "amount": verdict.amount,
-                                                          "sign_off_reasons": verdict.sign_off_reasons})
-    erp.set_claim(claim_id, order_ref=extraction.order_ref, invoice_ref=extraction.invoice_ref,
+                                                          "sign_off_reasons": reasons})
+    erp.set_claim(claim_id, order_ref=(facts.order or {}).get("order_ref") or extraction.order_ref,
+                  invoice_ref=(facts.invoice or {}).get("invoice_ref") or extraction.invoice_ref,
                   extraction=extraction.to_dict(), verdict=verdict_dict)
 
-    facts_dict = facts.to_dict()
-    if verdict.needs_sign_off:
+    if reasons:
         case_id = signoff.request(
             erp, row="dispute", kind="verdict", subject_ref=claim_id,
             title=f"Claim {claim_id} on {extraction.order_ref or 'an unknown order'}: Grok proposes {verdict.decision.value}",
             proposal={"verdict": verdict_dict, "facts": facts_dict, "out_dir": str(out_dir)},
-            reasons=verdict.sign_off_reasons,
+            reasons=reasons,
         )
         erp.set_claim(claim_id, status="awaiting_sign_off")
         return {"status": "awaiting_person", "claim_id": claim_id, "case_id": case_id, "verdict": verdict_dict}

@@ -29,6 +29,7 @@ from core.world import fresh_erp
 from dispute.service import approve_verdict, handle_claim, offline_callers
 from order.service import confirm_order, receive_order
 from shipping import cases, warehouse
+from shipping.receiving import record_receiving_advice
 from shipping.service import export_for_dispute, ingest_confirmed_order, invoice_shipment, record_delivery, reconcile_and_send
 
 ROOT = Path(__file__).resolve().parent
@@ -106,13 +107,16 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     record_delivery(erp, sent["desadv_ref"], signed_by="Esselunga CeDi Melzo", received={"8000000000001": 10560},
                     note="1 pallet mancante (240 pz)", when="2026-11-06")
     say("Delivery: the retailer signs the DDT with a reservation, 10,560 received")
+    gap = record_receiving_advice(erp, (GOLDEN / "RECADV_ESS-GOLD-001.edi").read_text())
+    say(f"RECADV {gap['recadv_ref']}: {gap['exceptions'][0]['explanation']} (€{gap['exceptions'][0]['financial_impact_eur']:.2f}), "
+        "known before any claim email")
     result["shipping"] = rec["status"]
 
     if not quiet:
         step("3. Dispute")
     read_c, verdict_c = (None, None) if live else offline_callers(GOLDEN / "grok_offline.json")
     claim = handle_claim(erp, (GOLDEN / "claim_email.txt").read_text(), out_dir=out, read_caller=read_c,
-                         verdict_caller=verdict_c, issue_date=date(2026, 11, 7))
+                         verdict_caller=verdict_c, issue_date=date(2026, 11, 7), received_on=date(2026, 11, 7))
     v = claim["verdict"]
     say(f"Claim {claim['claim_id']}: Grok proposes {v['decision']} €{v['amount']}, sources "
         f"{', '.join(p['source']['kind'] for p in v['points'])}")

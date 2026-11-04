@@ -116,7 +116,8 @@ def record_delivery(erp: Erp, desadv_ref: str, *, signed_by: str, received: dict
     reserve = f", with reservation: {note}" if note else ", no notes"
     summary = f"Signed DDT {shipment['ddt_ref']} by {signed_by}{' on ' + when if when else ''}: {'; '.join(parts)}{reserve}"
     doc_id = f"POD-{desadv_ref}"
-    erp.add_proof(doc_id=doc_id, order_ref=shipment["order_ref"], kind="pod", ref=shipment["ddt_ref"], summary=summary)
+    erp.add_proof(doc_id=doc_id, order_ref=shipment["order_ref"], kind="pod", ref=shipment["ddt_ref"], summary=summary,
+                  at=when)
     erp.log("retailer", "shipping.delivered", shipment["order_ref"], source_doc=doc_id, detail={"received": got, "note": note})
     return doc_id
 
