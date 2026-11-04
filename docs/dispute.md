@@ -3,36 +3,56 @@
 **Owner:** carlojolly / Dispute
 **Boxes on the map:** Claim email, Read the claim, Pull the facts, Verdict + sources, Credit note or reply
 
+## Status
+
+**Pipeline done** on `main`: claim reader → pull facts (baseline threeway **and** Shipping `reconcile`) → verdict + sources → TD04 / evidence reply, with ambiguity-only sign-off (no euro threshold). The HTML process map’s “>€500” rule is **obsolete** — see [DECISIONS.md](../DECISIONS.md) (4 Nov).
+
 ## Starting points
 
 - Claim emails are generated with Grok (the brief gives no real ones). The brief's minimum demo names partial delivery, price difference and contested goods; a short payment (the retailer pays less than the invoice) is the other common case.
 - [CUAD](https://github.com/TheAtticusProject/cuad): about 510 real US commercial contracts, annotated by lawyers in 41 clause types. Use it to write one synthetic supply contract between Riso Scotti and a retailer: complaint deadline, delivery tolerance, penalties, promo pricing. The contracts are American and not about food, so adapt them.
 - Credit note: FatturaPA document type `TD04`. The EDI version is an INVOIC with `BGM` code 381.
-- Evidence for a verdict: the order, the DESADV, the invoice, the threeway result, the signed DDT, the contract clause.
+- Evidence for a verdict: the order, the DESADV, the invoice, **Shipping reconcile causes** (preferred) / baseline threeway, the signed DDT, the contract clause.
 - The jury checks that disputes are resolved "with the right evidence" and that every action traces back to a source document, so every point of a verdict needs a citation.
-
-## What I found
 
 ## What I decided
 
 - **Split of work:** Grok decides and cites sources; **code** writes TD04 / EDI / amounts / evidence reply. Dispute ends in a credit note **or** a reply — never a new invoice.
-- First dispute-owned slice is the **claim reader** (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Remittance `PRI` / `PRI/UNK` (and short-pay price text) maps to `claim_type: pricing`. Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
-- Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage).
-- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from the shared Mini ERP when Shipping exported them, else mock fixtures (`data/disputes/erp/catalog.json`), then run three-way matching on every claim. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line; **DESADV = goods received (GRN)**. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok.
-- Third slice is **Verdict + sources** (`dispute/verdict.py`): Grok reads the Playbook (`data/disputes/playbook.md`) plus claim + facts + contract excerpt (`data/disputes/contract_excerpt.md`) and proposes `accept` | `partial` | `reject` with per-point citations. Code validates amounts against claim/facts/threeway (no invented totals).
-- Fourth slice is **Credit note or reply** (`dispute/outcome.py`): code emits FatturaPA **TD04** via `a38` (PyPI name for Truelite/python-a38) plus a minimal EDI INVOIC **BGM 381** on accept/partial; on reject it writes an evidence reply listing DESADV/DDT/threeway/contract citations from the verdict. Amounts/refs come only from verdict/facts. Outputs under `data/disputes/outcomes/`. Sample verdicts in `data/disputes/verdicts/`. No euro threshold: an ambiguous verdict waits for a person (`--approved-by`) before anything is written; the demo runner defaults `--approved-by demo`. The sign-off web UI is still to build.
+- **Claim reader** (`dispute/claim_reader.py`): Grok extracts structured fields; missing refs stay `null`. Remittance `PRI` / `PRI/UNK` maps to `pricing`.
+- **Pull the facts** (`dispute/pull_facts.py`): Mini ERP / fixture lookup, then **both** vendored baseline threeway and `shipping.reconcile.reconcile_documents` (same code `bench.score` measures). Verdicts should cite `reconcile` cause codes when present.
+- **Verdict + sources** (`dispute/verdict.py`): Playbook + contract + facts → accept / partial / reject with sources. Confidence gate **0.55** (not 0.7).
+- **Outcome** (`dispute/outcome.py`): TD04 + INVOIC 381, or evidence reply. Ambiguous cases wait for a person.
+- **Sign-off desk** (`python -m dispute.desk --db …`): list / show / approve / reject pending dispute cases on `core.signoff`. Shared CRM can replace this later.
+- **Jury Mini-ERP path:** `python -m dispute.service --db data/demo.sqlite claim.txt --out-dir …` (default **no** fixture merge). Same via `./scripts/run_dispute_claim.sh … --erp-db data/demo.sqlite`.
+
+## Learning beat (hand-off → fewer hand-offs)
+
+1. Ambiguous claim A goes to a person (desk / Sara).
+2. Their approve **activates a rule** for that case fingerprint (claim type + threeway + reconcile causes + proofs + flags).
+3. Claim B of the same kind closes alone, citing the rule — no Grok, no person.
+4. Shown in `demo.py` (RS26112 → Sara → RS26113) and `tests/test_learning.py::test_person_signoff_teaches_the_next_similar_claim`.
+
+## Current work (after the pipeline)
+
+1. Prefer Shipping reconcile citations in live verdicts (facts already carry them; learning signature uses them).
+2. Keep the desk CLI as the person path until the shared CRM screen is the default demo surface.
+3. Use `--erp-db` (no fixtures) for any jury-picked claim against an order already in the Mini ERP.
+
+**Case pack on the desk:** `dispute.desk show` leads with why handed off + briefing + evidence index; `--pack-dir` writes one folder (`README.md`, briefing, evidence, verdict, facts).
+
+Still later / not blocking the demo: quality-lot evidence handoff, shared contract file.
 
 ## What I need from others
 
-- Order, DESADV, invoice, threeway result and signed DDT for any order, from the Mini ERP (core, Shipping and invoicing)
+- Order, DESADV, invoice and signed DDT for any order, from the Mini ERP (core, Shipping)
 - The contract (core or me) — dispute-local excerpt is in `data/disputes/contract_excerpt.md` until shared core lands
 
 ## What I hand to others
 
 - A verdict per claim: accept, partial or reject, with the amount and a source for every point
 - A credit note or a reply to the retailer, saved in the Mini ERP
-- Structured claim extraction from the claim reader (input for Pull the facts)
-- A facts object per claim: linked order/DESADV/invoice, threeway lines+reasons, proof refs, lookup misses (input for Verdict)
+- Facts with baseline threeway **and** Shipping reconcile causes
+- Desk / CRM sign-off path for ambiguous cases
 
 ## Open questions
 

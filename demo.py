@@ -9,7 +9,10 @@
               fixed through an exception case) -> dispatch 10,800 -> TD01 + INVOIC 380 -> reconcile
 3. Dispute:   the retailer reports a missing pallet, the signed DDT backs it -> credit note
               with no person (nothing is ambiguous); then an unclear claim goes to a person
-4. Digest:    the weekly summary for the accountant and managers
+4. Cash:      Esselunga pays less: one deduction is our own credit note (matched), the other
+              becomes a claim that a person decides
+5. Planning:  this week's buy-or-wait calls, a lot checked from its photo, the stock projection
+6. Digest:    the weekly summary for the accountant and managers
 """
 
 from __future__ import annotations
@@ -27,8 +30,10 @@ from core.digest import build_digest
 from core.stock import record_event
 from core.world import fresh_erp
 from dispute.service import approve_verdict, handle_claim, offline_callers
+from finance.receivables import aging, record_remittance
 from order.service import confirm_order, receive_order
 from shipping import cases, warehouse
+from shipping.receiving import record_receiving_advice
 from shipping.service import export_for_dispute, ingest_confirmed_order, invoice_shipment, record_delivery, reconcile_and_send
 
 ROOT = Path(__file__).resolve().parent
@@ -40,7 +45,8 @@ def step(title: str) -> None:
     print(f"\n== {title}")
 
 
-def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None, quiet: bool = False) -> dict:
+def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None, quiet: bool = False,
+        with_planning: bool = True) -> dict:
     say = (lambda *a: None) if quiet else print
     if live and not grok.has_key():
         raise SystemExit("--live needs XAI_API_KEY or GROK_API_KEY")
@@ -106,13 +112,16 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     record_delivery(erp, sent["desadv_ref"], signed_by="Esselunga CeDi Melzo", received={"8000000000001": 10560},
                     note="1 pallet mancante (240 pz)", when="2026-11-06")
     say("Delivery: the retailer signs the DDT with a reservation, 10,560 received")
+    gap = record_receiving_advice(erp, (GOLDEN / "RECADV_ESS-GOLD-001.edi").read_text())
+    say(f"RECADV {gap['recadv_ref']}: {gap['exceptions'][0]['explanation']} (€{gap['exceptions'][0]['financial_impact_eur']:.2f}), "
+        "known before any claim email")
     result["shipping"] = rec["status"]
 
     if not quiet:
         step("3. Dispute")
     read_c, verdict_c = (None, None) if live else offline_callers(GOLDEN / "grok_offline.json")
     claim = handle_claim(erp, (GOLDEN / "claim_email.txt").read_text(), out_dir=out, read_caller=read_c,
-                         verdict_caller=verdict_c, issue_date=date(2026, 11, 7))
+                         verdict_caller=verdict_c, issue_date=date(2026, 11, 7), received_on=date(2026, 11, 7))
     v = claim["verdict"]
     say(f"Claim {claim['claim_id']}: Grok proposes {v['decision']} €{v['amount']}, sources "
         f"{', '.join(p['source']['kind'] for p in v['points'])}")
@@ -132,11 +141,81 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
         done = approve_verdict(erp, case["case_id"], by="Sara, credit desk",
                                reason="Late gate-in, quantities agree: reply with the evidence", playbook_path=playbook,
                                issue_date=date(2026, 11, 7))
-        say(f"Sara approves; {done['outcome']['kind']} written; the case is added to the Playbook's past cases")
+        say(f"Sara approves; {done['outcome']['kind']} written; learned rule {done['learned_rule_id']}")
+        result["learned_rule_id"] = done["learned_rule_id"]
     result["unclear_claim"] = claim2["status"]
 
+    # Same kind of ambiguous claim on another order: the learned rule decides, no person.
+    twin = json.loads((DISPUTES / "extractions" / "06_ambiguous_twin.json").read_text())
+    claim3 = handle_claim(
+        erp, (DISPUTES / "claims" / "06_ambiguous_otif_twin.txt").read_text(), out_dir=out,
+        read_caller=None if live else (lambda _t: dict(twin)),
+        verdict_caller=None if live else (lambda _m: json.loads(json.dumps(unclear_verdict))),
+        received_on=date(2026, 11, 7),
+    )
+    say(f"Claim {claim3['claim_id']} (same kind, order RS26113): {claim3['status']}"
+        + (f", rule {claim3['verdict']['points'][0]['source']['ref']}" if claim3["status"] == "closed" else ""))
+    result["learned_claim"] = claim3["status"]
+
     if not quiet:
-        step("4. Weekly digest")
+        step("4. Cash")
+    offline = json.loads((GOLDEN / "grok_offline.json").read_text())
+    paid = record_remittance(erp, (GOLDEN / "REMADV_ESS-GOLD-001.edi").read_text(), out_dir=out,
+                             verdict_caller=None if live else (lambda _m: json.loads(json.dumps(offline["deduction_verdict"]))),
+                             received_on=date(2026, 11, 30))
+    line = paid["lines"][0]
+    say(f"Remittance {paid['remittance_ref']}: Esselunga pays €{line['paid']:,.2f} on {line['invoice_ref']}")
+    for d in line["deductions"]:
+        if d["status"] == "matched_credit":
+            say(f"  €{d['amount']:.2f} deducted = our credit note {d['credit_note']}: matched, no person")
+        else:
+            case = erp.signoff(d["case_id"]) if d.get("case_id") else None
+            say(f"  €{d['amount']:.2f} deducted with no credit note behind it: claim {d['claim_id']}"
+                + (f", sign-off {case['case_id']}: {'; '.join(case['reasons'])}" if case else f", {d['claim_status']}"))
+            if case:
+                approve_verdict(erp, case["case_id"], by="Sara, credit desk",
+                                reason="No contract clause for flyer contributions: ask Esselunga to repay",
+                                playbook_path=playbook, issue_date=date(2026, 11, 30))
+                say("  Sara approves: Esselunga gets the evidence and a request to repay; the €300 is tracked")
+    ag = aging(erp, date(2026, 11, 30))
+    say(f"Open receivables: €{ag['open_total']:,.2f}, of which disputed deductions "
+        f"€{sum(d['amount'] for d in ag['open_deductions']):,.2f}")
+    result["cash"] = {"open": ag["open_total"], "deductions": [d["status"] for d in line["deductions"]]}
+
+    if with_planning:
+        if not quiet:
+            step("5. Forecast and quality")
+        from forecast_quality.advisor import advice
+        from forecast_quality.demand import production_suggestion, stock_projection
+        from forecast_quality.memo import weekly_memo
+        from forecast_quality.quality import check_lot, make_sample
+
+        calls = advice(["Carnaroli", "Arborio", "Selenio", "Long B"])
+        note = weekly_memo(calls)
+        say("Monday memo for the paddy buyer (" + note["by"] + "):")
+        for line in note["memo"].splitlines()[2:6]:
+            say("  " + line)
+        tray = out / "lot_LOT-PADDY-17.png"
+        make_sample(tray, whole=72, broken=18, chalky=2, clumps=1, seed=5)
+        lot = check_lot(erp, tray, variety="Carnaroli", lot="LOT-PADDY-17", tonnes=30)
+        r = lot["report"]
+        say(f"Lot LOT-PADDY-17, 30 t Carnaroli: broken {r['broken_pct']}%, whole-grain yield {r['whole_yield']} "
+            f"against {r['contract_whole_yield']}: cut €{r['price_cut_eur_t']:.2f}/t (€{r['lot_value_cut_eur']:,.2f}), "
+            f"goes to {r['destination']}")
+        if lot["status"] == "awaiting_person":
+            from crm.actions import decide
+
+            decide(erp, lot["case_id"], approve=True, by="Lab, Pavia", reason="Second sample confirms the broken count")
+            say("  The lab confirms the sample; the contract cut applies")
+        rows = stock_projection(erp, "8000000000001", start=date(2026, 11, 9), weeks=6)
+        tip = production_suggestion(rows)
+        say(f"Carnaroli 1 kg, next 6 weeks: {', '.join(f'{x['week']} {x['closing']:,.0f}' for x in rows[:4])}")
+        if tip:
+            say(f"  Predictive planning: {tip['why']}; plan about {tip['qty']:,} packs before {tip['make_before']}")
+        result["planning"] = {"calls": [c["call"] for c in calls], "lot": lot["status"], "suggestion": tip}
+
+    if not quiet:
+        step("6. Weekly digest")
     digest = build_digest(erp, title="Weekly digest, week of 2 Nov 2026")
     say(digest)
     result.update({"pending_signoffs": len(signoff.pending(erp)), "audit_events": len(erp.audit()),

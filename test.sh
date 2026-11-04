@@ -8,4 +8,4 @@ if [ ! -x .venv/bin/python ]; then
   "$PY" -m venv .venv
 fi
 .venv/bin/python -m pip install -q -r requirements.txt
-env -u XAI_API_KEY -u GROK_API_KEY .venv/bin/python -m pytest -q "$@"
+env -u XAI_API_KEY -u GROK_API_KEY BRC_OFFLINE=1 .venv/bin/python -m pytest -q "$@"

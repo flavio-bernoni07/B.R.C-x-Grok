@@ -16,7 +16,7 @@ from typing import Any
 
 from core.erp import Erp, now_iso
 
-ROWS = {"order", "shipping", "dispute"}
+ROWS = {"order", "shipping", "dispute", "inbox", "quality"}
 
 
 class SignoffError(ValueError):

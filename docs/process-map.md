@@ -54,7 +54,7 @@
 ## The parts every row shares
 
 - **Playbook (.md).** A text file with the rules plus every past human decision. Grok reads it before deciding anything, and every sign-off adds a case to it, so over time fewer cases need a person.
-- **Mini ERP.** One database for orders, stock, shipments, invoices, claims and decisions. Every Check reads from it and every Out is saved to it. Each record points to the document it came from, which is how we meet the "every action traceable to its source document" criterion.
+- **Mini ERP.** One database for orders, stock, shipments, invoices, claims and decisions. Every Check reads from it and every Out is saved to it. Each record points to the document it came from, which is how we meet the "every action traceable to its source document" criterion. In production it connects to Riso Scotti's own ERP, which manages inventory: stock, batches and production events come from that ERP, and every document we write goes back to it.
 - **Accountant, managers.** They get a weekly digest (totals, open problems, credit notes issued) instead of reading every invoice.
 - **Production events.** Simulated, as the brief asks: a batch finished, a quality hold. They change stock. Predictive planning, a stretch goal, would forecast them.
 

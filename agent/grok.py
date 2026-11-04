@@ -5,7 +5,8 @@
   and a second bad answer raises GrokAnswerRejected so the case goes to a person.
 - Model per task: XAI_MODEL_<TASK> (dots become underscores, e.g.
   XAI_MODEL_DISPUTE_VERDICT), then XAI_MODEL, then GROK_MODEL, then the default below.
-- Key from XAI_API_KEY or GROK_API_KEY; base URL from XAI_BASE_URL.
+- Key from XAI_API_KEY or GROK_API_KEY; base URL from XAI_BASE_URL. Each setting is read
+  from the environment first, then from the repo's gitignored .env.local.
 
 Grok proposes; code checks; a person decides when it is unclear. Nothing here
 writes a document or an amount.
@@ -17,6 +18,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Callable
 
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
@@ -39,9 +41,29 @@ class GrokAnswerRejected(RuntimeError):
         self.problems = problems
 
 
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env.local"  # gitignored
+
+
+def _env_file() -> dict[str, str]:
+    """KEY=value lines from the repo's .env.local, if there is one. Ignored when BRC_OFFLINE=1
+    (the test suite), so a key saved there never turns an offline test into a live call."""
+    if os.environ.get("BRC_OFFLINE") == "1" or not ENV_FILE.is_file():
+        return {}
+    out = {}
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#"):
+            out[key.strip().removeprefix("export ").strip()] = value.strip().strip('"').strip("'")
+    return out
+
+
+def _setting(name: str) -> str:
+    return (os.environ.get(name) or _env_file().get(name) or "").strip()
+
+
 def api_key() -> str | None:
     for name in ("XAI_API_KEY", "GROK_API_KEY"):
-        value = os.environ.get(name, "").strip()
+        value = _setting(name)
         if value:
             return value
     return None
@@ -52,16 +74,16 @@ def has_key() -> bool:
 
 
 def base_url() -> str:
-    return os.environ.get("XAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    return (_setting("XAI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
 
 
 def model_for(task: str | None = None) -> str:
     if task:
-        specific = os.environ.get("XAI_MODEL_" + task.upper().replace(".", "_").replace("-", "_"), "").strip()
+        specific = _setting("XAI_MODEL_" + task.upper().replace(".", "_").replace("-", "_"))
         if specific:
             return specific
     for name in ("XAI_MODEL", "GROK_MODEL"):
-        value = os.environ.get(name, "").strip()
+        value = _setting(name)
         if value:
             return value
     return DEFAULT_MODEL

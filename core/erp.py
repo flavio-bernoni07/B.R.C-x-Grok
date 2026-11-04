@@ -134,7 +134,8 @@ CREATE TABLE IF NOT EXISTS proofs (
     order_ref TEXT NOT NULL,
     kind TEXT NOT NULL,
     ref TEXT,
-    summary TEXT
+    summary TEXT,
+    at TEXT
 );
 CREATE TABLE IF NOT EXISTS claims (
     claim_id TEXT PRIMARY KEY,
@@ -427,10 +428,11 @@ class Erp:
         self.db.execute("UPDATE invoices SET status = ? WHERE invoice_ref = ?", (status, invoice_ref))
         self.db.commit()
 
-    def add_proof(self, *, doc_id: str, order_ref: str, kind: str, ref: str, summary: str) -> None:
+    def add_proof(self, *, doc_id: str, order_ref: str, kind: str, ref: str, summary: str,
+                  at: str | None = None) -> None:
         self.db.execute(
-            "INSERT OR REPLACE INTO proofs(doc_id, order_ref, kind, ref, summary) VALUES(?,?,?,?,?)",
-            (doc_id, order_ref, kind, ref, summary),
+            "INSERT OR REPLACE INTO proofs(doc_id, order_ref, kind, ref, summary, at) VALUES(?,?,?,?,?,?)",
+            (doc_id, order_ref, kind, ref, summary, at),
         )
         self.db.commit()
 

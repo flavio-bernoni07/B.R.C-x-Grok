@@ -1,4 +1,12 @@
 # Runtime: a38 is the PyPI name for Truelite/python-a38 (FatturaPA TD04).
 a38>=0.1.8,<0.2
+# Forecast and quality (forecast_quality/): numbers, the price model, the photo check, the Pink Sheet
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+pillow>=10
+openpyxl>=3.1
+# Root certificates for the data downloads on python.org macOS builds
+certifi
 # Dev / CI:
 pytest>=8.0,<9
