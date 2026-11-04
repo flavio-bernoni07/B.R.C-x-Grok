@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { DisputesView } from "@/components/dispute";
 
 export default function DisputesPage() {
-  return <DisputesView />;
+  return (
+    <Suspense fallback={null}>
+      <DisputesView />
+    </Suspense>
+  );
 }

@@ -27,7 +27,10 @@ export function SignoffView() {
 
   return (
     <Page>
-      <PageHeader title="Sign-off" sub="A person decides when a case is unclear, and writes one line on why. Grok and code never decide here.">
+      <PageHeader
+        title="Sign-off"
+        sub="When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject that proposal and write one line on why — that line is what the Playbook learns from."
+      >
         <Segmented
           value={filter}
           onChange={setFilter}
