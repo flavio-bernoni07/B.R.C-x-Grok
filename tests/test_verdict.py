@@ -300,7 +300,8 @@ def test_point_without_source_needs_sign_off() -> None:
 
 
 def test_claim_type_not_in_playbook_needs_sign_off() -> None:
-    claim = load_claim_json(EXTRACTIONS / "04_short_payment.json")  # claim_type "other"
+    # Synthetic "other" (fixture 04 remittance is now pricing after PRI/UNK mapping).
+    claim = dict(_CLEAR_CLAIM, claim_type="other", amount=70.0, order_ref="RS2026/771")
     verdict = parse_verdict_payload(
         _clear_payload(70.0), known_amounts=[70.0], claim=claim, facts={"misses": []}
     )
