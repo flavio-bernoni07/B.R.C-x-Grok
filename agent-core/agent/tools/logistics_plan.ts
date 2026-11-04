@@ -1,18 +1,21 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { getReadyErp } from "../lib/db/app";
+import { DISPATCH_DAY } from "../lib/demo/dispatch";
 import { logisticsPlan } from "../lib/logistics/plan";
 
 export default defineTool({
   description:
-    "Logistics agent: shared trucks and shorter routes for confirmed orders waiting to ship. Groups orders by delivery " +
-    "date, fills 33 pallet / 24 t trucks largest first, lets nearby delivery points (within 40 km) share a truck, orders " +
-    "the stops from and back to Pavia, and compares km, litres, euros and CO2 with one truck per order. Distances are " +
-    "estimates on demo coordinates. Orders are never split. With scenario=true it adds a few marked demo orders (not " +
-    "saved) to show consolidation. A plan only: it books or dispatches nothing.",
-  inputSchema: z.object({ scenario: z.boolean().default(false).describe("Add the marked demo orders to show consolidation") }),
+    "Logistics agent, read only: the current plan for shared trucks and stop order for one ship date, with km, " +
+    "litres, diesel € and CO2 (an estimate) against one truck per order. Same planner as shipping_plan_routes: real " +
+    "road distances (OSRM), ICCT fuel use, MASE diesel price, 33 pallets / 24 t per truck, the 9-hour driving limit. " +
+    "Orders not confirmed yet are shown as a preview. It books nothing: use shipping_plan_routes to send a plan to the " +
+    "transport planner's sign-off. Sources: Mini ERP orders, data/world/logistics.json.",
+  inputSchema: z.object({
+    ship_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(`Ship date, YYYY-MM-DD (default ${DISPATCH_DAY})`),
+  }),
   label: { start: () => "Plan shared trucks" },
-  async execute({ scenario }) {
-    return logisticsPlan(await getReadyErp(), { scenario });
+  async execute({ ship_date }) {
+    return logisticsPlan(await getReadyErp(), { shipDate: ship_date });
   },
 });

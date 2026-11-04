@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { BenchCard, ExceptionCaseCard, ReconcileCard, ShipmentCard, ShippingListCard } from "./cards";
+import { RoutePlanCard } from "./route-plan";
 
 export { BenchCard, ExceptionCaseCard, ReconcileCard, ShipmentCard, ShippingListCard } from "./cards";
+export { RoutePlanBody, RoutePlanCard, RoutePlanPanel } from "./route-plan";
 export { ShippingView } from "./shipping-view";
 
 /** Chat cards for the Shipping and benchmark tools (tool name → component). */
@@ -12,4 +14,5 @@ export const cards: Record<string, (props: { output: unknown }) => ReactNode> = 
   shipping_exception_cases: ExceptionCaseCard,
   shipping_propose_resolution: ExceptionCaseCard,
   bench_score: BenchCard,
+  shipping_plan_routes: RoutePlanCard,
 };

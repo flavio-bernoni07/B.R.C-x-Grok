@@ -19,6 +19,8 @@ import {
 import type { AuditEntry, Signoff } from "@agent/lib/core/erp";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { claimTypeLabel, decisionLabel, sourceKindLabel } from "@/components/dispute/format";
+import { actionLabel } from "@/components/shipping/format";
 import { DataTable, Facts, PageHeader, Panel, Pill, type PillTone, Segmented, SourceTag, day, eur, qty } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { AuditList } from "./audit";
@@ -52,16 +54,23 @@ function Section({ title, children }: { readonly title: string; readonly childre
   );
 }
 
-/** Proposal facts for evidence: scalar fields, plus a sourced point list for dispute verdicts. */
+/** Proposal facts for evidence: documents pulled, sourced points, then scalars / raw fallback. */
 function Evidence({ c }: { readonly c: Signoff }) {
   const p = obj(c.proposal) ?? {};
   const ref = caseOrderRef(c);
-  const scalars = Object.entries(p).filter(([k, v]) => !/(_dir|_path|draft_ordrsp)$/.test(k) && (v == null || typeof v !== "object"));
+  const scalars = Object.entries(p).filter(([k, v]) => !/(_dir|_path|draft_ordrsp|verdict|facts)$/.test(k) && (v == null || typeof v !== "object"));
   const verdict = obj(p.verdict);
+  const facts = obj(p.facts);
+  const claim = obj(verdict?.claim) ?? obj(facts?.claim);
   const points = arr(verdict?.points).map(obj).filter(Boolean) as J[];
+  const order = obj(facts?.order);
+  const desadv = obj(facts?.desadv);
+  const invoice = obj(facts?.invoice);
+  const proofs = arr(facts?.proofs).map(obj).filter(Boolean) as J[];
+  const misses = arr(facts?.misses).map(obj).filter(Boolean) as J[];
   const evidence = obj(obj(p.evidence) ?? obj(obj(p.case)?.evidence));
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <Facts
         items={[
           ...(ref ? ([["Order", orderLink(ref)]] as [ReactNode, ReactNode][]) : []),
@@ -69,28 +78,149 @@ function Evidence({ c }: { readonly c: Signoff }) {
           ...scalars.map(([k, v]) => [words(k), text(v)] as [ReactNode, ReactNode]),
         ]}
       />
+      {claim ? (
+        <div>
+          <div className="mb-1 text-[12px] text-ink-68">What the retailer claimed</div>
+          <Facts
+            items={[
+              ["Type", claimTypeLabel(typeof claim.claim_type === "string" ? claim.claim_type : null)],
+              ["Order", text(claim.order_ref)],
+              ["Amount", typeof claim.amount === "number" ? eur(claim.amount) : "–"],
+              ["Quantity", typeof claim.quantity === "number" ? qty(claim.quantity) : "–"],
+              ["Product", text(claim.product)],
+              ...(typeof claim.raw_notes === "string" && claim.raw_notes ? ([["Notes", claim.raw_notes]] as [ReactNode, ReactNode][]) : []),
+            ]}
+          />
+        </div>
+      ) : null}
       {points.length ? (
-        <ul className="space-y-1">
-          {points.map((pt, i) => {
-            const src = obj(pt.source);
-            return (
-              <li key={i} className="flex items-start gap-2">
-                <span className="min-w-0 flex-1">{text(pt.text)}</span>
-                {src ? <SourceTag title={text(src.detail)}>{text(src.ref)}</SourceTag> : <SourceTag>no source</SourceTag>}
-              </li>
-            );
-          })}
-        </ul>
+        <div>
+          <div className="mb-1 text-[12px] text-ink-68">Evidence you can check (each point needs a source)</div>
+          <ul className="divide-y divide-[var(--color-hairline)]">
+            {points.map((pt, i) => {
+              const src = obj(pt.source);
+              return (
+                <li key={i} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2">
+                  <span className="min-w-0 flex-1">{text(pt.text)}</span>
+                  {typeof pt.amount === "number" ? <b className="tabular-nums">{eur(pt.amount)}</b> : null}
+                  {src ? (
+                    <SourceTag title={text(src.detail)}>
+                      {sourceKindLabel(String(src.kind ?? "other"))} · {text(src.ref) === "unspecified" ? "no source" : text(src.ref)}
+                    </SourceTag>
+                  ) : (
+                    <SourceTag>no source</SourceTag>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+      {facts ? (
+        <div>
+          <div className="mb-1 text-[12px] text-ink-68">Documents on file</div>
+          <div className="flex flex-wrap gap-2">
+            {order?.order_ref ? <SourceTag>Order {text(order.order_ref)}</SourceTag> : <span className="text-st-attention-ink">Order not found</span>}
+            {typeof order?.customer === "string" ? <span className="text-ink-68">{order.customer}</span> : null}
+            {desadv?.desadv_ref ? <SourceTag>DESADV {text(desadv.desadv_ref)}</SourceTag> : <span className="text-st-attention-ink">DESADV not found</span>}
+            {invoice?.invoice_ref ? <SourceTag>Invoice {text(invoice.invoice_ref)}</SourceTag> : <span className="text-st-attention-ink">Invoice not found</span>}
+          </div>
+          {proofs.length ? (
+            <ul className="mt-2 space-y-1">
+              {proofs.map((pr, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-2">
+                  <SourceTag>
+                    {sourceKindLabel(String(pr.kind ?? "other"))} · {text(pr.ref ?? pr.doc_id)}
+                  </SourceTag>
+                  <span className="text-ink-78">{text(pr.summary)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {misses.length ? (
+            <ul className="mt-2 list-disc pl-5 text-st-attention-ink">
+              {misses.map((m, i) => (
+                <li key={i}>
+                  {text(m.kind)}: {text(m.detail)}
+                  {m.queried ? ` (${text(m.queried)})` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       {evidence ? (
         <pre className="max-h-48 overflow-auto rounded-lg bg-hh-honeydew p-2 font-mono text-[11px]">{JSON.stringify(evidence, null, 2)}</pre>
       ) : null}
       <details className="text-[12px]">
-        <summary className="cursor-pointer select-none text-ink-68">Full proposal</summary>
+        <summary className="cursor-pointer select-none text-ink-68">Full proposal (raw)</summary>
         <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-hh-honeydew p-3 font-mono text-[11px] text-ink-78">
           {JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => !/(_dir|_path)$/.test(k))), null, 2)}
         </pre>
       </details>
+    </div>
+  );
+}
+
+/** What Approve / Reject does for this row — the judgment the person is making. */
+function DecisionConsequences({ c }: { readonly c: Signoff }) {
+  const p = obj(c.proposal) ?? {};
+  if (c.row === "dispute") {
+    const v = obj(p.verdict) ?? {};
+    const decision = String(v.decision ?? "decide");
+    const amount = typeof v.amount === "number" ? ` ${eur(v.amount)}` : "";
+    const outcome =
+      decision === "accept"
+        ? `code writes the credit note${amount} and sends it`
+        : decision === "reject"
+          ? "code sends the evidence reply to the retailer (no credit)"
+          : "code runs Grok's proposed outcome";
+    return (
+      <div className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[12px] text-ink-78">
+        <b className="text-ink">Your call</b>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>
+            <b>Approve</b> — agree with Grok ({decisionLabel(decision)}
+            {amount}): {outcome}. Your “why” trains the Playbook.
+          </li>
+          <li>
+            <b>Reject</b> — nothing is sent; the claim reopens. Your “why” is logged as an overturn.
+          </li>
+          <li>
+            <b>Request clarification</b> — case stays open; the ask is in the audit trail.
+          </li>
+        </ul>
+      </div>
+    );
+  }
+  if (c.row === "shipping") {
+    const actions = arr(p.actions).map(obj).filter(Boolean) as J[];
+    const labels = actions.map((a) => actionLabel(String(a.action ?? a))).join(", ") || "the proposed fix";
+    return (
+      <div className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[12px] text-ink-78">
+        <b className="text-ink">Your call</b>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>
+            <b>Approve</b> — warehouse runs: {labels}.
+          </li>
+          <li>
+            <b>Reject</b> — the exception stays open; nothing is executed.
+          </li>
+        </ul>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[12px] text-ink-78">
+      <b className="text-ink">Your call</b>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+        <li>
+          <b>Approve</b> — send the ORDRSP and hand the order to Shipping.
+        </li>
+        <li>
+          <b>Reject</b> — no ORDRSP; the order stays blocked.
+        </li>
+      </ul>
     </div>
   );
 }
@@ -444,6 +574,7 @@ function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonl
 
       <Panel title="Decision">
         <div className="space-y-3 text-[13px]">
+          {c.status === "pending" ? <DecisionConsequences c={c} /> : null}
           {c.status === "pending" ? (
             <Decision
               c={c}
@@ -506,7 +637,10 @@ export function ActionsView({ policy }: { readonly policy: string }) {
 
   return (
     <Page>
-      <PageHeader title="Actions" sub={`Cases that need a person. Grok proposes, code checks, a person decides. ${policy}.`}>
+      <PageHeader
+        title="Actions"
+        sub={`When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject and write why — that line trains the Playbook. ${policy}.`}
+      >
         <Segmented
           value={filter}
           onChange={setFilter}

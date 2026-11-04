@@ -77,7 +77,10 @@ export function rowPill(r: ShippingListRow): { tone: PillTone; label: string } {
 /** "10,800 of 12,000 shipped, 10,800 invoiced" from the reconcile lines. */
 export function whatHappened(r: ShippingListRow): string {
   const rec = r.reconcile;
-  if (!r.shipments) return r.order_status === "ready_to_ship" ? "confirmed, waiting for a truck" : r.order_status;
+  if (!r.shipments) {
+    if (r.order_status !== "ready_to_ship") return r.order_status;
+    return r.truck_id ? `planned on ${r.truck_id}, waiting for picking` : "confirmed, waiting for a truck";
+  }
   if (!rec) return r.short ? "shipped short, not invoiced yet" : "shipped, not invoiced yet";
   return rec.report.lines
     .map((l) => {

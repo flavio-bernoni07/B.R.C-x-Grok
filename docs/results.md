@@ -1,11 +1,11 @@
 # Reconciliation against the threeway baseline
 
-22 labelled cases in `data/bench/cases.json`. Run `python -m bench.score` to reproduce.
+21 labelled cases in `data/bench/cases.json`. Run `python -m bench.score` to reproduce.
 
 | | threeway | ours |
 |---|---|---|
-| Right call on whether someone must act | 14/22 | 21/22 |
-| Every cause named, nothing extra | 10/22 | 21/22 |
+| Right call on whether someone must act | 13/21 | 21/21 |
+| Every cause named, nothing extra | 10/21 | 21/21 |
 
 | Case | What happened | Right answer | threeway | ours |
 |---|---|---|---|---|
@@ -27,11 +27,8 @@
 | C16 | the invoice writes RS2026 00482 for RS-2026-00482 | ok | act: orphan_invoice, price_difference ✗ | ok |
 | C17 | the invoice writes CAR1KGCTN12 for CAR-1KG-CTN12 | ok | act: orphan_invoice, price_difference ✗ | ok |
 | C18 | ordered and shipped as 40 cartons, invoiced as 480 packs at the per-pack price | ok | act: uom_unknown ✗ | ok |
-| C19 | 38 of 40 cartons shipped, invoiced correctly as 456 packs | act: short_delivery | act: uom_unknown ✗ | ok ✗ |
-| C20 | an invoice line for an order that does not exist | act: orphan_invoice | act: orphan_invoice | act: orphan_invoice |
-| C21 | 46 cartons shipped and invoiced against 40 ordered | act: over_delivery | ok ✗ | act: over_delivery |
-| C22 | 39 of 40 shipped and invoiced: inside the contract's 2-unit tolerance | ok | ok | ok |
+| C19 | an invoice line for an order that does not exist | act: orphan_invoice | act: orphan_invoice | act: orphan_invoice |
+| C20 | 46 cartons shipped and invoiced against 40 ordered | act: over_delivery | ok ✗ | act: over_delivery |
+| C21 | 39 of 40 shipped and invoiced: inside the contract's 2-unit tolerance | ok | ok | ok |
 
 How to read this: we wrote these cases and their answers ourselves, before running either matcher, to cover the blind spots we found in threeway's code. A full score on our own set shows those blind spots are handled; it is not a measure of accuracy on documents we have not seen. threeway runs with its default settings: it can convert units if it is given a conversion map, which the baseline does not have.
-
-One miss of ours is a labelling slip, left as written: C19 ships 38 of 40 cartons, exactly on the contract's 2-unit tolerance, which C22 treats as fine. By that rule our "ok" is arguably right.

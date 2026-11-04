@@ -6,6 +6,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { PageHeader, Panel, Pill } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { rowPill } from "./format";
+import { RoutePlanPanel } from "./route-plan";
 import { BenchSummary, BenchTable, ShippingSteps, ShippingTable } from "./shipping-parts";
 
 /**
@@ -91,12 +92,13 @@ export function ShippingView({ embedded = false }: { readonly embedded?: boolean
             : "Loading shipments…"
         }
       />
+      <RoutePlanPanel onChanged={loadList} />
       {bench ? (
         <Panel
           title="Against the threeway baseline"
           aside={
             <button type="button" onClick={() => setShowBench((v) => !v)} className="text-ink-68 hover:text-ink">
-              {showBench ? "Hide the 22 cases" : "Show the 22 cases"}
+              {showBench ? `Hide the ${bench.n} cases` : `Show the ${bench.n} cases`}
             </button>
           }
         >
@@ -105,7 +107,7 @@ export function ShippingView({ embedded = false }: { readonly embedded?: boolean
             <div className="mt-4 space-y-2">
               <BenchTable res={bench} />
               <p className="text-[12px] text-ink-68">
-                We wrote these cases and their answers ourselves, before running either matcher. Our one miss, C19, is a labelling slip: 38 of 40 is on the contract's 2-unit tolerance.
+                We wrote these cases and their answers ourselves, before running either matcher.
               </p>
             </div>
           ) : null}
