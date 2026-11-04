@@ -14,6 +14,8 @@
 
 ## What I decided
 
+- Detail in [order-dec.md](../order-dec.md). On stock short: **operator** chooses **split** (ORDRSP for available qty only) or **mail** (pending, **no ORDRSP** until reactivated).
+
 ## What I need from others
 
 - Stock, price list and order history per store, from the Mini ERP (core)
