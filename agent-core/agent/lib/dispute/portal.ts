@@ -119,6 +119,8 @@ export type PortalIntake = {
   language: "en" | "it";
 };
 
+export type DisputeChannel = "customer_chat" | "phone";
+
 export type PortalClaimRecord = {
   dispute_id: string;
   retailer_id: string;
@@ -139,6 +141,7 @@ export type PortalClaimRecord = {
   case_id: string | null;
   verified_quantities: Record<string, unknown> | null;
   reconciliation: Record<string, unknown> | null;
+  channel: DisputeChannel;
 };
 
 export type PortalTurnResult = {
@@ -333,11 +336,53 @@ function CLAIM_TYPES_SAFE(v: unknown): ClaimType | null {
   return (Object.values(ClaimType) as string[]).includes(v) ? (v as ClaimType) : null;
 }
 
-function authorizeOrder(erp: Erp, session: SimulatedRetailerSession, orderRef: string): { ok: true } | { ok: false; reason: string } {
+export function authorizeOrder(
+  erp: Erp,
+  session: SimulatedRetailerSession,
+  orderRef: string,
+): { ok: true } | { ok: false; reason: string } {
   const order = erp.order(orderRef);
   if (!order) return { ok: false, reason: "order_not_found" };
   if (order.buyerGln !== session.retailer_id) return { ok: false, reason: "unauthorized" };
   return { ok: true };
+}
+
+/** Read-only order snapshot for phone/chat tools — never trusts claimed qty as verified. */
+export function lookupAuthorizedOrder(
+  erp: Erp,
+  session: SimulatedRetailerSession,
+  orderRef: string,
+): Record<string, unknown> {
+  const ref = orderRef.trim().toUpperCase();
+  const auth = authorizeOrder(erp, session, ref);
+  if (!auth.ok) return { ok: false, reason: auth.reason, order_ref: ref };
+  const order = erp.order(ref)!;
+  const extraction: ClaimExtraction = {
+    claim_type: ClaimType.OTHER,
+    order_ref: ref,
+    invoice_ref: null,
+    product: null,
+    quantity: null,
+    amount: null,
+    confidence: 0,
+    raw_notes: "",
+  };
+  const facts = pullFacts(extraction, { store: disputeStore(erp, false) });
+  const evidence = evidenceSnapshot(erp, ref, facts);
+  return {
+    ok: true,
+    order_ref: ref,
+    retailer_gln: order.buyerGln,
+    lines: order.lines.map((l) => ({
+      gtin: l.gtin,
+      line_no: l.lineNo,
+      qty_ordered: l.qtyOrdered,
+      qty_confirmed: l.qtyConfirmed,
+      unit_price: l.unitPrice,
+    })),
+    evidence,
+    note: "These are internal Scotti records. Customer claimed quantities are not verified receipt.",
+  };
 }
 
 function portalMeta(claim: NonNullable<ReturnType<Erp["claim"]>>): Record<string, unknown> {
@@ -370,6 +415,7 @@ export function claimToPortalRecord(erp: Erp, claimId: string): PortalClaimRecor
     case_id: (portal.case_id as string) ?? null,
     verified_quantities: (portal.verified_quantities as Record<string, unknown>) ?? null,
     reconciliation: (portal.reconciliation as Record<string, unknown>) ?? null,
+    channel: portal.channel === "phone" ? "phone" : "customer_chat",
   };
 }
 
@@ -474,8 +520,11 @@ export async function handleCustomerMessage(
     conversationId?: string | null;
     idempotencyKey?: string | null;
     caller?: Caller | null;
+    channel?: DisputeChannel | null;
   },
 ): Promise<PortalTurnResult> {
+  const channel: DisputeChannel = opts.channel === "phone" ? "phone" : "customer_chat";
+  const channelLabel = channel === "phone" ? "phone" : "chat";
   const text = opts.message.trim();
   if (!text) {
     return {
@@ -733,7 +782,7 @@ export async function handleCustomerMessage(
               evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
           },
           analysis,
-          channel: "customer_chat",
+          channel,
         };
         erp.setClaim(disputeId, {
           orderRef: intake.order_ref,
@@ -745,9 +794,9 @@ export async function handleCustomerMessage(
           const so = erp.signoff(caseId)!;
           erp.updateSignoff(caseId, {
             title: `Customer dispute ${disputeId} on ${intake.order_ref}: ${intake.category}`,
-            proposal: { ...(so.proposal ?? {}), portal: true, intake, evidence, analysis, claim_id: disputeId },
+            proposal: { ...(so.proposal ?? {}), portal: true, intake, evidence, analysis, claim_id: disputeId, channel },
             reasons: [
-              "Customer-reported claim via chat — not verified evidence",
+              `Customer-reported claim via ${channelLabel} — not verified evidence`,
               `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
             ],
           });
@@ -786,7 +835,7 @@ export async function handleCustomerMessage(
               evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
           },
           analysis,
-          channel: "customer_chat",
+          channel,
           idempotency_key: idem,
         };
         erp.saveClaim({ claimId: disputeId, sourceDoc: docId, status: "customer_reported" });
@@ -806,12 +855,13 @@ export async function handleCustomerMessage(
             evidence,
             analysis,
             claim_id: disputeId,
+            channel,
             summary: intake.customer_description,
             recommended_action: analysis.recommended_action,
             assigned_role: assigned,
           },
           reasons: [
-            "Customer-reported claim via chat — not verified evidence",
+            `Customer-reported claim via ${channelLabel} — not verified evidence`,
             `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
           ],
         });
@@ -909,6 +959,7 @@ export function listEmployeePortalDisputes(erp: Erp) {
         assigned_role: rec?.assigned_role ?? "credit desk",
         received_at: s.createdAt,
         signoff_status: s.status,
+        channel: rec?.channel ?? "customer_chat",
       };
     });
 }
@@ -928,6 +979,7 @@ export function employeeDisputeWorkspace(erp: Erp, caseId: string) {
       claimed_quantity: rec?.claimed_quantity ?? null,
       claimed_amount: rec?.claimed_amount ?? null,
       category: rec?.category ?? null,
+      channel: rec?.channel ?? "customer_chat",
     },
     our_records: rec?.supporting_internal_records ?? proposal.evidence ?? null,
     matches: (proposal.analysis as { supported_facts?: string[] } | undefined)?.supported_facts ?? [],

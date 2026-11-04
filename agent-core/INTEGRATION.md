@@ -17,10 +17,19 @@ There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING
 
 - Customer UI: `/support` (microphone + text fallback)
 - APIs: `/api/support/session`, `/chat`, `/disputes`, `/voice/token`, `/voice/transcribe`, `/voice/speak`
-- Employee: Actions → Disputes (`/api/actions/disputes`)
+- Phone: `/api/telephony/incoming` (xAI SIP webhook), `/api/telephony/simulate` (offline rehearsal)
+- Employee: Actions → Disputes (`/api/actions/disputes`); workspace shows `channel` phone vs chat
 - Notifications table + conversation transcripts as `documents` kind `customer conversation`
 
 **Removed:** `/portal` page and `/api/portal/*`, and `portal_conversations` / `portal_messages` tables.
+
+## Phone flow (Grok Voice)
+
+1. Caller dials the free xAI number (or BYO SIP).
+2. xAI POSTs signed `realtime.call.incoming` to `/api/telephony/incoming`.
+3. Server verifies Standard Webhooks signature, joins `wss://api.x.ai/v1/realtime?call_id=…`.
+4. Voice tools: `lookup_order` (read-only) and `submit_dispute` → `handleCustomerMessage` with `channel=phone`.
+5. Agent speaks `DSP-…` only after ERP success. Setup: `docs/phone-voice.md`.
 
 ## Voice flow (MVP)
 

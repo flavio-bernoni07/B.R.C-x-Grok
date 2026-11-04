@@ -48,6 +48,7 @@ Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions o
 | Wed 4 Nov | Dispute ends in **credit note (TD04)** or **evidence reply** — never a new invoice | Retailer claim path; no rebound debit | dispute |
 | Wed 4 Nov | Facts from shared Mini ERP when Shipping exported them; else mock catalog fixtures (`data/disputes/erp/catalog.json`) until live docs cover the claim | Rows must hand off; fixtures keep Dispute demoable alone | dispute (+ core / shipping) |
 | Wed 4 Nov | **Customer dispute chat** (`/support`, not `/portal`): simulated Esselunga session; mic → STT (xAI or browser fallback) → confirm text → existing `handleCustomerMessage` workflow → `DSP-…` + Actions Disputes + notifications. Conversations stored as documents. Ephemeral xAI realtime tokens optional; permanent key stays server-side. Never auto-issues TD04. Demo orders `ORD-3001` / `ORD-3002`. See `agent-core/INTEGRATION.md` | Retailer voice/text intake without a second agent or portal_* tables | dispute (+ app) |
+| Thu 5 Nov | **Phone disputes via Grok Voice**: xAI free number / SIP → signed `realtime.call.incoming` webhook → server joins realtime WSS with `lookup_order` + `submit_dispute` tools → same `handleCustomerMessage` with `channel=phone` → Actions Disputes. No Twilio for demo. Never invents DSP ids. Offline rehearsal: `POST /api/telephony/simulate`. See `agent-core/docs/phone-voice.md` | Jury-callable phone intake without a second agent | dispute (+ app) |
 
 ## Forecast and quality (Flavio)
 

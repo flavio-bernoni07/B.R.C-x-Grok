@@ -30,7 +30,10 @@ Without a key, the app and every page still work. The golden demo uses recorded 
 | `pnpm dev` | The agent alone, in eve's terminal UI |
 | `pnpm db:reset` | Fresh Mini ERP plus the golden demo (`--empty` for the world only) |
 | `pnpm test` | All Vitest suites (core, order, shipping, benchmark, dispute, golden) |
+| `pnpm voice:check` | Smoke-check that `XAI_API_KEY` can list Voice phone numbers |
 | `pnpm data:fetch` | Refresh the public paddy price data |
+
+Customer phone claims (Grok Voice → Actions): see [`docs/phone-voice.md`](docs/phone-voice.md). Rehearse without a live number via `POST /api/telephony/simulate`.
 
 ## For developers
 

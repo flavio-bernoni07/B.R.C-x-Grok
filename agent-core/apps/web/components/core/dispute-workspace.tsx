@@ -15,7 +15,13 @@ type Workspace = {
     claimed_amount: number | null;
     category: string;
   } | null;
-  customer_reported: { message: string | null; claimed_quantity: number | null; claimed_amount: number | null; category: string | null };
+  customer_reported: {
+    message: string | null;
+    claimed_quantity: number | null;
+    claimed_amount: number | null;
+    category: string | null;
+    channel?: string | null;
+  };
   our_records: Record<string, unknown> | null;
   matches: string[];
   mismatches: string[];
@@ -87,6 +93,7 @@ export function DisputeWorkspace({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Pill tone="attention">{data.dispute?.status ?? data.case.status}</Pill>
+        {data.customer_reported.channel === "phone" ? <Pill tone="live">Phone</Pill> : <Pill tone="quiet">Chat</Pill>}
         <span className="text-[13px] text-ink-68">
           {data.dispute?.dispute_id} · {data.dispute?.order_id} · {data.dispute?.assigned_role}
         </span>
@@ -95,8 +102,9 @@ export function DisputeWorkspace({
       <Panel title="What the customer reported">
         <p className="text-[14px] text-ink-78">{data.customer_reported.message}</p>
         <p className="mt-2 text-[13px] text-ink-68">
-          Category {data.customer_reported.category ?? "—"} · claimed qty {data.customer_reported.claimed_quantity ?? "—"} ·
-          claimed amount {data.customer_reported.claimed_amount ?? "—"}
+          Via {data.customer_reported.channel === "phone" ? "phone" : "chat"} · category{" "}
+          {data.customer_reported.category ?? "—"} · claimed qty {data.customer_reported.claimed_quantity ?? "—"} · claimed
+          amount {data.customer_reported.claimed_amount ?? "—"}
         </p>
         <p className="mt-1 text-[12px] text-ink-50">Claimed figures are not treated as verified receipt evidence.</p>
       </Panel>
