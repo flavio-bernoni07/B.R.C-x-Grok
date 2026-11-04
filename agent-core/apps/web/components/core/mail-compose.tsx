@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DeskModal } from "./desk-modal";
 
@@ -21,6 +22,8 @@ export function MailCompose({
   onCancel,
   onSend,
   inline = false,
+  formMode = false,
+  cancelHref,
 }: {
   readonly title: string;
   readonly defaultTo: string;
@@ -32,6 +35,10 @@ export function MailCompose({
   readonly onSend: (mail: { to: string; subject: string; body: string; full: string; by: string }) => void;
   /** When true, render the form in place (no second overlay). */
   readonly inline?: boolean;
+  /** Named inputs + submit for server-action parent form (no client JS needed). */
+  readonly formMode?: boolean;
+  /** Back link when formMode (works without client JS). */
+  readonly cancelHref?: string;
 }) {
   const initial = useMemo(() => splitDraft(draft), [draft]);
   const [to, setTo] = useState(defaultTo);
@@ -54,6 +61,7 @@ export function MailCompose({
         <span className="text-[12px] text-ink-68">Your name</span>
         <input
           className="h-9 w-full rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
+          name={formMode ? "by" : undefined}
           value={by}
           onChange={(e) => setBy(e.target.value)}
           placeholder="Who sends this mail"
@@ -63,6 +71,7 @@ export function MailCompose({
         <span className="text-[12px] text-ink-68">To</span>
         <input
           className="h-9 w-full rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
+          name={formMode ? "mail_to" : undefined}
           value={to}
           onChange={(e) => setTo(e.target.value)}
           placeholder="buyer@retailer.example"
@@ -72,6 +81,7 @@ export function MailCompose({
         <span className="text-[12px] text-ink-68">Subject</span>
         <input
           className="h-9 w-full rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
+          name={formMode ? "mail_subject" : undefined}
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
         />
@@ -80,27 +90,59 @@ export function MailCompose({
         <span className="text-[12px] text-ink-68">Message</span>
         <textarea
           className="min-h-[240px] w-full rounded-lg border bg-hh-honeydew p-3 text-[13px] leading-relaxed outline-none focus:border-hh-asparagus"
+          name={formMode ? "mail_body" : undefined}
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
       </label>
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <button
-          type="button"
-          disabled={busy || !by.trim() || !to.trim() || !subject.trim() || !body.trim()}
-          onClick={send}
-          className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-        >
-          {busy ? "Sending…" : "Send mail"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCancel}
-          className="h-9 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
-        >
-          Back
-        </button>
+        {formMode ? (
+          <button
+            type="submit"
+            disabled={busy}
+            onClick={(e) => {
+              if (typeof window !== "undefined" && by.trim() && to.trim() && subject.trim() && body.trim()) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+          >
+            {busy ? "Sending…" : "Send mail"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || !by.trim() || !to.trim() || !subject.trim() || !body.trim()}
+            onClick={send}
+            className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+          >
+            {busy ? "Sending…" : "Send mail"}
+          </button>
+        )}
+        {formMode && cancelHref ? (
+          <Link
+            href={cancelHref}
+            className="inline-flex h-9 items-center rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)]"
+            onClick={(e) => {
+              if (typeof window !== "undefined") {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+          >
+            Back
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="h-9 rounded-full bg-hh-seasalt px-4 text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.15)] disabled:opacity-40"
+          >
+            Back
+          </button>
+        )}
         {error ? <span className="text-[12px] text-st-wrong">{error}</span> : null}
       </div>
     </div>

@@ -6,10 +6,11 @@
  * thread, and as the chat card for the `overview_snapshot` tool.
  */
 import { caseAmount, caseNextStep, caseOrderRef, caseProblem, caseRole } from "@agent/lib/core/case-view";
+import type { Signoff } from "@agent/lib/core/erp";
 import type { ImpactSummary } from "@agent/lib/core/impact";
 import type { OverviewSnapshot } from "@agent/lib/core/overview";
+import { actionsCaseHref, deskTabForSignoff } from "@agent/lib/core/actions-desk";
 import type { MarketSnapshot } from "@agent/lib/rice";
-import type { Signoff } from "@agent/lib/core/erp";
 import { type ReactNode, useEffect, useState } from "react";
 import { Panel, Stat, day, eur } from "@/components/kit";
 import { AuditList } from "./audit";
@@ -156,7 +157,10 @@ function AttentionCard({ c }: { readonly c: Signoff }) {
           </p>
           <p>Next step: {caseNextStep(c)}</p>
         </div>
-        <a href={`/actions?case=${encodeURIComponent(c.caseId)}`} className="h-8 shrink-0 rounded-full bg-hh-dark px-4 font-bold text-[13px] leading-8 text-hh-window">
+        <a
+          href={actionsCaseHref(c.caseId, deskTabForSignoff(c))}
+          className="h-8 shrink-0 rounded-full bg-hh-dark px-4 font-bold text-[13px] leading-8 text-hh-window"
+        >
           Review action
         </a>
       </div>

@@ -1,9 +1,12 @@
 "use client";
 
 import type { Signoff } from "@agent/lib/core/erp";
+import { actionsCaseHref, deskTabForSignoff, type DeskTab as CoreDeskTab } from "@agent/lib/core/actions-desk";
 import type { OrderBoardRow } from "@agent/lib/order/board";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { sendOffAllAction } from "@/app/(app)/actions/actions";
 import { DataTable, PageHeader, Panel, Pill, day, qty } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
@@ -11,11 +14,7 @@ import { Page } from "@/components/shell/app-shell";
 import { SignoffCard, SignoffStatus, signoffUsedGrokbot } from "./signoff";
 
 /** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
-export type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
-
-const SEND_OFF_KINDS = new Set(["confirm"]);
-const PRICE_KINDS = new Set(["price_fix"]);
-const QTY_KINDS = new Set(["qty_choice", "stock_short"]);
+export type DeskTab = CoreDeskTab;
 
 function isOpenCase(c: Signoff) {
   return c.status === "pending" && !c.decidedAt;
@@ -25,12 +24,8 @@ function isPendingCase(c: Signoff) {
   return (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
 }
 
-function tabFor(c: Signoff): Exclude<DeskTab, "decided" | "board" | "pending"> {
-  if (!isOpenCase(c)) return "other";
-  if (c.row === "order" && SEND_OFF_KINDS.has(c.kind)) return "sendoff";
-  if (c.row === "order" && PRICE_KINDS.has(c.kind)) return "price";
-  if (c.row === "order" && QTY_KINDS.has(c.kind)) return "quantity";
-  return "other";
+function tabFor(c: Signoff): Exclude<DeskTab, "board"> {
+  return deskTabForSignoff(c);
 }
 
 function countLabel(n: number) {
@@ -45,10 +40,20 @@ function stageTone(stage: string): "attention" | "ok" | "wait" | "quiet" | "pend
   return "wait";
 }
 
+function tabForBoardStage(stage: string): DeskTab {
+  if (stage === "signoff_price") return "price";
+  if (stage === "signoff_qty") return "quantity";
+  if (stage === "signoff_sendoff") return "sendoff";
+  if (stage === "signoff_edi") return "other";
+  if (stage === "pending" || stage === "parked") return "pending";
+  if (stage === "rejected") return "decided";
+  return "board";
+}
+
 function actionsHref(tab: DeskTab, caseId?: string) {
+  if (caseId) return actionsCaseHref(caseId, tab);
   const q = new URLSearchParams();
   if (tab !== "board") q.set("tab", tab);
-  if (caseId) q.set("case", caseId);
   const s = q.toString();
   return s ? `/actions?${s}` : "/actions";
 }
@@ -79,29 +84,42 @@ function DeskTabs({
   );
 }
 
-/** Actions desk: Board + Send-off / Price / Quantity schede. */
+function SendOffAllSubmit({ count }: { readonly count: number }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending || count === 0}
+      className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+    >
+      {pending ? "Sending off…" : `Send-off all (${count})`}
+    </button>
+  );
+}
+
+/** Actions desk: Board + Send-off / Price / Quantity / Pending / Decided schede. */
 export function SignoffView({
   initialCases,
   initialBoard,
   simBanner,
   initialTab = "board",
   initialCaseId,
+  openMail = false,
+  formError,
 }: {
   readonly initialCases?: Signoff[];
   readonly initialBoard?: OrderBoardRow[];
   readonly simBanner?: string;
   readonly initialTab?: DeskTab;
   readonly initialCaseId?: string;
+  readonly openMail?: boolean;
+  readonly formError?: string;
 } = {}) {
-  /** SSR seeds the desk so simulation results show even when client fetch/HMR is flaky. */
   const [cases, setCases] = useState<Signoff[]>(() => initialCases ?? []);
   const [board, setBoard] = useState<OrderBoardRow[]>(() => initialBoard ?? []);
   const tab = initialTab;
   const selected = initialCaseId;
-  const [by, setBy] = useState("");
-  const [reason, setReason] = useState("");
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkMsg, setBulkMsg] = useState<string>();
+  const [byDefault, setByDefault] = useState("");
 
   const load = useCallback(() => {
     fetch("/api/signoffs?all=1")
@@ -123,7 +141,7 @@ export function SignoffView({
 
   useEffect(() => {
     try {
-      setBy(localStorage.getItem("brc:signer") ?? "");
+      setByDefault(localStorage.getItem("brc:signer") ?? "");
     } catch {
       /* private mode */
     }
@@ -149,54 +167,6 @@ export function SignoffView({
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
 
-  const sendOffAll = async () => {
-    const signer = by.trim();
-    const why = reason.trim() || "Send-off all: checks already passed; release ORDRSP batch";
-    if (!signer) {
-      setBulkMsg("Enter your name before Send-off all.");
-      return;
-    }
-    setBulkBusy(true);
-    setBulkMsg(undefined);
-    try {
-      localStorage.setItem("brc:signer", signer);
-    } catch {
-      /* ignore */
-    }
-    try {
-      const res = await fetch("/api/signoffs/send-off-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          by: signer,
-          reason: why,
-          caseIds: sendoff.map((c) => c.caseId),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setBulkMsg(data.error ?? `Send-off all failed (${res.status})`);
-      } else {
-        const shipped = (data.results as { shipping_ref?: string }[] | undefined)?.filter((r) => r.shipping_ref).length ?? data.ok;
-        const failed = data.failed ?? 0;
-        setBulkMsg(
-          failed
-            ? `Sent off ${data.ok}/${(data.results as unknown[]).length} (${shipped} to Shipping). ${failed} need a look.`
-            : `Sent off all ${data.ok} orders · ${shipped} now in Shipping.`,
-        );
-      }
-    } catch (err) {
-      setBulkMsg((err as Error).message);
-    }
-    setBulkBusy(false);
-    try {
-      window.dispatchEvent(new Event("brc:changed"));
-    } catch {
-      /* ignore */
-    }
-    load();
-  };
-
   const emptyCopy =
     tab === "sendoff"
       ? "No orders waiting to send off."
@@ -209,12 +179,6 @@ export function SignoffView({
             : tab === "other"
               ? "No other cases waiting."
               : "No decisions yet.";
-
-  const onCaseDecided = () => {
-    load();
-    // Full navigation clears ?case= even if client router is flaky.
-    window.location.href = actionsHref(tab);
-  };
 
   const tabOptions: { value: DeskTab; label: string }[] = [
     { value: "board", label: `Board${countLabel(board.length)}` },
@@ -238,7 +202,7 @@ export function SignoffView({
       {simBanner ? (
         <p className="mb-3 rounded-[10px] bg-st-ok px-3 py-2 text-[13px] text-st-ok-ink">{simBanner}</p>
       ) : null}
-      {bulkMsg ? <p className="mb-3 text-[12.5px] text-ink-78">{bulkMsg}</p> : null}
+      {formError && !current ? <p className="mb-3 text-[12px] text-st-wrong">{formError}</p> : null}
 
       {tab === "board" ? (
         <Panel title="Order board" aside={`${board.length} orders`}>
@@ -254,12 +218,26 @@ export function SignoffView({
                 key: "order",
                 header: "Order",
                 main: true,
-                cell: (r) => (
-                  <span className="inline-flex items-center gap-1.5">
-                    {r.grokUsed ? <GrokbotIcon size={14} title="Grokbot worked on this order" /> : null}
-                    <span>{r.orderRef}</span>
-                  </span>
-                ),
+                cell: (r) => {
+                  const href = r.caseId
+                    ? actionsHref(tabForBoardStage(r.stage), r.caseId)
+                    : r.stage === "pending"
+                      ? actionsHref("pending")
+                      : undefined;
+                  const inner = (
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.grokUsed ? <GrokbotIcon size={14} title="Grokbot worked on this order" /> : null}
+                      <span>{r.orderRef}</span>
+                    </span>
+                  );
+                  return href ? (
+                    <Link href={href} className="hover:underline">
+                      {inner}
+                    </Link>
+                  ) : (
+                    inner
+                  );
+                },
               },
               { key: "retailer", header: "Retailer", cell: (r) => r.retailer },
               {
@@ -293,30 +271,22 @@ export function SignoffView({
             These orders already passed parse, stock and price. Open one to <b>Send off</b> (goes to Shipping), or{" "}
             <b>Send-off all</b> to release every ORDRSP in this scheda.
           </p>
-          <div className="flex flex-wrap items-end gap-2">
+          <form action={sendOffAllAction} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="caseIds" value={sendoff.map((c) => c.caseId).join(",")} />
             <input
               className="h-9 w-[160px] rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
               placeholder="Your name"
-              value={by}
-              onChange={(e) => setBy(e.target.value)}
               name="by"
+              required
+              defaultValue={byDefault}
             />
             <input
               className="h-9 min-w-[220px] flex-1 rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
               placeholder="Reason for Send-off all (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
               name="reason"
             />
-            <button
-              type="button"
-              disabled={bulkBusy || sendoff.length === 0 || !by.trim()}
-              onClick={() => void sendOffAll()}
-              className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-            >
-              {bulkBusy ? "Sending off…" : `Send-off all (${sendoff.length})`}
-            </button>
-          </div>
+            <SendOffAllSubmit count={sendoff.length} />
+          </form>
         </Panel>
       ) : null}
 
@@ -387,7 +357,7 @@ export function SignoffView({
         </Panel>
       ) : null}
 
-      {current && tab !== "board" ? (
+      {current ? (
         <Panel
           title={
             <span className="inline-flex items-center gap-2">
@@ -396,7 +366,7 @@ export function SignoffView({
             </span>
           }
           aside={
-            <Link href={actionsHref(tab)} className="text-[13px] text-ink-68 hover:text-ink">
+            <Link href={actionsHref(tab === "board" ? tabFor(current) : tab)} className="text-[13px] text-ink-68 hover:text-ink">
               Close
             </Link>
           }
@@ -406,11 +376,13 @@ export function SignoffView({
             {current.caseId} · {current.subjectRef ?? current.row}
           </p>
           <SignoffCard
-            key={current.caseId}
+            key={`${current.caseId}-${openMail ? "mail" : "card"}`}
             signoff={current}
-            onDecided={onCaseDecided}
             confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
             embedded
+            returnTab={tab === "board" ? tabFor(current) : tab}
+            initialCompose={openMail}
+            formError={formError}
           />
         </Panel>
       ) : null}
