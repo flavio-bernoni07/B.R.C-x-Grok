@@ -59,10 +59,36 @@ def test_disagreement_or_an_overturn_blocks_the_rule() -> None:
     assert learning.rules(erp) == []
 
 
+def test_activate_from_person_does_not_reuse_rule_with_other_decision() -> None:
+    erp = Erp()
+    learning.ensure_schema(erp)
+    old = learning.activate_from_person(erp, SIG, "accept", by="Sara", reason="credit it")
+    assert learning.rules(erp, "active")[0]["action"]["decision"] == "accept"
+    new = learning.activate_from_person(erp, SIG, "reject", by="Sara", reason="reply with evidence instead")
+    assert new != old
+    active = learning.rules(erp, "active")
+    assert len(active) == 1 and active[0]["action"]["decision"] == "reject"
+    assert learning.rules(erp, "draft")[0]["rule_id"] == old
+
+
+def test_same_kind_matches_on_reconcile_causes_not_threeway_wording() -> None:
+    """Exact rules key off Shipping reconcile codes — the labels we cite — not baseline text."""
+    erp = Erp()
+    a = dict(SIG, reconcile_causes="overbilled,short_delivery",
+             threeway_reason="Billed for more than was received")
+    b = dict(SIG, reconcile_causes="overbilled,short_delivery",
+             threeway_reason="Short delivery")  # different baseline wording, same causes
+    learning.activate_from_person(erp, a, "accept", by="Sara", reason="overbilled + short")
+    assert learning.match_rule(erp, b)["action"]["decision"] == "accept"
+    other = dict(SIG, reconcile_causes="price_difference", threeway_reason="Billed for more than was received")
+    assert learning.match_rule(erp, other) is None
+
+
 def test_precedents_are_the_closest_and_never_overturned() -> None:
     erp = Erp()
     _log(erp, 1)
-    _log(erp, 2, sig=dict(SIG, case_type="pricing", threeway_reason="Invoice price differs from the PO price"))
+    _log(erp, 2, sig=dict(SIG, case_type="pricing", reconcile_causes="price_difference",
+                           threeway_reason="Invoice price differs from the PO price"))
     learning.record_person_decision(erp, "C1", decided_by="Sara", decision="not accept", reason="wrong",
                                     overturned=True)
     near = learning.similar(erp, SIG)
