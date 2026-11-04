@@ -33,6 +33,26 @@ export type SimulatedRetailerSession = {
 };
 
 export const DEMO_RETAILER_GLN = "BUYER001";
+/** Document kind for chat transcripts (no portal_* tables). */
+export const CUSTOMER_CONV_KIND = "customer conversation";
+
+export type ChatMessage = {
+  message_id: string;
+  role: "customer" | "assistant" | "system";
+  content: string;
+  at: string;
+  meta?: Record<string, unknown> | null;
+};
+
+export type ConversationState = {
+  conversation_id: string;
+  retailer_gln: string;
+  claim_id: string | null;
+  idempotency_key: string | null;
+  messages: ChatMessage[];
+  created_at: string;
+  updated_at: string;
+};
 
 export function simulatedSession(erp: Erp, retailerGln = DEMO_RETAILER_GLN): SimulatedRetailerSession {
   const r = erp.retailer(retailerGln);
@@ -43,6 +63,46 @@ export function simulatedSession(erp: Erp, retailerGln = DEMO_RETAILER_GLN): Sim
     simulated: true,
     label: `SIMULATED retailer session — ${r.name} (hackathon demo, not a production login)`,
   };
+}
+
+function loadConversation(erp: Erp, conversationId: string): ConversationState | null {
+  const doc = erp.documents({ kind: CUSTOMER_CONV_KIND, ref: conversationId })[0];
+  if (!doc?.body) return null;
+  try {
+    return JSON.parse(doc.body) as ConversationState;
+  } catch {
+    return null;
+  }
+}
+
+function saveConversation(erp: Erp, state: ConversationState) {
+  const existing = erp.documents({ kind: CUSTOMER_CONV_KIND, ref: state.conversation_id })[0];
+  const body = JSON.stringify(state);
+  if (existing) erp.updateDocument(existing.docId, { body });
+  else erp.addDocument(CUSTOMER_CONV_KIND, state.conversation_id, body, { path: `customer/${state.conversation_id}` });
+}
+
+function appendMessage(
+  erp: Erp,
+  state: ConversationState,
+  msg: Omit<ChatMessage, "message_id"> & { message_id?: string },
+): ConversationState {
+  const next: ConversationState = {
+    ...state,
+    updated_at: msg.at,
+    messages: [
+      ...state.messages,
+      {
+        message_id: msg.message_id ?? erp.nextId("chat_msg", "MSG-"),
+        role: msg.role,
+        content: msg.content,
+        at: msg.at,
+        meta: msg.meta ?? null,
+      },
+    ],
+  };
+  saveConversation(erp, next);
+  return next;
 }
 
 export type PortalIntake = {
@@ -434,8 +494,8 @@ export async function handleCustomerMessage(
 
   const at = nowIso();
   let conversationId = opts.conversationId ?? "";
-  let conv = conversationId ? erp.portalConversation(conversationId) : undefined;
-  if (conv && conv.retailerGln !== session.retailer_id) {
+  let state = conversationId ? loadConversation(erp, conversationId) : null;
+  if (state && state.retailer_gln !== session.retailer_id) {
     return {
       reply: "This conversation belongs to another retailer session.",
       conversation_id: conversationId,
@@ -449,27 +509,48 @@ export async function handleCustomerMessage(
       error: "unauthorized_conversation",
     };
   }
-  if (!conv) {
-    conversationId = erp.nextId("portal_conv", "CNV-");
-    erp.savePortalConversation({
-      conversationId,
-      retailerGln: session.retailer_id,
-      createdAt: at,
-      updatedAt: at,
-      idempotencyKey: opts.idempotencyKey ?? null,
-    });
-    conv = erp.portalConversation(conversationId)!;
+  if (!state) {
+    conversationId = erp.nextId("chat_conv", "CNV-");
+    state = {
+      conversation_id: conversationId,
+      retailer_gln: session.retailer_id,
+      claim_id: null,
+      idempotency_key: opts.idempotencyKey ?? null,
+      messages: [],
+      created_at: at,
+      updated_at: at,
+    };
+    saveConversation(erp, state);
   }
+
+  const replyAndReturn = (
+    reply: string,
+    extra: Partial<PortalTurnResult> & { grok_mode: PortalTurnResult["grok_mode"] },
+  ): PortalTurnResult => {
+    state = appendMessage(erp, state!, { role: "assistant", content: reply, at: nowIso() });
+    const rec = state.claim_id ? claimToPortalRecord(erp, state.claim_id) : null;
+    return {
+      reply,
+      conversation_id: conversationId,
+      dispute_id: rec?.dispute_id ?? extra.dispute_id ?? null,
+      status: rec?.status ?? extra.status ?? null,
+      case_id: rec?.case_id ?? extra.case_id ?? null,
+      needs_follow_up: extra.needs_follow_up ?? false,
+      missing_fields: extra.missing_fields ?? [],
+      grok_mode: extra.grok_mode,
+      submitted: extra.submitted ?? false,
+      error: extra.error,
+    };
+  };
 
   // Idempotent retry of the same customer message key.
   if (opts.idempotencyKey) {
-    const existing = erp
-      .portalMessages(conversationId)
-      .find((m) => m.role === "customer" && (m.meta as { idempotency_key?: string } | null)?.idempotency_key === opts.idempotencyKey);
+    const existing = state.messages.find(
+      (m) => m.role === "customer" && m.meta?.idempotency_key === opts.idempotencyKey,
+    );
     if (existing) {
-      const lastAssistant = [...erp.portalMessages(conversationId)].reverse().find((m) => m.role === "assistant");
-      const claimId = conv.claimId;
-      const rec = claimId ? claimToPortalRecord(erp, claimId) : null;
+      const lastAssistant = [...state.messages].reverse().find((m) => m.role === "assistant");
+      const rec = state.claim_id ? claimToPortalRecord(erp, state.claim_id) : null;
       return {
         reply: lastAssistant?.content ?? "Your previous message was already recorded.",
         conversation_id: conversationId,
@@ -484,19 +565,16 @@ export async function handleCustomerMessage(
     }
   }
 
-  erp.addPortalMessage({
-    messageId: erp.nextId("portal_msg", "MSG-"),
-    conversationId,
+  state = appendMessage(erp, state, {
     role: "customer",
     content: text,
     at,
     meta: { idempotency_key: opts.idempotencyKey ?? null },
   });
 
-  const history = erp.portalMessages(conversationId).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
-  const priorClaim = conv.claimId ? claimToPortalRecord(erp, conv.claimId) : null;
-  const customerBlob = erp
-    .portalMessages(conversationId)
+  const history = state.messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
+  const priorClaim = state.claim_id ? claimToPortalRecord(erp, state.claim_id) : null;
+  const customerBlob = state.messages
     .filter((m) => m.role === "customer")
     .map((m) => m.content)
     .join("\n");
@@ -520,94 +598,54 @@ export async function handleCustomerMessage(
   const { intake, mode } = await extractIntake(text, history, foldedPrior, opts.caller);
 
   if (intake.intent === "unauthorized_action") {
-    const reply = replyUnauthorized(intake.language);
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: priorClaim?.dispute_id ?? null,
-      status: priorClaim?.status ?? null,
-      case_id: priorClaim?.case_id ?? null,
+    return replyAndReturn(replyUnauthorized(intake.language), {
       needs_follow_up: true,
       missing_fields: intake.missing_fields,
       grok_mode: mode,
       submitted: false,
-    };
+    });
   }
 
   if (intake.intent === "status") {
     const refMatch = text.match(/\b(DSP-\d+|CLM-\d+)\b/i);
-    const disputeId = refMatch?.[1]?.toUpperCase() || priorClaim?.dispute_id || conv.claimId;
+    const disputeId = refMatch?.[1]?.toUpperCase() || priorClaim?.dispute_id || state.claim_id || undefined;
     const rec = disputeId ? claimToPortalRecord(erp, disputeId) : null;
     if (!rec || rec.retailer_id !== session.retailer_id) {
-      const reply =
+      return replyAndReturn(
         intake.language === "it"
           ? "Non trovo una segnalazione sua con quel riferimento. Indichi il codice DSP-… oppure descriva di nuovo il problema."
-          : "I can't find one of your disputes with that reference. Share the DSP-… code or describe the problem again.";
-      erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-      return {
-        reply,
-        conversation_id: conversationId,
-        dispute_id: null,
-        status: null,
-        case_id: null,
-        needs_follow_up: true,
-        missing_fields: ["dispute_id"],
-        grok_mode: mode,
-        submitted: false,
-      };
+          : "I can't find one of your disputes with that reference. Share the DSP-… code or describe the problem again.",
+        { needs_follow_up: true, missing_fields: ["dispute_id"], grok_mode: mode, submitted: false },
+      );
     }
-    const reply =
+    return replyAndReturn(
       intake.language === "it"
         ? `Lo stato di ${rec.dispute_id} è ${rec.status}. Ruolo assegnato: ${rec.assigned_role}.`
-        : `The status of ${rec.dispute_id} is ${rec.status}. Assigned role: ${rec.assigned_role}.`;
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: rec.dispute_id,
-      status: rec.status,
-      case_id: rec.case_id,
-      needs_follow_up: false,
-      missing_fields: [],
-      grok_mode: mode,
-      submitted: true,
-    };
+        : `The status of ${rec.dispute_id} is ${rec.status}. Assigned role: ${rec.assigned_role}.`,
+      {
+        dispute_id: rec.dispute_id,
+        status: rec.status,
+        case_id: rec.case_id,
+        grok_mode: mode,
+        submitted: true,
+      },
+    );
   }
 
   if (intake.intent === "chitchat") {
-    const reply =
-      intake.language === "it"
-        ? "Buongiorno. Come possiamo aiutarla con il suo ordine?"
-        : "Hello. How can we help with your order?";
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: priorClaim?.dispute_id ?? null,
-      status: priorClaim?.status ?? null,
-      case_id: priorClaim?.case_id ?? null,
-      needs_follow_up: true,
-      missing_fields: ["order_ref"],
-      grok_mode: mode,
-      submitted: false,
-    };
+    return replyAndReturn(
+      intake.language === "it" ? "Buongiorno. Come possiamo aiutarla con il suo ordine?" : "Hello. How can we help with your order?",
+      { needs_follow_up: true, missing_fields: ["order_ref"], grok_mode: mode, submitted: false },
+    );
   }
 
   if (intake.missing_fields.includes("order_ref") || !intake.order_ref) {
-    const reply = replyAskOrder(intake.language);
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: priorClaim?.dispute_id ?? null,
-      status: priorClaim?.status ?? null,
-      case_id: priorClaim?.case_id ?? null,
+    return replyAndReturn(replyAskOrder(intake.language), {
       needs_follow_up: true,
       missing_fields: ["order_ref"],
       grok_mode: mode,
       submitted: false,
-    };
+    });
   }
 
   const auth = authorizeOrder(erp, session, intake.order_ref);
@@ -620,39 +658,23 @@ export async function handleCustomerMessage(
         : intake.language === "it"
           ? "Non trovo quell'ordine nei nostri archivi. Verifichi il riferimento."
           : "I can't find that order in our records. Please check the reference.";
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: null,
-      status: null,
-      case_id: null,
+    return replyAndReturn(reply, {
       needs_follow_up: true,
       missing_fields: auth.reason === "order_not_found" ? ["order_ref"] : [],
       grok_mode: mode,
       submitted: false,
       error: auth.reason,
-    };
+    });
   }
 
   if (intake.missing_fields.length) {
     const field = intake.missing_fields[0];
-    const reply =
+    return replyAndReturn(
       intake.language === "it"
         ? `Per registrare la segnalazione mi serve ancora: ${field}.`
-        : `To register the report I still need: ${field}.`;
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: priorClaim?.dispute_id ?? null,
-      status: priorClaim?.status ?? null,
-      case_id: priorClaim?.case_id ?? null,
-      needs_follow_up: true,
-      missing_fields: intake.missing_fields,
-      grok_mode: mode,
-      submitted: false,
-    };
+        : `To register the report I still need: ${field}.`,
+      { needs_follow_up: true, missing_fields: intake.missing_fields, grok_mode: mode, submitted: false },
+    );
   }
 
   // Persist the dispute (create or update). Failures must not claim success.
@@ -666,7 +688,7 @@ export async function handleCustomerMessage(
         amount: intake.claimed_amount,
         claim_type: intake.category,
         confidence: 0.7,
-        raw_notes: "customer portal intake — claimed values, not verified",
+        raw_notes: "customer chat intake — claimed values, not verified",
       });
       const facts = pullFacts(extraction, { store: disputeStore(erp, false) });
       const evidence = evidenceSnapshot(erp, intake.order_ref!, facts);
@@ -674,7 +696,7 @@ export async function handleCustomerMessage(
       const assigned = ROLE_BY_CATEGORY[intake.category] ?? "credit desk";
       const idem = opts.idempotencyKey || hashKey([session.retailer_id, intake.order_ref!, intake.category, String(intake.claimed_quantity), String(intake.claimed_amount)]);
 
-      let disputeId = findOpenPortalClaim(erp, session.retailer_id, intake.order_ref!, intake.category) || conv!.claimId || null;
+      let disputeId = findOpenPortalClaim(erp, session.retailer_id, intake.order_ref!, intake.category) || state!.claim_id || null;
       let caseId: string | null = null;
       const updatedAt = nowIso();
 
@@ -711,7 +733,7 @@ export async function handleCustomerMessage(
               evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
           },
           analysis,
-          channel: "customer_portal",
+          channel: "customer_chat",
         };
         erp.setClaim(disputeId, {
           orderRef: intake.order_ref,
@@ -725,15 +747,15 @@ export async function handleCustomerMessage(
             title: `Customer dispute ${disputeId} on ${intake.order_ref}: ${intake.category}`,
             proposal: { ...(so.proposal ?? {}), portal: true, intake, evidence, analysis, claim_id: disputeId },
             reasons: [
-              "Customer-reported claim via portal — not verified evidence",
+              "Customer-reported claim via chat — not verified evidence",
               `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
             ],
           });
         }
-        erp.log("retailer", "dispute.portal_updated", disputeId, { detail: { conversation_id: conversationId } });
+        erp.log("retailer", "dispute.customer_updated", disputeId, { detail: { conversation_id: conversationId } });
       } else {
-        const docId = erp.addDocument("portal claim", intake.order_ref, intake.customer_description, {
-          path: `portal/${conversationId}`,
+        const docId = erp.addDocument("customer claim", intake.order_ref, intake.customer_description, {
+          path: `customer/${conversationId}`,
         });
         disputeId = erp.nextId("dispute", "DSP-");
         const portal = {
@@ -764,7 +786,7 @@ export async function handleCustomerMessage(
               evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
           },
           analysis,
-          channel: "customer_portal",
+          channel: "customer_chat",
           idempotency_key: idem,
         };
         erp.saveClaim({ claimId: disputeId, sourceDoc: docId, status: "customer_reported" });
@@ -789,7 +811,7 @@ export async function handleCustomerMessage(
             assigned_role: assigned,
           },
           reasons: [
-            "Customer-reported claim via portal — not verified evidence",
+            "Customer-reported claim via chat — not verified evidence",
             `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
           ],
         });
@@ -808,54 +830,43 @@ export async function handleCustomerMessage(
           assignedRole: assigned,
           createdAt: updatedAt,
         });
-        erp.log("retailer", "dispute.portal_created", disputeId, {
+        erp.log("retailer", "dispute.customer_created", disputeId, {
           sourceDoc: docId,
           detail: { conversation_id: conversationId, case_id: caseId },
         });
       }
 
-      erp.updatePortalConversation(conversationId, { claimId: disputeId, updatedAt, idempotencyKey: idem });
-      return { disputeId: disputeId!, caseId, status: "ACTION_REQUIRED" as PortalStatus };
+      // Persist claim link on the conversation document (outside nested claim writes is fine).
+      const linked: ConversationState = {
+        ...state!,
+        claim_id: disputeId!,
+        idempotency_key: idem,
+        updated_at: updatedAt,
+      };
+      saveConversation(erp, linked);
+      return { disputeId: disputeId!, caseId, status: "ACTION_REQUIRED" as PortalStatus, linked };
     });
 
-    const reply = replySubmitted(intake.language, result.disputeId, result.status);
-    erp.addPortalMessage({ messageId: erp.nextId("portal_msg", "MSG-"), conversationId, role: "assistant", content: reply, at: nowIso() });
-    return {
-      reply,
-      conversation_id: conversationId,
+    state = result.linked;
+    return replyAndReturn(replySubmitted(intake.language, result.disputeId, result.status), {
       dispute_id: result.disputeId,
       status: result.status,
       case_id: result.caseId,
-      needs_follow_up: false,
-      missing_fields: [],
       grok_mode: mode,
       submitted: true,
-    };
+    });
   } catch (err) {
-    const reply =
+    return replyAndReturn(
       intake.language === "it"
         ? "Non sono riuscito a registrare la segnalazione per un errore interno. Riprovi tra poco; non le è stato assegnato alcun riferimento."
-        : "I couldn't submit your report because of an internal error. Please try again shortly; no dispute reference was assigned.";
-    erp.addPortalMessage({
-      messageId: erp.nextId("portal_msg", "MSG-"),
-      conversationId,
-      role: "assistant",
-      content: reply,
-      at: nowIso(),
-      meta: { error: (err as Error).message },
-    });
-    return {
-      reply,
-      conversation_id: conversationId,
-      dispute_id: null,
-      status: null,
-      case_id: null,
-      needs_follow_up: true,
-      missing_fields: [],
-      grok_mode: mode,
-      submitted: false,
-      error: (err as Error).message,
-    };
+        : "I couldn't submit your report because of an internal error. Please try again shortly; no dispute reference was assigned.",
+      {
+        needs_follow_up: true,
+        grok_mode: mode,
+        submitted: false,
+        error: (err as Error).message,
+      },
+    );
   }
 }
 
@@ -908,7 +919,7 @@ export function employeeDisputeWorkspace(erp: Erp, caseId: string) {
   const claimId = so.subjectRef!;
   const rec = claimToPortalRecord(erp, claimId);
   const proposal = (so.proposal ?? {}) as Record<string, unknown>;
-  const messages = rec?.conversation_id ? erp.portalMessages(rec.conversation_id) : [];
+  const conv = rec?.conversation_id ? loadConversation(erp, rec.conversation_id) : null;
   return {
     case: so,
     dispute: rec,
@@ -927,7 +938,7 @@ export function employeeDisputeWorkspace(erp: Erp, caseId: string) {
       recommended: (proposal.analysis as { recommended_action?: string } | undefined)?.recommended_action ?? proposal.recommended_action,
       requires_approval: true,
     },
-    conversation: messages.map((m) => ({ role: m.role, content: m.content, at: m.at })),
+    conversation: (conv?.messages ?? []).map((m) => ({ role: m.role, content: m.content, at: m.at })),
   };
 }
 

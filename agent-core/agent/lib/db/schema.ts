@@ -229,28 +229,9 @@ export const siProposals = sqliteTable("si_proposals", {
 });
 
 /**
- * Customer-facing dispute portal (hackathon): conversations and inbox notifications live in the
- * same Mini ERP SQLite file. Python does not read these tables; CREATE IF NOT EXISTS keeps both
- * sides compatible.
+ * Internal inbox notifications for customer-reported disputes (same Mini ERP SQLite file).
+ * Conversation transcripts are stored as `documents` (kind `customer conversation`), not separate tables.
  */
-export const portalConversations = sqliteTable("portal_conversations", {
-  conversationId: text("conversation_id").primaryKey(),
-  retailerGln: text("retailer_gln").notNull(),
-  claimId: text("claim_id"),
-  idempotencyKey: text("idempotency_key"),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
-});
-
-export const portalMessages = sqliteTable("portal_messages", {
-  messageId: text("message_id").primaryKey(),
-  conversationId: text("conversation_id").notNull(),
-  role: text("role").notNull(),
-  content: text("content").notNull(),
-  at: text("at").notNull(),
-  meta: text("meta"),
-});
-
 export const notifications = sqliteTable("notifications", {
   notificationId: text("notification_id").primaryKey(),
   kind: text("kind").notNull(),
@@ -311,10 +292,6 @@ CREATE TABLE IF NOT EXISTS si_loadings (loading_id TEXT PRIMARY KEY, order_ref T
 CREATE TABLE IF NOT EXISTS si_exceptions (exception_id TEXT PRIMARY KEY, status TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS si_exception_cases (case_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS si_proposals (proposal_id TEXT PRIMARY KEY, case_id TEXT NOT NULL, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS portal_conversations (conversation_id TEXT PRIMARY KEY, retailer_gln TEXT NOT NULL,
-  claim_id TEXT, idempotency_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS portal_messages (message_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL,
-  role TEXT NOT NULL, content TEXT NOT NULL, at TEXT NOT NULL, meta TEXT);
 CREATE TABLE IF NOT EXISTS notifications (notification_id TEXT PRIMARY KEY, kind TEXT NOT NULL, subject_ref TEXT,
   title TEXT NOT NULL, body TEXT, assigned_role TEXT, read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 `;

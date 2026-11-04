@@ -105,8 +105,8 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
         ) : null}
 
         <div className="mt-auto flex flex-col gap-2 px-2.5 pt-3 max-md:hidden">
-          <Link href="/portal" className="text-[12px] text-ink-68 underline-offset-2 hover:underline">
-            Retailer portal (simulated)
+          <Link href="/support" className="text-[12px] text-ink-68 underline-offset-2 hover:underline">
+            Retailer support chat (voice)
           </Link>
         </div>
       </aside>

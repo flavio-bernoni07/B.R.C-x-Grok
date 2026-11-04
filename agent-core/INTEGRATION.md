@@ -1,27 +1,41 @@
-# Integration notes (customer dispute portal)
+# Integration notes (customer dispute chat + voice)
 
-There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING.md`, `DECISIONS.md` and `dispute-dec.md`. This file documents the **customer-facing dispute chat** added for the hackathon.
+There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING.md`, `DECISIONS.md` and `dispute-dec.md`. This file documents the **customer dispute chat** and its **voice** MVP.
 
 ## What it reuses
 
-| Existing piece | How the portal uses it |
+| Existing piece | How the chat uses it |
 |---|---|
-| Mini ERP `claims` + `signoffs` | Portal disputes are `claims` with id `DSP-…`; Actions cases are `signoffs` with `row=dispute`, `kind=customer_dispute` |
+| Mini ERP `claims` + `signoffs` | Disputes are `claims` with id `DSP-…`; Actions cases are `signoffs` with `row=dispute`, `kind=customer_dispute` |
 | `pullFacts` / threeway | Read-only evidence for the employee workspace |
 | `chatJson` / Grok client | Intake classification when `XAI_API_KEY` is set; otherwise deterministic offline intake |
 | Retailers master data | Simulated session binds to a retailer GLN (`BUYER001` = Esselunga) |
-| Actions page | New **Disputes** tab + dispute workspace |
+| Actions page | **Disputes** tab + dispute workspace |
+| `@ai-sdk/xai` | Transcription, speech (TTS), realtime ephemeral client secrets |
 
-## What is new (same SQLite file)
+## Surfaces
 
-- `portal_conversations`, `portal_messages`, `notifications`
-- Routes under `/api/portal/*` and `/api/actions/disputes`
-- UI at `/portal` (customer) and Actions → Disputes (employee)
+- Customer UI: `/support` (microphone + text fallback)
+- APIs: `/api/support/session`, `/chat`, `/disputes`, `/voice/token`, `/voice/transcribe`, `/voice/speak`
+- Employee: Actions → Disputes (`/api/actions/disputes`)
+- Notifications table + conversation transcripts as `documents` kind `customer conversation`
+
+**Removed:** `/portal` page and `/api/portal/*`, and `portal_conversations` / `portal_messages` tables.
+
+## Voice flow (MVP)
+
+1. Customer taps mic → browser records (permission required).
+2. Audio POSTs to `/api/support/voice/transcribe` (xAI STT server-side) **or** browser `SpeechRecognition` fallback.
+3. Draft text is shown for edit/confirm.
+4. Confirmed text POSTs to `/api/support/chat` → `handleCustomerMessage` (existing dispute workflow).
+5. Only after backend success does the UI show a `DSP-…` reference / status.
+6. Optional: read replies aloud via `/api/support/voice/speak`.
+7. Optional: `/api/support/voice/token` mints an ephemeral xAI realtime secret for browser WebSocket speech-to-speech — permanent key never leaves the server. Realtime is for natural dialogue drafts; dispute creation still requires the confirmed chat POST.
 
 ## Auth
 
-**Simulated only.** Cookie `brc_portal_retailer` + banner label. Not a production customer portal.
+**Simulated only.** Cookie `brc_support_retailer` + banner label.
 
 ## Safety
 
-The portal **never** emits TD04, refunds or invoice changes. Employees investigate / ask for evidence / close without credit from the Disputes workspace.
+Never emits TD04 / refunds from the customer chat. Voice never claims a dispute was submitted until `/api/support/chat` returns `submitted: true`.

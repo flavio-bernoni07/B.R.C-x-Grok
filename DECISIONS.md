@@ -47,7 +47,7 @@ Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions o
 | Wed 4 Nov | Remittance reason `PRI` / `PRI/UNK` (and short-pay price text) → `claim_type: pricing` | Portal often labels short pays as other; pricing Playbook must apply | dispute |
 | Wed 4 Nov | Dispute ends in **credit note (TD04)** or **evidence reply** — never a new invoice | Retailer claim path; no rebound debit | dispute |
 | Wed 4 Nov | Facts from shared Mini ERP when Shipping exported them; else mock catalog fixtures (`data/disputes/erp/catalog.json`) until live docs cover the claim | Rows must hand off; fixtures keep Dispute demoable alone | dispute (+ core / shipping) |
-| Wed 4 Nov | **Customer dispute portal** (`/portal`): simulated retailer session (Esselunga `BUYER001`); Grok/offline intake creates `DSP-…` claims + `customer_dispute` sign-offs; Actions gains a Disputes tab. Never auto-issues TD04/refunds; claimed qty ≠ verified receipt. Demo orders `ORD-3001` (shortage) and `ORD-3002` (wrong invoice price). Same Mini ERP; see `agent-core/INTEGRATION.md` | Jury needs a retailer-facing chat without a second agent or dispute DB | dispute (+ app) |
+| Wed 4 Nov | **Customer dispute chat** (`/support`, not `/portal`): simulated Esselunga session; mic → STT (xAI or browser fallback) → confirm text → existing `handleCustomerMessage` workflow → `DSP-…` + Actions Disputes + notifications. Conversations stored as documents. Ephemeral xAI realtime tokens optional; permanent key stays server-side. Never auto-issues TD04. Demo orders `ORD-3001` / `ORD-3002`. See `agent-core/INTEGRATION.md` | Retailer voice/text intake without a second agent or portal_* tables | dispute (+ app) |
 
 ## Forecast and quality (Flavio)
 

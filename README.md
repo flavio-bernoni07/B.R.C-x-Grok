@@ -99,7 +99,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order, 6 Nov dispatch day, and support demo orders ORD-3001/3002/3003
 pnpm test                     # the app's tests
-pnpm dev:web                  # starts the server and opens the B.R.C x Grok app; /support for retailer chat; Disputes + Sign-off for phone/chat claims
+pnpm dev:web                  # starts the server and opens the B.R.C x Grok app; /support (+ mic) for retailer chat; Disputes + Sign-off for phone/chat claims
 ```
 
 The Python rows are the reference the app is ported from:
