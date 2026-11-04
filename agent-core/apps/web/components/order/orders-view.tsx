@@ -69,22 +69,39 @@ export function OrdersView() {
   const [listTick, setListTick] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    let settled = false;
     const ctrl = new AbortController();
+    const watchdog = setTimeout(() => {
+      if (cancelled || settled) return;
+      settled = true;
+      setListError(true);
+      setRows((prev) => prev ?? []);
+      ctrl.abort();
+    }, 8_000);
     const t = setTimeout(() => {
+      if (cancelled) return;
       setListError(false);
-      const watchdog = setTimeout(() => ctrl.abort("timeout"), 12_000);
       fetch(`/api/orders/inbox?filter=${filter}&q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
-        .then((d: { rows: InboxRow[] }) => setRows(d.rows))
-        .catch((e: Error) => {
-          if (e.name === "AbortError" && ctrl.signal.reason === "unmount") return;
-          setListError(true);
+        .then((d: { rows?: InboxRow[] }) => {
+          if (cancelled || settled) return;
+          settled = true;
+          setRows(Array.isArray(d.rows) ? d.rows : []);
+          setListError(false);
         })
-        .finally(() => clearTimeout(watchdog));
-    }, 150);
+        .catch((e: Error) => {
+          if (cancelled || settled || e.name === "AbortError") return;
+          settled = true;
+          setListError(true);
+          setRows((prev) => prev ?? []);
+        });
+    }, 50);
     return () => {
+      cancelled = true;
       clearTimeout(t);
-      ctrl.abort("unmount");
+      clearTimeout(watchdog);
+      ctrl.abort();
     };
   }, [filter, q, listTick]);
 
@@ -145,9 +162,11 @@ export function OrdersView() {
       <PageHeader
         title="Orders"
         sub={
-          rows
-            ? `${rows.length} orders shown, ${attention} need attention. Agents do the steps; a person approves what needs a person.`
-            : "Loading orders..."
+          listError
+            ? "Could not load orders. Use Retry or Run order simulation."
+            : rows
+              ? `${rows.length} orders shown, ${attention} need attention. Agents do the steps; a person approves what needs a person.`
+              : "Loading orders…"
         }
       >
         <button
@@ -169,14 +188,27 @@ export function OrdersView() {
       {simMsg ? <p className="text-[13px] text-ink-78">{simMsg}</p> : null}
       <div className={selected ? "mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : "mt-4 grid gap-5"}>
         <Panel title="Inbox">
-          {listError ? (
-            <p className="py-6 text-center text-[14px] text-ink-68">The orders could not be loaded. Try again in a moment.</p>
+          {listError && !rows?.length ? (
+            <div className="space-y-3 py-6 text-center">
+              <p className="text-[14px] text-ink-68">The orders could not be loaded.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setListError(false);
+                  setRows(undefined);
+                  setListTick((n) => n + 1);
+                }}
+                className="h-8 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window"
+              >
+                Retry
+              </button>
+            </div>
           ) : !rows ? (
             <div className="h-48 animate-pulse rounded-[12px] bg-hh-honeydew" />
           ) : rows.length ? (
             <InboxList rows={rows} selected={selected} onOpen={(r) => go(r.orderRef)} />
           ) : (
-            <p className="py-6 text-center text-[14px] text-ink-68">{q || filter !== "all" ? "No orders match." : "No orders yet."}</p>
+            <p className="py-6 text-center text-[14px] text-ink-68">{q || filter !== "all" ? "No orders match." : "No orders yet. Run the order simulation."}</p>
           )}
         </Panel>
         {selected ? (
