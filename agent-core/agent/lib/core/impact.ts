@@ -39,7 +39,7 @@ function openShippingCases(erp: Erp): { caseId: string; orderRef: string | null;
 function ordersWithPendingSignoff(erp: Erp): Set<string> {
   const refs = new Set<string>();
   const known = new Set(erp.orders().map((o) => o.orderRef));
-  for (const s of erp.signoffs({ status: "pending" })) {
+  for (const s of erp.signoffs({ status: "pending" }).filter((x) => !x.decidedAt)) {
     if (s.subjectRef && known.has(s.subjectRef)) refs.add(s.subjectRef);
     const claim = s.subjectRef ? erp.claim(s.subjectRef) : undefined;
     if (claim?.orderRef && known.has(claim.orderRef)) refs.add(claim.orderRef);
@@ -129,7 +129,7 @@ export function impactSummary(erp: Erp, opts: { bench?: boolean } = {}): ImpactS
       runningAutomatically: active.filter((o) => !needs.has(o.orderRef)).length,
       needingPerson: active.filter((o) => needs.has(o.orderRef)).length,
       // Every case in the sign-off queue, including claims whose order is not in the Mini ERP.
-      casesWaiting: erp.signoffs({ status: "pending" }).length,
+      casesWaiting: erp.signoffs({ status: "pending" }).filter((s) => !s.decidedAt).length,
       deliveriesAtRisk: atRisk.length,
     },
     atRisk,

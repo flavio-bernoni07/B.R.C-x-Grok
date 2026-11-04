@@ -1,5 +1,6 @@
 /** Sidebar search: orders, retailers, invoices, claims and trucks, matched on their ids and names. */
 import type { Erp } from "./erp";
+import { actionsCaseHref, deskTabForSignoff } from "./actions-desk";
 
 export type SearchHit = { label: string; sub: string; href: string };
 
@@ -17,11 +18,11 @@ export function search(erp: Erp, q: string, limit = 8): SearchHit[] {
   }
   for (const r of erp.retailers()) if (has(r.name, r.gln)) hits.push({ label: r.name, sub: "Retailer", href: `/orders?retailer=${encodeURIComponent(r.gln)}` });
   for (const i of erp.invoices()) if (has(i.invoiceRef)) hits.push({ label: i.invoiceRef, sub: `Invoice · order ${i.orderRef}`, href: orderHref(i.orderRef) });
-  const pendingBySubject = new Map(erp.signoffs().map((s) => [s.subjectRef, s.caseId]));
+  const pendingBySubject = new Map(erp.signoffs().map((s) => [s.subjectRef, s]));
   for (const c of erp.claims()) {
     if (!has(c.claimId, c.orderRef, c.invoiceRef)) continue;
     const so = pendingBySubject.get(c.claimId);
-    const href = so ? `/actions?case=${encodeURIComponent(so)}` : c.orderRef ? orderHref(c.orderRef) : "/actions";
+    const href = so ? actionsCaseHref(so.caseId, deskTabForSignoff(so)) : c.orderRef ? orderHref(c.orderRef) : "/actions";
     hits.push({ label: c.claimId, sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""} · ${c.status.replace(/_/g, " ")}`, href });
   }
   try {

@@ -1,9 +1,9 @@
 "use client";
 
 import type { InboxStatus, OrderWorkspace } from "@agent/lib/order/workspace";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { day, eur, Facts, Panel, Pill, type PillTone, qty, SourceTag } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { askHref } from "@/components/shell/overview-chat";
 
 export const STATUS_TONE: Record<InboxStatus, PillTone> = { attention: "attention", on_track: "quiet", waiting: "wait", completed: "ok" };
@@ -80,11 +80,30 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
           <span>
             <b>{x.caseId}</b> {x.text}
           </span>
-          <Link href={x.href} className="rounded-full bg-hh-dark px-3 py-1 font-bold text-[12px] text-hh-window">
+          <a href={x.href} className="rounded-full bg-hh-dark px-3 py-1 font-bold text-[12px] text-hh-window">
             Review proposed resolution
-          </Link>
+          </a>
         </div>
       ))}
+
+      {ws.details.grokChanges.length ? (
+        <div className="space-y-2">
+          <h4 className="flex items-center gap-1.5 font-bold text-[14px] tracking-[-0.02em]">
+            <GrokbotIcon size={16} title="Grokbot" />
+            What Grokbot did
+          </h4>
+          <ul className="space-y-2">
+            {ws.details.grokChanges.map((g, i) => (
+              <li key={`${g.what}-${g.before}-${g.after}-${i}`} className="rounded-[10px] bg-hh-honeydew px-3 py-2 text-[13px] leading-snug">
+                <div className="font-bold tracking-[-0.01em]">
+                  {g.what}: {g.before} → {g.after}
+                </div>
+                {g.why ? <div className="mt-0.5 text-[12.5px] text-ink-78">{g.why}</div> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className={compact ? "grid gap-4" : "grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]"}>
         <div>
@@ -127,13 +146,9 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
               </div>
             ))}
             {ws.details.grokChanges.length ? (
-              ws.details.grokChanges.map((g, i) => (
-                <p key={i}>
-                  Grok changed {g.what}: {g.before} → {g.after}. {g.why}.
-                </p>
-              ))
+              <Muted>See “What Grokbot did” above for the parse / quantity fixes on this order.</Muted>
             ) : (
-              <Muted>Grok changed nothing on this order.</Muted>
+              <Muted>Grokbot changed nothing on this order.</Muted>
             )}
           </Section>
           <Section title="Inventory">
@@ -242,9 +257,9 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
         </div>
       )}
 
-      <Link href={askHref(ws.askQuestion)} className="inline-block text-[13px] font-bold underline underline-offset-2">
+      <a href={askHref(ws.askQuestion)} className="inline-block text-[13px] font-bold underline underline-offset-2">
         Ask about this order
-      </Link>
+      </a>
     </div>
   );
 }
@@ -260,7 +275,10 @@ export function OrderWorkspaceCard({ output }: { readonly output: unknown }) {
     );
   }
   return (
-    <Panel title={`Order ${o.workspace.orderRef}`} aside={<Link href={`/orders?ref=${encodeURIComponent(o.workspace.orderRef)}`}>Open the workspace</Link>}>
+    <Panel
+      title={`Order ${o.workspace.orderRef}`}
+      aside={<a href={`/orders?ref=${encodeURIComponent(o.workspace.orderRef)}`}>Open the workspace</a>}
+    >
       <OrderWorkspaceBody ws={o.workspace} compact />
     </Panel>
   );

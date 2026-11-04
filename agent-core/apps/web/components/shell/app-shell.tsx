@@ -21,11 +21,26 @@ const NAV = [
 // Retailer dots in the banner's order: Flex Green, Opal, a warm note, a quiet grey-green.
 const DOTS = ["#bfff80", "#9fc6bf", "#f2c46b", "#a2b9a2", "#d7e4e0"];
 
-type ShellData = { pending: number; retailers: { gln: string; name: string }[]; grok?: { key: boolean; recorded_demo: boolean } };
+type ShellData = {
+  pending: number;
+  retailers: { gln: string; name: string }[];
+  grok?: { key: boolean; recorded_demo: boolean };
+};
 
-export function AppShell({ children }: { readonly children: ReactNode }) {
+/** SSR seeds pending badge + retailers so the sidebar works without client JS. */
+export function AppShell({
+  children,
+  initial,
+}: {
+  readonly children: ReactNode;
+  readonly initial?: ShellData;
+}) {
   const path = usePathname();
-  const [data, setData] = useState<ShellData>({ pending: 0, retailers: [] });
+  const [data, setData] = useState<ShellData>(() => initial ?? { pending: 0, retailers: [] });
+
+  useEffect(() => {
+    if (initial) setData(initial);
+  }, [initial]);
 
   useEffect(() => {
     let live = true;

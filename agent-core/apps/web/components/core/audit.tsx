@@ -3,6 +3,7 @@
 /** The audit trail: every action, who did it (code, Grok, retailer or a person) and its source document. */
 import type { AuditEntry } from "@agent/lib/core/erp";
 import { Panel, Pill, type PillTone, SourceTag } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 
 export function actorTone(actor: string): PillTone {
   if (actor === "grok") return "grok";
@@ -32,7 +33,8 @@ export function AuditList({ entries, max }: { readonly entries: AuditEntry[]; re
       {rows.map((e) => (
         <li key={e.id} className="flex items-center gap-3 py-1.5 text-[13px]">
           <span className="w-[84px] shrink-0 text-[12px] text-ink-68 tabular-nums">{time(e.at)}</span>
-          <Pill tone={actorTone(e.actor)} className="max-w-[120px] shrink-0 truncate">
+          <Pill tone={actorTone(e.actor)} className="max-w-[140px] shrink-0 truncate">
+            {e.actor === "grok" ? <GrokbotIcon size={12} /> : null}
             {actorLabel(e.actor)}
           </Pill>
           <span className="min-w-0 flex-1 truncate">

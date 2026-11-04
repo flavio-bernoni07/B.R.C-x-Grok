@@ -10,11 +10,13 @@
  *   attention amber: a person has to act                        (client screen state)
  *   wait      grey-green: checking, not decided yet
  *   quiet     Honeydew: shortlisted, informational
+ *   pending   light red: mail/hold waiting on retailer
+ *   reject    red: rejected
  */
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type PillTone = "ok" | "live" | "grok" | "attention" | "wait" | "quiet";
+export type PillTone = "ok" | "live" | "grok" | "attention" | "wait" | "quiet" | "pending" | "reject";
 
 const PILL: Record<PillTone, string> = {
   ok: "bg-st-ok text-st-ok-ink font-bold",
@@ -23,6 +25,8 @@ const PILL: Record<PillTone, string> = {
   attention: "bg-st-attention text-st-attention-ink font-bold",
   wait: "bg-st-wait text-st-wait-ink",
   quiet: "bg-hh-honeydew text-ink-68",
+  pending: "bg-st-pending text-st-pending-ink font-bold",
+  reject: "bg-st-reject text-st-reject-ink font-bold",
 };
 
 export function Pill({ tone, children, className }: { readonly tone: PillTone; readonly children: ReactNode; readonly className?: string }) {

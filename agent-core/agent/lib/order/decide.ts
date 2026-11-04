@@ -4,11 +4,11 @@
  *   confirm      approve -> confirmOrder: ORDRSP written, hand-over for Shipping returned
  *                reject  -> rejectOrder: order status "rejected"
  *   price_fix,   approve -> resolvePriceCase: with `edits.manual_edi` (the EDI text) the order
- *   manual_edi              goes back to Parse; without it the order is parked as "pending"
+ *   manual_edi              goes back to Parse; without it the order stays Pending
  *                           (DECISIONS.md: a separate human step, never the confirm sign-off)
  *                reject  -> rejectOrder
  *   qty_choice   approve -> resolveQtyCase: `edits.qty_action` = "split" (re-enter checks with
- *                           available qty → confirm → ORDRSP for that qty) or "mail" (park, no
+ *                           available qty → confirm → ORDRSP for that qty) or "mail" (Pending, no
  *                           ORDRSP). Reject records the decision only.
  *   stock_short  the decision is recorded; nothing else runs (no qty available to ship)
  *

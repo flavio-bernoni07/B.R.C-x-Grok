@@ -10,6 +10,8 @@ const ORDER_ACTIONS = new Set([
   "order.qty_short",
   "order.qty_split",
   "order.qty_parked",
+  "order.qty_pending",
+  "order.price_pending",
   "order.price_mismatch",
   "order.checks_passed",
   "order.ordrsp_sent",
@@ -35,14 +37,17 @@ function lineFor(action: string, actor: string, detail: unknown): string {
     }
     case "order.qty_short":
       return d.action === "await_operator" || (d as { action?: string }).action === "await_operator"
-        ? "Stock short versus available-to-promise. Waiting in Sign-off Pending for split or mail."
+        ? "Stock short versus available-to-promise. Waiting in Sign-off for split or mail (then Pending)."
         : `Stock short: ${(d as { action?: string }).action ?? "change"} noted by ${actor}.`;
     case "order.qty_split":
       return "Operator chose split: available qty re-enters the stock check toward ORDRSP.";
     case "order.qty_parked":
-      return "Operator chose mail: order parked as pending. No ORDRSP while blocked; the feed continues.";
+    case "order.qty_pending":
+      return "Operator chose mail: order is Pending. No ORDRSP while blocked; the feed continues.";
+    case "order.price_pending":
+      return "Price mail sent; order is Pending until a new ORDERS.";
     case "order.price_mismatch":
-      return "Price does not match the contract. Draft mail ready; parked in Sign-off Pending.";
+      return "Price does not match the contract. Draft mail ready; waiting in Sign-off (then Pending).";
     case "order.checks_passed":
       return "Parse, stock and price passed. Waiting for the person to confirm before ORDRSP.";
     case "order.ordrsp_sent":

@@ -4,13 +4,13 @@
  *
  *   receiveOrder()      parse -> stock -> price, with Grokbot loops; stops at a person
  *   confirmOrder()      the person approves: ORDRSP is written, the hand-over is returned
- *   resolvePriceCase()  the person types a manual EDI (back to Parse) or parks the order
- *   resolveQtyCase()    stock short: operator chooses split (continue) or mail (park, no ORDRSP)
+ *   resolvePriceCase()  the person types a manual EDI (back to Parse) or leaves Pending
+ *   resolveQtyCase()    stock short: operator chooses split (continue) or mail (Pending, no ORDRSP)
  *   simulateOrderFeed() run every EDI in data/orders/feed.json without stopping the batch
  *
  * The order-dec.md rules hold: Grok's fixes go back through the code checks, a wrong price
  * never reaches the confirm step, and a person confirms every order. Qty short is a human
- * gate: split ships available qty toward ORDRSP; mail parks with no ORDRSP.
+ * gate: split ships available qty toward ORDRSP; mail → Pending with no ORDRSP.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import type { Caller } from "../grok/client";
 import { dataPath } from "../paths";
 import { ErpAvailabilityProvider } from "./availability";
 import { loadContract, type SupplyContract } from "./contract";
+import { ingestConfirmedOrder } from "../shipping/service";
 import { polishPriceMail, proposeParseFix } from "./grokbot";
 import { draftQtyShortMail } from "./mail";
 import { buildOrdrsp, type OrdrspHandoff, qtyText } from "./ordrsp";
@@ -167,7 +168,7 @@ export async function receiveOrder(
             where: f.segment || null,
             code: f.code,
           })),
-          options: ["manual_edi", "park_pending"],
+          options: ["manual_edi", "pending"],
         },
         reasons: [
           `The order file could not be read safely and Grokbot had no automatic fix: ${lastFlags.map((f) => f.message).join("; ")}`,
@@ -190,7 +191,7 @@ export async function receiveOrder(
     }
 
     if (result.status === PipelineStatus.AWAIT_GROK_QTY && parsed) {
-      // Operator chooses split (continue toward ORDRSP for available qty) or mail (park, no ORDRSP).
+      // Operator chooses split (continue toward ORDRSP for available qty) or mail (Pending, no ORDRSP).
       // The batch / feed never auto-applies a split: every short line waits in Sign-off Pending.
       const lines: QtyLineChoice[] = [];
       for (let i = 0; i < parsed.lines.length && i < result.availability.length; i++) {
@@ -304,8 +305,8 @@ export async function receiveOrder(
           options: ["split", "mail"],
           summary:
             short.later_date && short.later_qty > 0
-              ? `Ship ${pyG(short.now_qty)} now; ${pyG(short.later_qty)} later (${short.later_date}). Or email the retailer and park.`
-              : `Ship ${pyG(short.now_qty)} of ${pyG(short.ordered_qty)} now. Or email the retailer and park.`,
+              ? `Ship ${pyG(short.now_qty)} now; ${pyG(short.later_qty)} later (${short.later_date}). Or email the retailer (Pending).`
+              : `Ship ${pyG(short.now_qty)} of ${pyG(short.ordered_qty)} now. Or email the retailer (Pending).`,
         },
         reasons: lines.map((l) => {
           const name = l.product || pyStr(l.gtin);
@@ -347,7 +348,7 @@ export async function receiveOrder(
           mail_by: source,
           grokbot: notes,
           price_check: result.price_check ? result.price_check.toDict() : null,
-          options: ["manual_edi", "park_pending"],
+          options: ["manual_edi", "pending"],
           summary: `Unit price on the ORDERS does not match contract ${contract.id}. Mail the retailer or paste a corrected ORDERS.`,
         },
         reasons: reasons.length
@@ -406,19 +407,32 @@ export async function receiveOrder(
 }
 
 /** The person approves the confirm sign-off: write ORDRSP, return the hand-over for Shipping. */
-export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): ConfirmedOrderHandoff {
+export function confirmOrder(
+  erp: Erp,
+  caseId: string,
+  d: { by: string; reason: string },
+  opts: {
+    /**
+     * Send-off all: these cases already passed stock at the gate; release every ORDRSP without
+     * re-blocking on live ATP (live ATP drops after each prior confirm in the same batch).
+     */
+    trustPriorCheck?: boolean;
+  } = {},
+): ConfirmedOrderHandoff {
   const c = erp.signoff(caseId);
   if (!c || c.kind !== "confirm") throw new Error(`${caseId} is not an order confirmation`);
   const order = erp.order(c.subjectRef ?? "");
   if (!order) throw new Error(`${caseId} is not an order confirmation`);
-  for (const line of order.lines) {
-    // another order may have been confirmed since the checks ran
-    const want = line.qtyConfirmed ?? line.qtyOrdered;
-    const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate).atp;
-    if (want && want > atp) {
-      throw new Error(
-        `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
-      );
+  if (!opts.trustPriorCheck) {
+    for (const line of order.lines) {
+      // Exclude this order's own Send-off reservation; other awaiting/confirmed still count.
+      const want = line.qtyConfirmed ?? line.qtyOrdered;
+      const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate, { exceptOrderRef: order.orderRef }).atp;
+      if (want && want > atp) {
+        throw new Error(
+          `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
+        );
+      }
     }
   }
   decide(erp, caseId, { approve: true, by: d.by, reason: d.reason });
@@ -435,15 +449,58 @@ export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: 
   };
 }
 
+export type SendOffBatchItem = {
+  case_id: string;
+  order_ref: string | null;
+  ok: boolean;
+  shipping_ref?: string;
+  error?: string;
+};
+
+/** Release every pending confirm case (Send-off all), smallest qty first. */
+export function sendOffConfirmBatch(
+  erp: Erp,
+  d: { by: string; reason: string; caseIds?: string[] },
+): { results: SendOffBatchItem[]; ok: number; failed: number } {
+  const pending = erp
+    .signoffs({ status: "pending", row: "order" })
+    .filter(
+      (c) =>
+        !c.decidedAt &&
+        c.kind === "confirm" &&
+        (!d.caseIds?.length || d.caseIds.includes(c.caseId)),
+    );
+  const ranked = [...pending].sort((a, b) => {
+    const orderA = a.subjectRef ? erp.order(a.subjectRef) : undefined;
+    const orderB = b.subjectRef ? erp.order(b.subjectRef) : undefined;
+    const qtyA = orderA?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    const qtyB = orderB?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    return qtyA - qtyB || a.caseId.localeCompare(b.caseId);
+  });
+  const results: SendOffBatchItem[] = [];
+  for (const c of ranked) {
+    try {
+      const handoff = confirmOrder(erp, c.caseId, { by: d.by, reason: d.reason }, { trustPriorCheck: true });
+      const shippingRef = ingestConfirmedOrder(erp, handoff);
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: true, shipping_ref: shippingRef });
+    } catch (err) {
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: false, error: (err as Error).message });
+    }
+  }
+  return { results, ok: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
+}
+
 export function rejectOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): void {
   const c = erp.signoff(caseId);
   decide(erp, caseId, { approve: false, by: d.by, reason: d.reason });
   if (c?.subjectRef && erp.order(c.subjectRef)) erp.setOrder(c.subjectRef, { status: "rejected" });
 }
 
-export type ParkedResult = { status: "parked"; order_ref: string | null };
+export type PendingResult = { status: "pending"; order_ref: string | null };
+/** @deprecated use PendingResult */
+export type ParkedResult = PendingResult;
 
-/** Manual EDI goes back to Parse; no EDI parks the order as pending (optionally after sending the price mail). */
+/** Manual EDI goes back to Parse; without it the order stays Pending (optionally after the price mail). */
 export async function resolvePriceCase(
   erp: Erp,
   caseId: string,
@@ -456,7 +513,7 @@ export async function resolvePriceCase(
     mailTo?: string | null;
     sendMail?: boolean;
   },
-): Promise<ReceiveResult | ParkedResult> {
+): Promise<ReceiveResult | PendingResult> {
   const c = erp.signoff(caseId);
   if (!c || !["price_fix", "manual_edi"].includes(c.kind)) throw new Error(`${caseId} is not a price or EDI case`);
   if (d.manualEdi) {
@@ -470,7 +527,7 @@ export async function resolvePriceCase(
     approve: true,
     by: d.by,
     reason: d.reason,
-    edits: { parked: true, mail_sent: !!d.sendMail, draft_mail: sentMail || null, mail_to: mailTo },
+    edits: { pending: true, mail_sent: !!d.sendMail, draft_mail: sentMail || null, mail_to: mailTo },
   });
   if (c.subjectRef && erp.order(c.subjectRef)) {
     erp.setOrder(c.subjectRef, {
@@ -480,21 +537,21 @@ export async function resolvePriceCase(
         mail_to: mailTo,
         mail_sent: !!d.sendMail,
         grokbot: proposal.grokbot,
-        parked_for: d.sendMail ? "price_mail" : "price_park",
+        pending_for: d.sendMail ? "price_mail" : "price_pending",
       },
     });
   }
   if (d.sendMail) {
-    erp.log(`person:${d.by.trim()}`, "order.price_parked", c.subjectRef, {
+    erp.log(`person:${d.by.trim()}`, "order.price_pending", c.subjectRef, {
       detail: { case: caseId, action: "mail", mail_to: mailTo },
     });
   }
-  return { status: "parked", order_ref: c.subjectRef };
+  return { status: "pending", order_ref: c.subjectRef };
 }
 
 /**
  * Stock short: operator chooses **split** (accept available qty, re-enter checks → confirm → ORDRSP
- * for that qty only) or **mail** (park pending with the draft, no ORDRSP). The feed does not wait.
+ * for that qty only) or **mail** (Pending with the draft, no ORDRSP). The feed does not wait.
  */
 export async function resolveQtyCase(
   erp: Erp,
@@ -508,7 +565,7 @@ export async function resolveQtyCase(
     draftMail?: string | null;
     mailTo?: string | null;
   },
-): Promise<ReceiveResult | ParkedResult> {
+): Promise<ReceiveResult | PendingResult> {
   const c = erp.signoff(caseId);
   if (!c || c.kind !== "qty_choice") throw new Error(`${caseId} is not a qty choice case`);
   const proposal = (c.proposal ?? {}) as {
@@ -535,14 +592,14 @@ export async function resolveQtyCase(
           mail_to: mailTo,
           mail_sent: true,
           grokbot: proposal.grokbot,
-          parked_for: "qty_short_mail",
+          pending_for: "qty_short_mail",
         },
       });
     }
-    erp.log(`person:${d.by.trim()}`, "order.qty_parked", c.subjectRef, {
+    erp.log(`person:${d.by.trim()}`, "order.qty_pending", c.subjectRef, {
       detail: { case: caseId, action: "mail", mail_to: mailTo },
     });
-    return { status: "parked", order_ref: c.subjectRef };
+    return { status: "pending", order_ref: c.subjectRef };
   }
 
   if (!proposal.edi || !lines.length) throw new Error(`${caseId} has no EDI to split`);

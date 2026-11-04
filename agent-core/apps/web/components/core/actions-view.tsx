@@ -22,8 +22,10 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { claimTypeLabel, decisionLabel, sourceKindLabel } from "@/components/dispute/format";
 import { actionLabel } from "@/components/shipping/format";
 import { DataTable, Facts, PageHeader, Panel, Pill, type PillTone, Segmented, SourceTag, day, eur, qty } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
 import { AuditList } from "./audit";
+import { signoffUsedGrokbot } from "./signoff";
 
 type Filter = "pending" | "decided" | "all";
 type J = Record<string, unknown>;
@@ -466,7 +468,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
       {takesEdi ? (
         <textarea
           className="h-24 w-full rounded-lg border bg-hh-seasalt p-2 font-mono text-[11px] outline-none focus:border-hh-asparagus"
-          placeholder="Optional: paste the corrected ORDERS EDI. Approving without it parks the order as pending until a new ORDERS arrives."
+          placeholder="Optional: paste the corrected ORDERS EDI. Approving without it leaves the order Pending until a new ORDERS arrives."
           value={manualEdi}
           onChange={(e) => setManualEdi(e.target.value)}
         />
@@ -524,7 +526,12 @@ function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonl
   return (
     <div className="space-y-4">
       <Panel
-        title={caseProblem(c)}
+        title={
+          <span className="inline-flex items-center gap-2">
+            {signoffUsedGrokbot(c) ? <GrokbotIcon size={16} title="Grokbot worked on this case" /> : null}
+            {caseProblem(c)}
+          </span>
+        }
         aside={
           <span className="flex items-center gap-2">
             <SourceTag>{c.caseId}</SourceTag>
@@ -677,10 +684,13 @@ export function ActionsView({ policy }: { readonly policy: string }) {
                 cell: (c) => {
                   const ref = caseOrderRef(c) ?? c.subjectRef;
                   return (
-                    <span className="inline-flex max-w-[200px] flex-col align-middle leading-tight">
-                      <span className="truncate">{caseProblem(c)}</span>
-                      <span className="text-[11px] text-ink-68">
-                        {ref ?? c.caseId} · {caseRole(c)} · {caseUrgency(c)}
+                    <span className="inline-flex max-w-[220px] items-start gap-1.5 align-middle leading-tight">
+                      {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
+                      <span className="inline-flex min-w-0 flex-col">
+                        <span className="truncate">{caseProblem(c)}</span>
+                        <span className="text-[11px] text-ink-68">
+                          {ref ?? c.caseId} · {caseRole(c)} · {caseUrgency(c)}
+                        </span>
                       </span>
                     </span>
                   );
