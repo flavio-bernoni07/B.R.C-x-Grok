@@ -30,7 +30,11 @@ About 20 seconds. One screen, three panels:
 
 1. *Before the screen:* "Last year Italian paddy fell up to 40% because Asian rice got cheap. This year world prices are up 43% in euros. For Riso Scotti, every 1% saved on paddy is about a million euros."
 2. *Buy or wait:* "Every Monday Grok proposes what to buy, and every number links to its source.
-3. *How it works:* 
+3. *How it works:* "A model trained on eleven years of weekly paddy prices predicts the price in eight weeks, and a simple rule turns that into tonnes to buy."
+   - **Data:** EU weekly paddy prices since 2015, World Bank world rice prices, ECB euro/dollar rate, our silo stock. All free APIs (addresses in the data table below).
+   - **Method:** gradient-boosted trees predict the price change over the next 8 weeks. We buy more when prices should rise and less when they should fall, always keeping 8 to 16 weeks of stock.
+   - **Proof:** we replay 2016 to 2026 week by week, learning only from the past, against buying the same amount every week. Result: € saved per tonne.
+   - **Grok:** writes the weekly memo from those numbers only, and a person signs every purchase.
 4. *Lot check:* "A delivery arrives. A photo of the lab sample counts broken and chalky grains, adapt it (inference) to the whole delivery, applies the contract price cut if needed and must require further checks by human to confirm quality (good to show in the demo)."
 
 ### The screen
