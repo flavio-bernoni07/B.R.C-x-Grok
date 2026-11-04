@@ -1,0 +1,50 @@
+{
+  "decision": "accept",
+  "amount": 93.0,
+  "confidence": 0.86,
+  "needs_sign_off": false,
+  "summary": "Threeway qty/price matched; DDT + portal photos support damage on 6 CTN. Credit 6 × PO €15.50 = €93.00.",
+  "points": [
+    {
+      "text": "Signed DDT 4521 notes 6 CTN wet/crushed on arrival",
+      "amount": 93.0,
+      "source": {
+        "kind": "ddt",
+        "ref": "4521",
+        "detail": "damage_noted true; 6 × 15.50 = 93.00"
+      }
+    },
+    {
+      "text": "Retailer portal damage photos attached",
+      "amount": null,
+      "source": {
+        "kind": "damage_photo",
+        "ref": "PORTAL-CONAD-99102-photos",
+        "detail": "wet carton photos"
+      }
+    },
+    {
+      "text": "Playbook damage: accept damaged qty × PO unit price when DDT/photo support",
+      "amount": null,
+      "source": {
+        "kind": "playbook",
+        "ref": "damage",
+        "detail": "qty/price threeway matched; damage proven separately"
+      }
+    }
+  ],
+  "playbook_path": "data/disputes/playbook.md",
+  "contract_path": "data/disputes/contract_excerpt.md",
+  "amount_notes": [],
+  "known_amounts": [93.0, 15.5, 372.0],
+  "claim": {
+    "order_ref": "RS-ORD-99102",
+    "invoice_ref": null,
+    "product": "Riso Scotti Carnaroli 1kg",
+    "quantity": 6,
+    "amount": 93.0,
+    "claim_type": "damage",
+    "confidence": 0.85,
+    "raw_notes": "Invoice not cited; DDT 4521; cartoni da 12"
+  }
+}

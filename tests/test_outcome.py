@@ -74,7 +74,7 @@ def test_emit_reject_reply(tmp_path: Path) -> None:
     assert "REJECT" in text
     assert "RS26112" in text
     assert "DESADV-2026-26112" in text
-    assert "GATE-AUCHAN" in text or "DDT-26112" in text
+    assert "GATE-IPER" in text or "DDT-26112" in text
     # Retailer-facing: no internal Playbook / generator meta
     assert "Playbook" not in text
     assert "dispute.outcome" not in text

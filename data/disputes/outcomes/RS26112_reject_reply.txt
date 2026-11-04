@@ -1,6 +1,6 @@
 Subject: Your claim — decision REJECT — order RS26112 / invoice FT-2026/26112
 
-Dear Auchan,
+Dear Iper,
 
 Thank you for your claim. We compared it with our purchase order, despatch advice (DESADV),
 invoice, and warehouse / delivery evidence.
@@ -13,7 +13,7 @@ Claim is ambiguous (shortage vs OTIF) with no formal qty count; documents show l
 
 Evidence we relied on:
 - Despatch advice (DESADV): DESADV-2026-26112 — Order RS26112 resolved; DESADV/invoice agree at 28 CTN; shipped 28; invoice FT-2026/26112 matches
-- Warehouse / gate event: GATE-AUCHAN-2026-11-03 — Gate-in 10:40 outside booked slot 06:00-08:00 (OTIF miss logged); OTIF miss; no liquidated damages € in contract excerpt
+- Warehouse / gate event: GATE-IPER-2026-11-03 — Gate-in 10:40 outside booked slot 06:00-08:00 (OTIF miss logged); OTIF miss; no liquidated damages € in contract excerpt
 - Delivery note (DDT): DDT-26112 — Signed DDT 28 CTN; unclear handwriting on PO field
 
 If you can provide a clearer order/invoice reference, a formal receiving count, or additional
