@@ -89,6 +89,17 @@ There is no euro threshold. An ambiguous verdict (`needs_sign_off`, with the rea
 `sign_off_reasons`) writes nothing for the retailer: the outcome stays `awaiting_sign_off`
 until a person approves it with `--approved-by NAME`.
 
+## One-shot demo runner
+
+```bash
+./scripts/run_dispute_claim.sh data/disputes/claims/01_shortage_messy_it.txt
+# No API key → offline fixtures (extraction+verdict); with key → live claim_reader+verdict.
+# Writes JSON under data/disputes/runs/<claim-stem>/ (or OUT_DIR=… / --out-dir).
+# Passes --approved-by demo by default so needs_sign_off verdicts still emit TD04/reject reply.
+```
+
+Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing` in `claim_reader` (and via threeway price-gap safety net in `pull_facts`).
+
 ## On the Mini ERP
 
 `dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus these fixtures), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` writes it after a person's OK and adds the case to the Playbook's past cases; `reject_verdict()` reopens the claim. Tests: `tests/test_dispute_service.py`.

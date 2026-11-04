@@ -25,6 +25,19 @@ Detail: [order-dec.md](order-dec.md)
 | Wed 4 Nov | CRM backend: one `crm.actions.decide()` for the sign-off desk, three-line briefings, the inbox router, plain-language questions on fixed read-only views, a JSON API (`python -m crm.api`) | The screen can be designed on top of it | Flavio, core |
 | Wed 4 Nov | Forecast and quality built in `planning/` on real EU, ECB and World Bank data; the buy-or-wait backtest shows no proven saving (+0.38%, 32 of 64), so it is pitched as signals for the buyer | Honest result beats a promise we cannot back | Flavio, forecast |
 
+## Dispute
+
+Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions only (full pipeline in the subdocument).
+
+| When | Decision | Why | Who |
+|---|---|---|---|
+| Wed 4 Nov | Grok decides and cites sources; **code** writes TD04 / EDI INVOIC 381 / amounts / evidence reply | Jury needs every euro from a document; no invented totals | dispute |
+| Wed 4 Nov | **threeway** runs inside every dispute (`pull_facts`); DESADV lines count as goods received (GRN) | Same match idea as the track baseline; Shipping also reconciles earlier | dispute |
+| Wed 4 Nov | No euro threshold. Sign-off only when the case is ambiguous (unsure / no source / missing doc / off-Playbook). Demo runner defaults `--approved-by demo` so mentor demos still emit TD04 or reject reply | Amount alone does not make a case unclear; Flavio all-rows rule | dispute (+ Flavio) |
+| Wed 4 Nov | Remittance reason `PRI` / `PRI/UNK` (and short-pay price text) → `claim_type: pricing` | Portal often labels short pays as other; pricing Playbook must apply | dispute |
+| Wed 4 Nov | Dispute ends in **credit note (TD04)** or **evidence reply** — never a new invoice | Retailer claim path; no rebound debit | dispute |
+| Wed 4 Nov | Facts from shared Mini ERP when Shipping exported them; else mock catalog fixtures (`data/disputes/erp/catalog.json`) until live docs cover the claim | Rows must hand off; fixtures keep Dispute demoable alone | dispute (+ core / shipping) |
+
 ## Forecast and quality (Flavio)
 
 ### TL;DR
@@ -40,7 +53,7 @@ Detail: [order-dec.md](order-dec.md)
 
 ### Built (4 Nov evening)
 
-Code in `planning/`, data in `data/raw/`, results in [docs/forecast-results.md](docs/forecast-results.md). Tests: `tests/test_planning.py`.
+Code in `planning/`, data in `data/market/`, results in [docs/forecast-results.md](docs/forecast-results.md). Tests: `tests/test_planning.py`.
 
 - **Data** (`python -m planning.data`): EU weekly Italian rice prices since Sep 2015 (15,400 rows), ECB USD per EUR, World Bank Pink Sheet Thai and Viet Nam 5%. Checks against the research: Carnaroli €672/t on 19 Oct 2026; Thai 5% €306/t (Oct 2025) to €437/t (Oct 2026) in euros.
 - **Buy or wait** (`python -m planning.advisor`): gradient-boosted trees predict the 8-week price change; the rule buys 1.5, 1 or 0.5 weeks of use within 8 to 16 weeks of cover. **Backtest 2017/18 to 2025/26, 64 variety-campaigns: +0.38% against even buying, better in 32 of 64; direction right 57% of the time when the price moved more than 2%.** That is no proven saving yet: say "signals for the buyer", not "€1M a year". This week every variety reads BUY MORE (expected +3% to +6% in 8 weeks). The weekly memo (`planning/memo.py`) is written by code, or by Grok with every figure checked.

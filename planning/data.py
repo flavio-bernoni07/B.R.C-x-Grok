@@ -1,4 +1,4 @@
-"""Public market data for the purchasing advisor, kept as CSV in data/raw/ so everything
+"""Public market data for the purchasing advisor, kept as CSV in data/market/ so everything
 downstream runs offline and every number has a file it came from.
 
     python -m planning.data          # refresh all three sources
@@ -21,7 +21,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-RAW = Path(__file__).resolve().parents[1] / "data" / "raw"
+# data/raw/ holds the files of the Rice Agent (agent-core, planning/rice_forecast/), from 2021 on;
+# the advisor's backtest needs weekly prices from 2015, so its own copies live in data/market/.
+RAW = Path(__file__).resolve().parents[1] / "data" / "market"
 EU_URL = ("https://ec.europa.eu/agrifood/api/rice/prices?memberStateCodes=IT"
           "&beginDate={begin}&endDate={end}")
 ECB_URL = "https://data-api.ecb.europa.eu/service/data/EXR/M.USD.EUR.SP00.A?startPeriod={start}&format=csvdata"
@@ -137,7 +139,7 @@ def eu_series(variety: str, stage: str = "Paddy") -> list[tuple[date, float]]:
     """Weekly prices for one variety, oldest first; nan where there was no quote."""
     rows = [r for r in _read("eu_rice_prices_it.csv") if r["variety"] == variety and r["stage"] == stage]
     if not rows:
-        raise KeyError(f"no {stage} prices for {variety!r} in data/raw/eu_rice_prices_it.csv")
+        raise KeyError(f"no {stage} prices for {variety!r} in data/market/eu_rice_prices_it.csv")
     return [(date.fromisoformat(r["week_start"]), _num(r["price_eur_t"])) for r in rows]
 
 

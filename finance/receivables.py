@@ -216,7 +216,7 @@ def apply_remittance(
                 erp, f"Remittance {advice['remittance_ref']} deducts €{a['amount']:.2f} from invoice "
                 f"{inv['invoice_ref']} (order {inv['order_ref']}). Reason given: {a['code']} {a['note']}",
                 out_dir=out_dir, source_name=f"REMADV {advice['remittance_ref']}",
-                read_caller=lambda _t, e=extraction: dict(e), verdict_caller=caller, received_on=received_on)
+                extraction=extraction, verdict_caller=caller, received_on=received_on)
             erp.db.execute("INSERT INTO deductions VALUES(?,?,?,?,?,?,?,?,?,?)",
                            (ded_id, payment_id, inv["invoice_ref"], a["amount"], a["code"], a["note"],
                             "claim_opened", None, claim["claim_id"], now_iso()))

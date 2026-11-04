@@ -50,8 +50,30 @@ Rules:
 - Do not invent order_ref or invoice_ref. If missing or unreadable, use null.
 - Prefer null over guessing when a field is absent.
 - claim_type must be exactly one of the allowed values.
+- Remittance / short-payment texts with price reason codes (PRI, PRI/UNK) or
+  unit-price / promo variance → claim_type "pricing" (not "other").
 - Tolerate Italian and English, typos, and remittance/short-payment style texts.
 """.strip()
+
+# Remittance short-pays often arrive as portal "other" / PRI/UNK; map to pricing.
+_PRICING_MARKERS = (
+    "pri/unk",
+    "pri_unk",
+    "reason code: pri",
+    "reason code on remittance: pri",
+    "short-pay",
+    "short pay",
+    "shortpaid",
+    "paid short",
+    "invoice paid short",
+    "price variance",
+    "price hold",
+    "unit price",
+    "promo price",
+    "promo agreement",
+    "list price",
+    "listino",
+)
 
 
 @dataclass(frozen=True)
@@ -116,7 +138,44 @@ def _null_float(value: Any) -> float | None:
     return None
 
 
-def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
+def looks_like_pricing_remittance(*texts: str | None) -> bool:
+    """True when remittance / PRI/UNK / short-pay language points at a price dispute."""
+    blob = " ".join(t for t in texts if t).lower()
+    if not blob:
+        return False
+    if any(marker in blob for marker in _PRICING_MARKERS):
+        return True
+    # Remittance feed + price/PRI token (portal often leaves claim type blank).
+    if "remittance" in blob and (
+        "pri" in blob or "price" in blob or "prezzo" in blob or "€" in blob or "eur" in blob
+    ):
+        return True
+    return False
+
+
+def refine_claim_type(
+    claim_type: ClaimType,
+    *,
+    raw_notes: str = "",
+    claim_text: str = "",
+) -> ClaimType:
+    """Post-process claim_type: remittance PRI/UNK / short-pay → pricing.
+
+    Leaves shortage / damage / late_delivery / pricing unchanged. Only upgrades
+    ``other`` (or unknown→other) when pricing remittance signals are present.
+    """
+    if claim_type is not ClaimType.OTHER:
+        return claim_type
+    if looks_like_pricing_remittance(raw_notes, claim_text):
+        return ClaimType.PRICING
+    return claim_type
+
+
+def parse_extraction(
+    payload: dict[str, Any],
+    *,
+    claim_text: str = "",
+) -> ClaimExtraction:
     """Build a ClaimExtraction from a model JSON object; never invent refs."""
     claim_raw = payload.get("claim_type", "other")
     if isinstance(claim_raw, ClaimType):
@@ -134,6 +193,9 @@ def parse_extraction(payload: dict[str, Any]) -> ClaimExtraction:
 
     notes = payload.get("raw_notes")
     raw_notes = notes.strip() if isinstance(notes, str) else (str(notes) if notes else "")
+    claim_type = refine_claim_type(
+        claim_type, raw_notes=raw_notes, claim_text=claim_text
+    )
 
     return ClaimExtraction(
         order_ref=_null_str(payload.get("order_ref")),
@@ -185,7 +247,7 @@ def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:
         payload = grok_caller(text)
         if not isinstance(payload, dict):
             raise TypeError("grok_caller must return a dict")
-        return parse_extraction(payload)
+        return parse_extraction(payload, claim_text=text)
 
     key = _api_key()
     if not key:
@@ -193,7 +255,7 @@ def read_claim(claim_text: str, *, grok_caller=None) -> ClaimExtraction:
             "Missing API key. Set XAI_API_KEY or GROK_API_KEY for live claim extraction. "
             "Use --dry-run to validate fixture loading without calling Grok."
         )
-    return parse_extraction(call_grok(text, api_key=key))
+    return parse_extraction(call_grok(text, api_key=key), claim_text=text)
 
 
 def load_claim_file(path: Path | str) -> str:

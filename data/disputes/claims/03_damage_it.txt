@@ -11,9 +11,9 @@ Riferimento ordine: RS-ORD-99102
 DDT: 4521
 Fattura: ancora non ricevuta / non indicata sul portale
 
-Articolo: Riso Scotti Carnaroli 1kg
+Articolo: Riso Scotti Carnaroli 1kg (cartoni da 12)
 Quantità danneggiata: 6 cartoni (su 24 consegnati)
-Stima danno: circa 93 euro
+Stima danno: circa 93 euro (6 × €15,50/CTN listino)
 
 Apriamo claim per danno da trasporto / imballo. Attendiamo istruzioni per reso
 o nota di credito.

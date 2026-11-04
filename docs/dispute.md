@@ -15,11 +15,12 @@
 
 ## What I decided
 
-- First dispute-owned slice is the **claim reader** (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
+- **Split of work:** Grok decides and cites sources; **code** writes TD04 / EDI / amounts / evidence reply. Dispute ends in a credit note **or** a reply — never a new invoice.
+- First dispute-owned slice is the **claim reader** (`dispute/claim_reader.py`): Grok extracts `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes` from plain-text claim emails. Missing refs stay `null`/`None` (never invented). Remittance `PRI` / `PRI/UNK` (and short-pay price text) maps to `claim_type: pricing`. Live calls need `XAI_API_KEY` or `GROK_API_KEY`; see `dispute/README.md`.
 - Demo claim emails live under `data/disputes/claims/` (shortage, pricing, damage, incomplete short payment, one ambiguous OTIF/shortage).
-- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from mock Mini ERP fixtures (`data/disputes/erp/catalog.json`), then run three-way matching. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok.
+- Second slice is **Pull the facts** (`dispute/pull_facts.py` + `dispute/mini_erp.py`): resolve order / DESADV / invoice / proof stubs from the shared Mini ERP when Shipping exported them, else mock fixtures (`data/disputes/erp/catalog.json`), then run three-way matching on every claim. Matcher is **vendored** from [Bhavya-Dhoot/threeway](https://github.com/Bhavya-Dhoot/threeway) (`dispute/_threeway_core.py`, MIT) — join on order+item, tolerate tiny qty/€ diffs, one reason per flagged line; **DESADV = goods received (GRN)**. Hand-written extraction JSON under `data/disputes/extractions/` lets you run without Grok.
 - Third slice is **Verdict + sources** (`dispute/verdict.py`): Grok reads the Playbook (`data/disputes/playbook.md`) plus claim + facts + contract excerpt (`data/disputes/contract_excerpt.md`) and proposes `accept` | `partial` | `reject` with per-point citations. Code validates amounts against claim/facts/threeway (no invented totals).
-- Fourth slice is **Credit note or reply** (`dispute/outcome.py`): code emits FatturaPA **TD04** via `a38` (PyPI name for Truelite/python-a38) plus a minimal EDI INVOIC **BGM 381** on accept/partial; on reject it writes an evidence reply listing DESADV/DDT/threeway/contract citations from the verdict. Amounts/refs come only from verdict/facts. Outputs under `data/disputes/outcomes/`. Sample verdicts in `data/disputes/verdicts/`. No euro threshold: an ambiguous verdict waits for a person (`--approved-by`) before anything is written. The sign-off web UI is still to build.
+- Fourth slice is **Credit note or reply** (`dispute/outcome.py`): code emits FatturaPA **TD04** via `a38` (PyPI name for Truelite/python-a38) plus a minimal EDI INVOIC **BGM 381** on accept/partial; on reject it writes an evidence reply listing DESADV/DDT/threeway/contract citations from the verdict. Amounts/refs come only from verdict/facts. Outputs under `data/disputes/outcomes/`. Sample verdicts in `data/disputes/verdicts/`. No euro threshold: an ambiguous verdict waits for a person (`--approved-by`) before anything is written; the demo runner defaults `--approved-by demo`. The sign-off web UI is still to build.
 
 ## What I need from others
 
@@ -34,3 +35,5 @@
 - A facts object per claim: linked order/DESADV/invoice, threeway lines+reasons, proof refs, lookup misses (input for Verdict)
 
 ## Open questions
+
+See [MENTOR.md](../MENTOR.md) (Dispute section): real sign-off threshold, how reconciliation is scored, whether FatturaPA must appear in the demo, GDO dispute practice.

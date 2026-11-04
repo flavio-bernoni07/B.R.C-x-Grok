@@ -12,6 +12,7 @@ Grok decides and explains, code writes every document and amount (dispute-dec.md
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
@@ -19,7 +20,7 @@ from typing import Any, Callable
 from agent import learning
 from core import signoff
 from core.erp import Erp
-from dispute.claim_reader import read_claim
+from dispute.claim_reader import ClaimType, parse_extraction, read_claim
 from dispute.mini_erp import MiniErpStore
 from dispute.outcome import emit_outcome
 from dispute.pull_facts import pull_facts
@@ -104,14 +105,22 @@ def handle_claim(
     include_fixtures: bool = True,
     issue_date: date | None = None,
     received_on: date | None = None,
+    extraction: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`extraction`: a claim already structured by code from a document (a REMADV deduction).
+    It is used as given, claim type included, instead of reading the text."""
     doc_id = erp.add_document("claim email", None, email_text, path=source_name)
     claim_id = erp.next_id("claim", "CLM-")
     erp.save_claim(claim_id=claim_id, source_doc=doc_id, status="received")
     erp.log("retailer", "dispute.claim_received", claim_id, source_doc=doc_id)
 
-    extraction = read_claim(email_text, grok_caller=read_caller)
-    erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+    structured = extraction
+    if structured is not None:
+        extraction = replace(parse_extraction(structured), claim_type=ClaimType(structured["claim_type"]))
+        erp.log("code", "dispute.claim_from_document", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+    else:
+        extraction = read_claim(email_text, grok_caller=read_caller)
+        erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
     facts = pull_facts(extraction, store=_store(erp, include_fixtures))
     erp.log("code", "dispute.facts_pulled", claim_id, detail={"misses": [m.to_dict() for m in facts.misses],
                                                                "threeway": facts.threeway.summary if facts.threeway else None})

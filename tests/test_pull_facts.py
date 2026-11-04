@@ -70,6 +70,23 @@ def test_pull_facts_short_payment_fragment_invoice() -> None:
     assert facts.threeway is not None
     assert facts.threeway.lines[0].reason == "Invoice price differs from the PO price"
     assert abs(facts.threeway.lines[0].value_variance - 70.0) < 0.01
+    assert facts.claim["claim_type"] == "pricing"
+
+
+def test_pull_facts_maps_other_to_pricing_on_price_gap() -> None:
+    claim = ClaimExtraction(
+        order_ref="RS2026/771",
+        invoice_ref="334",
+        product="Riso Scotti Arborio sottovuoto 1kg",
+        quantity=100,
+        amount=70.0,
+        claim_type=ClaimType.OTHER,
+        confidence=0.4,
+        raw_notes="portal blank type",
+    )
+    facts = pull_facts(claim)
+    assert facts.claim["claim_type"] == "pricing"
+    assert "threeway price gap" in facts.claim["raw_notes"]
 
 
 def test_pull_facts_ambiguous_resolves_alias() -> None:
