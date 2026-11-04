@@ -169,3 +169,18 @@ def test_cli_ambiguous_without_approval(tmp_path: Path, capsys) -> None:
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["kind"] == "awaiting_sign_off"
+
+
+
+def test_reject_reply_when_no_document_was_found(tmp_path: Path) -> None:
+    """Live Grok on an unclear claim: no order, DESADV or invoice matched, a person approves the reject."""
+    verdict = {"decision": "reject", "amount": None, "confidence": 0.3, "needs_sign_off": True,
+               "summary": "Cannot match the claim to any order.", "known_amounts": [],
+               "points": [{"text": "No order matches the references", "amount": None,
+                           "source": {"kind": "playbook", "ref": "Other / ambiguous", "detail": "ask for refs"}}],
+               "claim": {"order_ref": None, "invoice_ref": None, "claim_type": "other", "confidence": 0.4}}
+    facts = {"order": None, "desadv": None, "invoice": None, "proofs": [], "threeway": None,
+             "misses": [{"kind": "order", "queried": None, "detail": "no ref"}]}
+    outcome = emit_outcome(verdict, facts=facts, out_dir=tmp_path, approved_by="Sara")
+    assert outcome.kind == "reject_reply"
+    assert Path(outcome.paths["reject_reply"]).is_file()

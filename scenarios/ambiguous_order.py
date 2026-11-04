@@ -197,6 +197,8 @@ def main(argv: list[str] | None = None) -> int:
     res = run(live=args.live, me=args.me, db=args.db)
     print(f"\nGrok calls: {len(res['grok_calls'])} ({'live' if args.live else 'recorded'}); "
           f"person decisions: {len(res['people'])}")
+    if args.live:
+        print(grok.usage_summary())
     return 0
 
 

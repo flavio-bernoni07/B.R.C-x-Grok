@@ -54,3 +54,44 @@ def test_number_check() -> None:
     assert numbers_in("12.000 pezzi a 2,20") == {"12000", "220"}
     assert unknown_numbers("credit 528 for 240 packs", "240 x 2.20 = 528") == set()
     assert unknown_numbers("credit 600", "240 x 2.20 = 528") == {"600"}
+
+
+class _Resp:
+    def __init__(self, body: dict) -> None:
+        self._raw = __import__("json").dumps(body).encode()
+
+    def read(self) -> bytes:
+        return self._raw
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a) -> None:
+        pass
+
+
+def test_json_mode_is_requested_and_dropped_if_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import json
+    import urllib.error
+
+    sent = []
+
+    def fake_urlopen(req, timeout=None, context=None):
+        body = json.loads(req.data)
+        sent.append(body)
+        if "response_format" in body and len(sent) == 1:
+            raise urllib.error.HTTPError(req.full_url, 400, "bad", {}, io.BytesIO(b'{"error":"response_format not supported"}'))
+        return _Resp({"model": "grok-test", "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+                      "choices": [{"message": {"content": '{"ok": true}'}}]})
+
+    monkeypatch.setattr(grok.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setitem(grok._JSON_MODE, "supported", True)
+    assert grok.chat_json([{"role": "user", "content": "x"}], task="t", api_key_value="k") == {"ok": True}
+    assert sent[0]["response_format"] == {"type": "json_object"} and "response_format" not in sent[1]
+    assert grok._JSON_MODE["supported"] is False
+
+
+def test_key_source_never_shows_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XAI_API_KEY", "xai-secret-value")
+    assert grok.key_source() == "environment (XAI_API_KEY)"
