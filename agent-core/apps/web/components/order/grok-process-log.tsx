@@ -6,7 +6,7 @@
  * and Grok did without leaving Orders / Sign-off Pending.
  */
 import { useCallback, useEffect, useState } from "react";
-import { BrandTile } from "@/components/kit/icons";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
 
 type LogEntry = {
@@ -59,7 +59,7 @@ export function GrokProcessLog() {
         )}
       >
         <span className="relative">
-          <BrandTile size={22} />
+          <GrokbotIcon size={22} />
           <span className="pointer-events-none absolute -top-1 -right-1.5 size-2.5 rounded-full bg-[#bfff80] shadow-[0_0_0_2px_rgb(32_49_25)]" />
         </span>
         {unread > 0 && !open ? (
@@ -72,7 +72,7 @@ export function GrokProcessLog() {
       {open ? (
         <aside className="fixed right-5 bottom-20 z-40 flex h-[min(520px,70vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-[16px] bg-hh-seasalt shadow-[0_16px_40px_-16px_rgb(32_49_25/0.45),inset_0_0_0_1px_rgb(32_49_25/0.08)]">
           <header className="flex items-center gap-2 border-hairline border-b px-3.5 py-3">
-            <BrandTile size={22} />
+            <GrokbotIcon size={22} />
             <div className="min-w-0 flex-1">
               <div className="font-bold text-[14px] tracking-[-0.02em]">Grokbot log</div>
               <div className="text-[11px] text-ink-68">Order process: code checks, Grok fixes, human gates</div>

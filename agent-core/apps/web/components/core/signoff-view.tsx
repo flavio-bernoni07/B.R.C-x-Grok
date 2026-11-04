@@ -4,9 +4,10 @@ import type { Signoff } from "@agent/lib/core/erp";
 import type { OrderBoardRow } from "@agent/lib/order/board";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, PageHeader, Panel, Pill, Segmented, day, qty } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
 import { DeskModal } from "./desk-modal";
-import { SignoffCard, SignoffStatus } from "./signoff";
+import { SignoffCard, SignoffStatus, signoffUsedGrokbot } from "./signoff";
 
 /** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
 type DeskTab = "board" | "sendoff" | "price" | "quantity" | "pending" | "other" | "decided";
@@ -206,7 +207,17 @@ export function SignoffView() {
             rowKey={(r) => r.orderRef}
             empty="No orders on the desk yet. Run the order simulation from Orders."
             columns={[
-              { key: "order", header: "Order", main: true, cell: (r) => r.orderRef },
+              {
+                key: "order",
+                header: "Order",
+                main: true,
+                cell: (r) => (
+                  <span className="inline-flex items-center gap-1.5">
+                    {r.grokUsed ? <GrokbotIcon size={14} title="Grokbot worked on this order" /> : null}
+                    <span>{r.orderRef}</span>
+                  </span>
+                ),
+              },
               { key: "retailer", header: "Retailer", cell: (r) => r.retailer },
               {
                 key: "stage",
@@ -307,7 +318,17 @@ export function SignoffView() {
             onRowClick={(c) => setSelected(c.caseId)}
             empty={emptyCopy}
             columns={[
-              { key: "id", header: "Case", main: true, cell: (c) => c.caseId },
+              {
+                key: "id",
+                header: "Case",
+                main: true,
+                cell: (c) => (
+                  <span className="inline-flex items-center gap-1.5">
+                    {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
+                    <span>{c.caseId}</span>
+                  </span>
+                ),
+              },
               {
                 key: "about",
                 header: "About",
@@ -333,7 +354,12 @@ export function SignoffView() {
 
       {current && tab !== "board" ? (
         <DeskModal
-          title={current.title ?? current.kind}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {signoffUsedGrokbot(current) ? <GrokbotIcon size={16} title="Grokbot worked on this case" /> : null}
+              {current.title ?? current.kind}
+            </span>
+          }
           aside={`${current.caseId} · ${current.subjectRef ?? current.row}`}
           onClose={() => setSelected(undefined)}
           wide

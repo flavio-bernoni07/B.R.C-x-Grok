@@ -8,10 +8,20 @@
 import type { Signoff } from "@agent/lib/core/erp";
 import { useEffect, useMemo, useState } from "react";
 import { Panel, Pill, type PillTone, SourceTag, day } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
 import { MailCompose } from "./mail-compose";
 
 const ROW_LABEL: Record<string, string> = { order: "Order", shipping: "Shipping", dispute: "Dispute" };
+
+/** True when Grokbot actually stepped in (parse fix / Grok note), not merely any proposal note. */
+export function signoffUsedGrokbot(c: Signoff): boolean {
+  const mentions = (s: string) => /Grokbot|\bGrok\b/i.test(s);
+  const notes = c.proposal?.grokbot;
+  if (Array.isArray(notes) && notes.some((n) => mentions(String(n ?? "")))) return true;
+  if (c.reasons?.some((r) => mentions(r))) return true;
+  return false;
+}
 
 export function signoffTone(status: string, decidedAt?: string | null): PillTone {
   if ((status === "pending" && !!decidedAt) || status === "parked") return "pending";
@@ -481,7 +491,12 @@ export function SignoffCard({
 
   return (
     <Panel
-      title={<span className="flex items-center gap-2">{c.title ?? c.kind}</span>}
+      title={
+        <span className="flex items-center gap-2">
+          {signoffUsedGrokbot(c) ? <GrokbotIcon size={16} title="Grokbot worked on this case" /> : null}
+          {c.title ?? c.kind}
+        </span>
+      }
       aside={
         <span className="flex items-center gap-2">
           <SourceTag>{c.caseId}</SourceTag>
@@ -508,7 +523,10 @@ export function SignoffQueue({ cases, compact = false }: { readonly cases: Signo
             onClick={() => setOpenId(openId === c.caseId ? undefined : c.caseId)}
             className="flex w-full items-center gap-3 text-left"
           >
-            <span className="w-[72px] shrink-0 font-bold text-[13px]">{c.caseId}</span>
+            <span className="inline-flex w-[88px] shrink-0 items-center gap-1.5 font-bold text-[13px]">
+              {signoffUsedGrokbot(c) ? <GrokbotIcon size={14} title="Grokbot worked on this case" /> : null}
+              {c.caseId}
+            </span>
             <span className="w-[64px] shrink-0 text-[12px] text-ink-68">{ROW_LABEL[c.row] ?? c.row}</span>
             <span className={cn("min-w-0 flex-1 truncate text-[13px]", compact && "text-ink-78")}>{c.title ?? c.kind}</span>
             <SignoffStatus status={c.status} decidedAt={c.decidedAt} />

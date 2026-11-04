@@ -7,11 +7,16 @@
 import type { OrderCheck, OrderDetail, OrderSummary } from "@agent/lib/order/views";
 import { type ReactNode, useState } from "react";
 import { type Column, DataTable, day, eur, Facts, Pill, qty, SourceTag } from "@/components/kit";
-import { BrandTile } from "@/components/kit/icons";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { DeskModal } from "@/components/core/desk-modal";
 
 export function OrderPill({ order }: { readonly order: Pick<OrderSummary, "pill"> }) {
-  return <Pill tone={order.pill.tone}>{order.pill.label}</Pill>;
+  return (
+    <Pill tone={order.pill.tone}>
+      {order.pill.tone === "grok" ? <GrokbotIcon size={14} /> : null}
+      {order.pill.label}
+    </Pill>
+  );
 }
 
 function GrokExplainDot({ order }: { readonly order: OrderSummary }) {
@@ -27,9 +32,9 @@ function GrokExplainDot({ order }: { readonly order: OrderSummary }) {
           e.stopPropagation();
           setOpen(true);
         }}
-        className="relative inline-flex size-6 shrink-0 items-center justify-center rounded-full align-middle shadow-[0_0_0_1px_rgb(32_49_25/0.12)] hover:scale-[1.04]"
+        className="relative inline-flex size-6 shrink-0 items-center justify-center rounded-full align-middle hover:scale-[1.04]"
       >
-        <BrandTile size={18} />
+        <GrokbotIcon size={18} />
         <span className="pointer-events-none absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#bfff80] shadow-[0_0_0_1.5px_rgb(32_49_25)]" />
       </button>
       {open ? (

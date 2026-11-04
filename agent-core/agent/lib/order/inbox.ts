@@ -19,6 +19,8 @@ export type InboxRow = {
   agents: string[];
   /** False for a sign-off case whose order was never saved (no workspace to open). */
   hasWorkspace: boolean;
+  /** True when Grokbot stepped in on this order. */
+  grokUsed: boolean;
 };
 
 const ORDER: Record<InboxStatus, number> = { attention: 0, on_track: 1, waiting: 2, completed: 3 };
@@ -38,6 +40,7 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
     } else if (s.qtyOrdered) {
       description = `${s.lineCount} lines · ${n(s.qtyOrdered)} units`;
     }
+    const grokUsed = s.pill.tone === "grok" || !!(s.grokExplain && /Grokbot|\bGrok\b/i.test(s.grokExplain));
     if (ws) {
       rows.push({
         orderRef: s.orderRef,
@@ -49,6 +52,7 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         statusLabel: ws.statusLabel,
         agents: ws.agents,
         hasWorkspace: true,
+        grokUsed,
       });
     } else {
       const status: InboxStatus = s.caseStatus === "pending" ? "attention" : "completed";
@@ -62,6 +66,7 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         statusLabel: STATUS_LABEL[status],
         agents: ["Order"],
         hasWorkspace: false,
+        grokUsed,
       });
     }
   }

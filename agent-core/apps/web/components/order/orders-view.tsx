@@ -5,6 +5,7 @@ import type { OrderWorkspace } from "@agent/lib/order/workspace";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { day, PageHeader, Panel, Pill, Segmented } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
 import { OrderWorkspaceBody, STATUS_TONE } from "./workspace";
 
@@ -25,8 +26,11 @@ function InboxList({ rows, selected, onOpen }: { readonly rows: InboxRow[]; read
             onClick={() => onOpen(r)}
             className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-1 py-2.5 text-left transition-colors hover:bg-hh-honeydew/60 ${selected === r.orderRef ? "bg-hh-honeydew" : ""}`}
           >
-            <span className="truncate text-[14px]">
-              <b className="tracking-[-0.02em]">{r.retailer}</b> <span className="text-ink-68">{r.orderRef}</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[14px]">
+              {r.grokUsed ? <GrokbotIcon size={14} title="Grokbot worked on this order" /> : null}
+              <span className="truncate">
+                <b className="tracking-[-0.02em]">{r.retailer}</b> <span className="text-ink-68">{r.orderRef}</span>
+              </span>
             </span>
             <span className="flex items-center gap-2 justify-self-end">
               <span className="text-[12px] text-ink-68">{r.deliveryDate ? day(r.deliveryDate) : "no date"}</span>

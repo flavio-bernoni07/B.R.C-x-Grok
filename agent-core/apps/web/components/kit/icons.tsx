@@ -64,3 +64,18 @@ export function BrandTile({ size = 26 }: { readonly size?: number }) {
     </span>
   );
 }
+
+/** xAI / Grokbot mark (black sphere with specular pills). Shown next to cases Grokbot touched. */
+export function GrokbotIcon({ size = 16, title = "Grokbot" }: { readonly size?: number; readonly title?: string }) {
+  return (
+    <img
+      src="/assets/grokbot.png"
+      alt=""
+      title={title}
+      width={size}
+      height={size}
+      className="inline-block shrink-0 rounded-full align-middle"
+      style={{ width: size, height: size }}
+    />
+  );
+}

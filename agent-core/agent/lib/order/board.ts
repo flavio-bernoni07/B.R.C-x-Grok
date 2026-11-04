@@ -42,6 +42,8 @@ export type OrderBoardRow = {
   detail: string;
   qtyOrdered: number;
   qtyConfirmed: number | null;
+  /** True when Grokbot stepped in on this order (parse fix, notes, etc.). */
+  grokUsed: boolean;
 };
 
 function stageFor(erp: Erp, orderRef: string, status: string, caseKind: string | null): OrderBoardStage {
@@ -86,6 +88,7 @@ export function orderBoard(erp: Erp): OrderBoardRow[] {
         detail: s.check,
         qtyOrdered: s.qtyOrdered,
         qtyConfirmed: s.qtyConfirmed,
+        grokUsed: s.pill.tone === "grok" || !!(s.grokExplain && /Grokbot|\bGrok\b/i.test(s.grokExplain)),
       };
     })
     .sort((a, b) => a.stageLabel.localeCompare(b.stageLabel) || a.orderRef.localeCompare(b.orderRef));
