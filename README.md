@@ -62,8 +62,8 @@ On 22 labelled cases ([docs/results.md](docs/results.md)):
 
 | | threeway | ours |
 |---|---|---|
-| Right call on whether someone must act | 14/22 | 21/22 |
-| Every cause named, nothing extra | 10/22 | 21/22 |
+| Right call on whether someone must act | 14/22 | 22/22 |
+| Every cause named, nothing extra | 10/22 | 22/22 |
 
 We wrote the cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. Our one miss (C19) is a labelling slip, explained in the results.
 
