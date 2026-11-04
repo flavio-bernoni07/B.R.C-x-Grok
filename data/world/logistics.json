@@ -1,0 +1,232 @@
+{
+ "_comment": "Places, road distances, fleet and fuel for the route planner (agent/lib/shipping/routes.ts). Built by scripts/build_logistics.py; every figure names its source. The CeDi are the demo world's delivery points, placed at the centre of their real comune.",
+ "built_on": "2026-11-04",
+ "points": [
+  {
+   "id": "PLANT-PV",
+   "name": "Riso Scotti plant, Pavia",
+   "kind": "plant",
+   "lat": 45.18681,
+   "lon": 9.19881,
+   "osm": "way/24328841",
+   "display_name": "Via Angelo Scotti, Cascina Madonnina, Pavia, Lombardia, 27100, Italia"
+  },
+  {
+   "id": "CeDi Melzo",
+   "name": "CeDi Melzo",
+   "kind": "delivery_point",
+   "retailer": "Esselunga",
+   "gln": "BUYER001",
+   "town": "Melzo",
+   "lat": 45.49858,
+   "lon": 9.42425,
+   "osm": "relation/45143",
+   "display_name": "Melzo, Rodano, Milano, Lombardia, 20066, Italia"
+  },
+  {
+   "id": "CeDi Carrefour Nord",
+   "name": "CeDi Carrefour Nord",
+   "kind": "delivery_point",
+   "retailer": "Carrefour Italia",
+   "gln": "8000000000100",
+   "town": "Milano",
+   "lat": 45.46419,
+   "lon": 9.18963,
+   "osm": "relation/44915",
+   "display_name": "Milano, Rodano, Milano, Lombardia, Italia"
+  },
+  {
+   "id": "CeDi Ancona",
+   "name": "CeDi Ancona",
+   "kind": "delivery_point",
+   "retailer": "Conad Ancona",
+   "gln": "8000000000117",
+   "town": "Ancona",
+   "lat": 43.48012,
+   "lon": 13.21873,
+   "osm": "relation/53059",
+   "display_name": "Ancona, Marche, Italia"
+  },
+  {
+   "id": "CeDi Coop Nord",
+   "name": "CeDi Coop Nord",
+   "kind": "delivery_point",
+   "retailer": "Coop Italia",
+   "gln": "8000000000124",
+   "town": "Casalecchio di Reno",
+   "lat": 44.47602,
+   "lon": 11.27569,
+   "osm": "relation/43181",
+   "display_name": "Casalecchio di Reno, Unione dei comuni Valli del Reno, Lavino e Samoggia, Bologna, Emilia-Romagna, 40033, Italia"
+  },
+  {
+   "id": "CeDi Auchan",
+   "name": "CeDi Auchan",
+   "kind": "delivery_point",
+   "retailer": "Auchan",
+   "gln": "8000000000131",
+   "town": "Rozzano",
+   "lat": 45.383,
+   "lon": 9.15453,
+   "osm": "relation/44817",
+   "display_name": "Rozzano, Milano, Lombardia, Italia"
+  }
+ ],
+ "matrix": {
+  "order": [
+   "PLANT-PV",
+   "CeDi Melzo",
+   "CeDi Carrefour Nord",
+   "CeDi Ancona",
+   "CeDi Coop Nord",
+   "CeDi Auchan"
+  ],
+  "km": [
+   [
+    0.0,
+    45.2,
+    46.8,
+    427.1,
+    203.7,
+    28.9
+   ],
+   [
+    45.9,
+    0.0,
+    21.8,
+    436.2,
+    212.8,
+    42.4
+   ],
+   [
+    45.6,
+    21.6,
+    0.0,
+    430.4,
+    207.0,
+    11.9
+   ],
+   [
+    425.3,
+    434.9,
+    429.9,
+    0.0,
+    232.6,
+    429.9
+   ],
+   [
+    203.0,
+    212.6,
+    207.6,
+    233.7,
+    0.0,
+    207.6
+   ],
+   [
+    29.1,
+    42.4,
+    12.8,
+    429.6,
+    206.2,
+    0.0
+   ]
+  ],
+  "minutes": [
+   [
+    0,
+    52,
+    45,
+    266,
+    134,
+    35
+   ],
+   [
+    54,
+    0,
+    30,
+    268,
+    136,
+    39
+   ],
+   [
+    43,
+    30,
+    0,
+    265,
+    133,
+    18
+   ],
+   [
+    264,
+    265,
+    265,
+    0,
+    146,
+    261
+   ],
+   [
+    134,
+    135,
+    135,
+    147,
+    0,
+    131
+   ],
+   [
+    36,
+    38,
+    20,
+    261,
+    130,
+    0
+   ]
+  ],
+  "source": "OSRM table service on OpenStreetMap roads, car profile (ODbL)",
+  "url": "https://router.project-osrm.org/table/v1/driving/9.19881,45.18681;9.42425,45.49858;9.18963,45.46419;13.21873,43.48012;11.27569,44.47602;9.15453,45.383?annotations=distance,duration"
+ },
+ "fleet": {
+  "trucks": [
+   {
+    "truck_id": "TRUCK-PV-03",
+    "plate": "GC204LM"
+   },
+   {
+    "truck_id": "TRUCK-PV-04",
+    "plate": "GC388RA"
+   },
+   {
+    "truck_id": "TRUCK-PV-05",
+    "plate": "GD015TS"
+   },
+   {
+    "truck_id": "TRUCK-PV-06",
+    "plate": "GD772BN"
+   }
+  ],
+  "pallet_capacity": 33,
+  "max_payload_kg": 24000,
+  "source": "demo fleet: 13.6 m semi-trailer, 33 EUR pallets, same limits as the golden order's trucks"
+ },
+ "fuel": {
+  "l_per_100km": 32.6,
+  "source": "ICCT (2018), Fuel consumption testing of tractor-trailers in the European Union and the United States: typical EU tractor-trailer, Long Haul cycle",
+  "url": "https://theicct.org/publication/fuel-consumption-testing-of-tractor-trailers-in-the-european-union-and-the-united-states"
+ },
+ "diesel": {
+  "eur_per_l": 2.23842,
+  "week": "2026-11-02",
+  "source": "MASE, prezzi medi settimanali dei carburanti, gasolio auto (EUR per 1000 l, taxes included)",
+  "url": "https://sisen.mase.gov.it/dgsaie/api/v1/weekly-prices/report/export?format=CSV&lang=it"
+ },
+ "co2": {
+  "kg_per_l": 2.65,
+  "source": "estimate: a common combustion factor for diesel, demo value (agent-core/OPS-WORKSPACE-PROMPT.md, section 5B); not a measured figure"
+ },
+ "rules": {
+  "max_daily_driving_h": 9,
+  "max_daily_driving_source": "Regulation (EC) No 561/2006, art. 6(1): daily driving time shall not exceed nine hours",
+  "max_daily_driving_url": "https://eur-lex.europa.eu/eli/reg/2006/561/oj",
+  "truck_speed_kmh": 80,
+  "truck_speed_source": "Codice della Strada, art. 142: 80 km/h on motorways for goods vehicles over 12 t"
+ }
+}

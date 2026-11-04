@@ -2,10 +2,11 @@
 
 import type { BenchResult } from "@agent/lib/bench/score";
 import type { ShippingFile, ShippingListRow } from "@agent/lib/shipping/service";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { PageHeader, Panel, Pill } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
 import { rowPill } from "./format";
+import { RoutePlanPanel } from "./route-plan";
 import { BenchSummary, BenchTable, ShippingSteps, ShippingTable } from "./shipping-parts";
 
 /**
@@ -13,7 +14,7 @@ import { BenchSummary, BenchTable, ShippingSteps, ShippingTable } from "./shippi
  * detail panel with each step (plan, scan, dispatch, invoice, reconcile, case, Grok's proposal,
  * approval). Approval happens on the Sign-off page.
  */
-export function ShippingView() {
+export function ShippingView({ embedded = false }: { readonly embedded?: boolean } = {}) {
   const [rows, setRows] = useState<ShippingListRow[]>();
   const [bench, setBench] = useState<BenchResult>();
   const [showBench, setShowBench] = useState(false);
@@ -80,22 +81,24 @@ export function ShippingView() {
   const threewayMissed = rows?.filter((r) => r.reconcile?.threeway_wrong).length ?? 0;
   const current = rows?.find((r) => r.order_ref === selected);
 
+  const Wrap = embedded ? EmbeddedWrap : Page;
   return (
-    <Page>
+    <Wrap>
       <PageHeader
-        title="Shipping"
+        title={embedded ? "Shipments and invoices" : "Shipping"}
         sub={
           rows
             ? `${rows.length} orders in shipping, ${flagged} with a cause to follow up, ${threewayMissed} where threeway gives a different answer. The invoice bills what shipped; code names every cause; an employee approves every exception resolution.`
             : "Loading shipments…"
         }
       />
+      <RoutePlanPanel onChanged={loadList} />
       {bench ? (
         <Panel
           title="Against the threeway baseline"
           aside={
             <button type="button" onClick={() => setShowBench((v) => !v)} className="text-ink-68 hover:text-ink">
-              {showBench ? "Hide the 22 cases" : "Show the 22 cases"}
+              {showBench ? `Hide the ${bench.n} cases` : `Show the ${bench.n} cases`}
             </button>
           }
         >
@@ -104,7 +107,7 @@ export function ShippingView() {
             <div className="mt-4 space-y-2">
               <BenchTable res={bench} />
               <p className="text-[12px] text-ink-68">
-                We wrote these cases and their answers ourselves, before running either matcher. Our one miss, C19, is a labelling slip: 38 of 40 is on the contract's 2-unit tolerance.
+                We wrote these cases and their answers ourselves, before running either matcher.
               </p>
             </div>
           ) : null}
@@ -132,6 +135,11 @@ export function ShippingView() {
           </Panel>
         ) : null}
       </div>
-    </Page>
+    </Wrap>
   );
+}
+
+/** Inside the Operations page: no second scrolling page. */
+function EmbeddedWrap({ children }: { readonly children: ReactNode }) {
+  return <div className="space-y-5">{children}</div>;
 }

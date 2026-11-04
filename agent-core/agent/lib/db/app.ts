@@ -33,8 +33,8 @@ export async function getReadyErp(): Promise<Erp> {
   // A new database opens on the golden demo (offline, recorded Grok answers) unless BRC_SEED=none.
   g.__brcSeeder ??= async (e) => {
     if (process.env.BRC_SEED === "none") return;
-    const { runGolden } = await import("../demo/golden");
-    await runGolden(e);
+    const { seedDemo } = await import("../demo/seed");
+    await seedDemo(e);
   };
   if (erp.orders().length === 0) {
     g.__brcSeeding ??= Promise.resolve(g.__brcSeeder(erp)).finally(() => {

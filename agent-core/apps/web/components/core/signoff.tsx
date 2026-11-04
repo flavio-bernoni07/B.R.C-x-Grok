@@ -266,6 +266,11 @@ export function SignoffCard({
     setBusy(false);
     if (!res.ok) return setError(data.error ?? `Failed (${res.status})`);
     if (data.case) setC(data.case);
+    try {
+      window.dispatchEvent(new Event("brc:changed"));
+    } catch {
+      /* ignore */
+    }
     setResult(data.result);
     setComposeMail(false);
     onDecided?.(data);

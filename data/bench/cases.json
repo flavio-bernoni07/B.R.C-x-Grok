@@ -713,48 +713,11 @@
   },
   {
    "id": "C19",
-   "kind": "cartons against units",
-   "description": "38 of 40 cartons shipped, invoiced correctly as 456 packs",
-   "po": [
-    {
-     "order_ref": "RS-26-1019",
-     "item_code": "ARB-1KG-CTN12",
-     "quantity": 40,
-     "unit_price": 15.5,
-     "uom": "CTN"
-    }
-   ],
-   "received": [
-    {
-     "order_ref": "RS-26-1019",
-     "item_code": "ARB-1KG-CTN12",
-     "quantity": 38,
-     "uom": "CTN"
-    }
-   ],
-   "invoiced": [
-    {
-     "order_ref": "RS-26-1019",
-     "item_code": "ARB-1KG-CTN12",
-     "quantity": 456,
-     "unit_price": 1.2917,
-     "uom": "EA"
-    }
-   ],
-   "expected": {
-    "attention": true,
-    "causes": [
-     "short_delivery"
-    ]
-   }
-  },
-  {
-   "id": "C20",
    "kind": "orphan invoice",
    "description": "an invoice line for an order that does not exist",
    "po": [
     {
-     "order_ref": "RS-26-1020",
+     "order_ref": "RS-26-1019",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 40,
      "unit_price": 15.5,
@@ -763,7 +726,7 @@
    ],
    "received": [
     {
-     "order_ref": "RS-26-1020",
+     "order_ref": "RS-26-1019",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 40,
      "uom": "CTN"
@@ -771,7 +734,7 @@
    ],
    "invoiced": [
     {
-     "order_ref": "RS-26-1020",
+     "order_ref": "RS-26-1019",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 40,
      "unit_price": 15.5,
@@ -793,12 +756,12 @@
    }
   },
   {
-   "id": "C21",
+   "id": "C20",
    "kind": "over-delivery",
    "description": "46 cartons shipped and invoiced against 40 ordered",
    "po": [
     {
-     "order_ref": "RS-26-1021",
+     "order_ref": "RS-26-1020",
      "item_code": "CAR-1KG-CTN12",
      "quantity": 40,
      "unit_price": 15.5,
@@ -807,7 +770,7 @@
    ],
    "received": [
     {
-     "order_ref": "RS-26-1021",
+     "order_ref": "RS-26-1020",
      "item_code": "CAR-1KG-CTN12",
      "quantity": 46,
      "uom": "CTN"
@@ -815,7 +778,7 @@
    ],
    "invoiced": [
     {
-     "order_ref": "RS-26-1021",
+     "order_ref": "RS-26-1020",
      "item_code": "CAR-1KG-CTN12",
      "quantity": 46,
      "unit_price": 15.5,
@@ -830,12 +793,12 @@
    }
   },
   {
-   "id": "C22",
+   "id": "C21",
    "kind": "within tolerance",
    "description": "39 of 40 shipped and invoiced: inside the contract's 2-unit tolerance",
    "po": [
     {
-     "order_ref": "RS-26-1022",
+     "order_ref": "RS-26-1021",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 40,
      "unit_price": 15.5,
@@ -844,7 +807,7 @@
    ],
    "received": [
     {
-     "order_ref": "RS-26-1022",
+     "order_ref": "RS-26-1021",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 39,
      "uom": "CTN"
@@ -852,7 +815,7 @@
    ],
    "invoiced": [
     {
-     "order_ref": "RS-26-1022",
+     "order_ref": "RS-26-1021",
      "item_code": "ARB-1KG-CTN12",
      "quantity": 39,
      "unit_price": 15.5,

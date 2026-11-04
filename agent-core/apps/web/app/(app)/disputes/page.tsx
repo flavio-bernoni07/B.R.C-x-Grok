@@ -1,5 +1,6 @@
-import { DisputesView } from "@/components/dispute";
+import { redirect } from "next/navigation";
 
-export default function DisputesPage() {
-  return <DisputesView />;
+/** Disputes live in Actions now (ops workspace). Keep this path so old links still land. */
+export default function Page() {
+  redirect("/actions");
 }

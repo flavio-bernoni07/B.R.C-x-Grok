@@ -122,6 +122,11 @@ export function SignoffView() {
         : `Sent off all ${ok} orders · ${shipped} now in Shipping.`,
     );
     setSelected(undefined);
+    try {
+      window.dispatchEvent(new Event("brc:changed"));
+    } catch {
+      /* ignore */
+    }
     load();
   };
 
@@ -144,7 +149,7 @@ export function SignoffView() {
   return (
     <Page>
       <PageHeader
-        title="Sign-off Pending"
+        title="Actions"
         sub="Schede by gate: Send-off (confirm ORDRSP → Shipping), Price error, Quantity error. Open a case for the actions; Send-off all releases every ready order."
       >
         <Segmented
