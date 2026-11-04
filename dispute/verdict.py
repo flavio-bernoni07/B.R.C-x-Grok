@@ -69,15 +69,17 @@ Return a single JSON object only (no markdown), with these keys:
     amount: number or null — € for this point only
     source: object with:
       kind: one of "order" | "desadv" | "invoice" | "ddt" | "pod" | "warehouse_event"
-            | "contract" | "threeway" | "playbook" | "damage_photo" | "other"
-      ref: string — document id, clause, threeway reason, or playbook rule id
+            | "contract" | "threeway" | "reconcile" | "playbook" | "damage_photo" | "other"
+      ref: string — document id, clause, threeway reason, reconcile cause code, or playbook rule id
       detail: string — brief why this source supports the point
 
 Rules:
 - Read the Playbook first and follow it.
+- Prefer facts.reconcile (shipping.reconcile causes) over baseline threeway when both exist:
+  cite kind "reconcile" with the cause code (e.g. overbilled, short_delivery, price_difference).
 - NEVER invent euro amounts. Every amount must equal a figure present in the claim,
-  threeway value_variance, invoice/PO line math, or contract promo prices × qty
-  already shown in the facts. If you cannot tie an amount to those numbers, use null.
+  threeway value_variance, reconcile cause eur, invoice/PO line math, or contract promo
+  prices × qty already shown in the facts. If you cannot tie an amount to those numbers, use null.
 - Every point MUST have a source. Prefer concrete document ids from facts.
 - Dispute ends in credit note or evidence reply later — you only decide.
 """.strip()
@@ -208,6 +210,13 @@ def collect_known_amounts(claim: ClaimExtraction, facts: dict[str, Any]) -> list
             add((invoiced - received) * po_price)
         if invoiced is not None and inv_price is not None and po_price is not None:
             add((inv_price - po_price) * invoiced)
+
+    reconcile = facts.get("reconcile") or {}
+    for line in reconcile.get("lines") or []:
+        add(line.get("po_price"))
+        add(line.get("invoice_price"))
+        for cause in line.get("causes") or []:
+            add(cause.get("eur"))
 
     # Deduplicate while preserving order.
     seen: set[float] = set()

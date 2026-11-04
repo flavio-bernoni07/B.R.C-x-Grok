@@ -122,8 +122,12 @@ def handle_claim(
         extraction = read_claim(email_text, grok_caller=read_caller)
         erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
     facts = pull_facts(extraction, store=_store(erp, include_fixtures))
-    erp.log("code", "dispute.facts_pulled", claim_id, detail={"misses": [m.to_dict() for m in facts.misses],
-                                                               "threeway": facts.threeway.summary if facts.threeway else None})
+    erp.log("code", "dispute.facts_pulled", claim_id, detail={
+        "misses": [m.to_dict() for m in facts.misses],
+        "threeway": facts.threeway.summary if facts.threeway else None,
+        "reconcile": ({"status": facts.reconcile.status, "causes": facts.reconcile.causes}
+                      if facts.reconcile else None),
+    })
     facts_dict = facts.to_dict()
     checks, check_reasons = claim_checks(erp, claim_id, extraction, facts_dict, received_on or date.today())
     facts_dict["checks"] = checks
@@ -234,3 +238,110 @@ def offline_callers(path: Path | str) -> tuple[Callable, Callable]:
     """Recorded Grok answers (for a demo with the network off). Same code checks apply."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return (lambda _text: dict(data["read_claim"])), (lambda _messages: json.loads(json.dumps(data["verdict"])))
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Jury / Mini-ERP claim runner: no fixture catalog merge unless --with-fixtures."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run one claim on the shared Mini ERP (Order→Shipping docs already there). "
+            "Default: include_fixtures=False so lookup misses are real."
+        )
+    )
+    parser.add_argument("--db", required=True, help="Mini ERP SQLite (e.g. data/demo.sqlite)")
+    parser.add_argument("claim", type=Path, help="Claim email / remittance text file")
+    parser.add_argument("--out-dir", type=Path, required=True, help="Where to write TD04 / reply")
+    parser.add_argument(
+        "--with-fixtures",
+        action="store_true",
+        help="Also merge data/disputes/erp/catalog.json (demo convenience; off for jury)",
+    )
+    parser.add_argument(
+        "--offline",
+        type=Path,
+        default=None,
+        help="JSON with recorded read_claim + verdict (skips live Grok)",
+    )
+    parser.add_argument("--issue-date", default=None, help="ISO date for documents")
+    parser.add_argument(
+        "--extraction",
+        type=Path,
+        default=None,
+        help="Skip claim_reader: use this extraction JSON (and optional --verdict)",
+    )
+    parser.add_argument(
+        "--verdict",
+        type=Path,
+        default=None,
+        help="With --extraction: recorded verdict JSON for offline path",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.claim.is_file():
+        print(f"error: claim file not found: {args.claim}", file=sys.stderr)
+        return 2
+
+    erp = Erp(args.db)
+    email = args.claim.read_text(encoding="utf-8")
+    issue = date.fromisoformat(args.issue_date) if args.issue_date else None
+    read_c = verdict_c = None
+    extraction = None
+
+    if args.offline:
+        read_c, verdict_c = offline_callers(args.offline)
+    if args.extraction:
+        extraction = json.loads(args.extraction.read_text(encoding="utf-8"))
+    if args.verdict:
+        verd_payload = json.loads(args.verdict.read_text(encoding="utf-8"))
+        for key in ("claim", "playbook_path", "contract_path", "amount_notes", "known_amounts"):
+            verd_payload.pop(key, None)
+        verdict_c = lambda _m, v=verd_payload: json.loads(json.dumps(v))
+
+    result = handle_claim(
+        erp,
+        email,
+        out_dir=args.out_dir,
+        source_name=str(args.claim),
+        read_caller=read_c,
+        verdict_caller=verdict_c,
+        include_fixtures=bool(args.with_fixtures),
+        issue_date=issue,
+        extraction=extraction,
+    )
+
+    claim_row = erp.claim(result["claim_id"]) or {}
+    verd = claim_row.get("verdict") or result.get("verdict") or {}
+    summary: dict[str, Any] = {
+        "status": result["status"],
+        "claim_id": result["claim_id"],
+        "case_id": result.get("case_id"),
+        "include_fixtures": bool(args.with_fixtures),
+        "decision": verd.get("decision"),
+        "amount": verd.get("amount"),
+        "outcome": (result.get("outcome") or {}).get("kind"),
+        "sign_off_reasons": verd.get("sign_off_reasons"),
+    }
+    if result.get("status") == "awaiting_person":
+        case = erp.signoff(result["case_id"]) or {}
+        facts = (case.get("proposal") or {}).get("facts") or {}
+        summary["misses"] = facts.get("misses")
+        summary["reconcile"] = facts.get("reconcile")
+        if facts.get("misses") and not args.with_fixtures:
+            print(
+                "warning: Mini ERP lookup misses (no fixture merge): "
+                + json.dumps(facts["misses"], ensure_ascii=False),
+                file=sys.stderr,
+            )
+        summary["hint"] = (
+            f"Person needed. Approve with: python -m dispute.desk --db {args.db} "
+            f"approve {result['case_id']} --by NAME --reason '…'"
+        )
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -83,7 +83,7 @@ A rejected answer is sent back to Grok once, with the reason. If it fails again,
 
 A case goes to the sign-off desk when any of these is true:
 - the lane's own rule says so (Order: always; Shipping: every exception resolution). There is no euro threshold
-- Grok's confidence is under the threshold for that task (starting at 0.7, then tuned, see below)
+- Grok's confidence is under the threshold for that task (Dispute verdict / claim read: **0.55**, then tuned per task; see below)
 - Grok listed an open question
 - facts are missing or conflict, for example two invoices match one claim
 - there is no rule and no close precedent for this kind of case
@@ -235,4 +235,4 @@ These go beyond the boxes on the map, with the same contract and checks.
 
 - Which Grok models and keys the hackathon gives us, and the rate limits
 - Who builds the sign-off page that all lanes share
-- The starting confidence threshold for each task (0.7 until we have data)
+- The starting confidence threshold for each task (Dispute uses **0.55** in code; other tasks tune from the case log)

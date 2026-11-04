@@ -1,9 +1,12 @@
-"""Pull the facts — resolve Mini ERP docs for a claim and run three-way matching.
+"""Pull the facts — resolve Mini ERP docs for a claim and run matching.
 
-Three-way matcher: vendored from https://github.com/Bhavya-Dhoot/threeway
-(`dispute/_threeway_core.py`, MIT — see `dispute/THREEWAY_LICENSE.txt`).
-Join key is order_ref + item_code; tiny qty/€ diffs are tolerated; one reason
-per flagged line. DESADV lines are treated as goods-received (GRN).
+Runs two matchers side by side:
+- baseline threeway (vendored https://github.com/Bhavya-Dhoot/threeway in
+  `dispute/_threeway_core.py`, MIT — see `dispute/THREEWAY_LICENSE.txt`)
+- Shipping's improved reconciler (`shipping.reconcile.reconcile_documents`),
+  which names every cause (the same code `bench.score` measures)
+
+Join key is order_ref + item_code; DESADV lines are treated as goods received.
 
 Usage:
   python -m dispute.pull_facts data/disputes/extractions/01_shortage.json
@@ -25,9 +28,13 @@ from typing import Any
 from dispute._threeway_core import RawLine, ReconcileResult, reconcile
 from dispute.claim_reader import ClaimExtraction, ClaimType, parse_extraction
 from dispute.mini_erp import LookupMiss, MiniErpStore
+from shipping.reconcile import explain, reconcile_documents
 
 DEFAULT_EXTRACTIONS = (
     Path(__file__).resolve().parents[1] / "data" / "disputes" / "extractions"
+)
+DEFAULT_PRODUCTS = (
+    Path(__file__).resolve().parents[1] / "data" / "world" / "products.json"
 )
 
 
@@ -68,8 +75,67 @@ class ThreeWayView:
 
 
 @dataclass
+class ReconcileCauseView:
+    code: str
+    qty: float
+    eur: float
+    text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ReconcileLineView:
+    order_ref: str
+    item_code: str
+    ordered: float
+    received: float
+    invoiced: float
+    po_price: float | None
+    invoice_price: float | None
+    status: str
+    causes: list[ReconcileCauseView]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "order_ref": self.order_ref,
+            "item_code": self.item_code,
+            "ordered": self.ordered,
+            "received": self.received,
+            "invoiced": self.invoiced,
+            "po_price": self.po_price,
+            "invoice_price": self.invoice_price,
+            "status": self.status,
+            "causes": [c.to_dict() for c in self.causes],
+        }
+
+
+@dataclass
+class ReconcileView:
+    """Serializable shipping.reconcile result for the facts object."""
+
+    status: str
+    causes: list[str]
+    notes: list[str]
+    lines: list[ReconcileLineView]
+    explanation: str
+    source: str = "shipping.reconcile.reconcile_documents"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "status": self.status,
+            "causes": list(self.causes),
+            "notes": list(self.notes),
+            "explanation": self.explanation,
+            "lines": [line.to_dict() for line in self.lines],
+        }
+
+
+@dataclass
 class DisputeFacts:
-    """Linked documents + three-way result + proof refs + lookup misses."""
+    """Linked documents + baseline threeway + improved reconcile + proofs + misses."""
 
     claim: dict[str, Any]
     order: dict[str, Any] | None
@@ -77,6 +143,7 @@ class DisputeFacts:
     invoice: dict[str, Any] | None
     proofs: list[dict[str, Any]]
     threeway: ThreeWayView | None
+    reconcile: ReconcileView | None = None
     misses: list[LookupMiss] = field(default_factory=list)
     catalog_path: str | None = None
 
@@ -88,6 +155,7 @@ class DisputeFacts:
             "invoice": self.invoice,
             "proofs": self.proofs,
             "threeway": self.threeway.to_dict() if self.threeway else None,
+            "reconcile": self.reconcile.to_dict() if self.reconcile else None,
             "misses": [m.to_dict() for m in self.misses],
             "catalog_path": self.catalog_path,
         }
@@ -170,13 +238,99 @@ def run_threeway(
     return ThreeWayView(lines=lines, warnings=list(result.warnings), summary=summary)
 
 
+def _load_products(path: Path | str | None = None) -> list[dict[str, Any]]:
+    products_path = Path(path) if path else DEFAULT_PRODUCTS
+    if not products_path.is_file():
+        return []
+    data = json.loads(products_path.read_text(encoding="utf-8"))
+    if isinstance(data, dict):
+        return list(data.get("products") or [])
+    return list(data) if isinstance(data, list) else []
+
+
+def _doc_to_reconcile_lines(
+    doc: dict[str, Any] | None,
+    *,
+    order_ref: str,
+    include_price: bool,
+) -> list[dict[str, Any]]:
+    if not doc:
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in doc.get("lines") or []:
+        item = str(line.get("item_code") or "").strip()
+        if not item:
+            continue
+        row: dict[str, Any] = {
+            "order_ref": order_ref,
+            "item_code": item,
+            "quantity": float(line.get("quantity") or 0),
+            "uom": line.get("uom"),
+        }
+        if include_price and line.get("unit_price") is not None:
+            row["unit_price"] = float(line["unit_price"])
+        rows.append(row)
+    return rows
+
+
+def run_shipping_reconcile(
+    order: dict[str, Any] | None,
+    desadv: dict[str, Any] | None,
+    invoice: dict[str, Any] | None,
+    *,
+    products: list[dict[str, Any]] | None = None,
+) -> ReconcileView | None:
+    """Run Shipping's improved reconciler on the same docs as baseline threeway."""
+    if not order:
+        return None
+    order_ref = str(order.get("order_ref") or "")
+    po_lines = _doc_to_reconcile_lines(order, order_ref=order_ref, include_price=True)
+    received = _doc_to_reconcile_lines(desadv, order_ref=order_ref, include_price=False)
+    invoiced = _doc_to_reconcile_lines(invoice, order_ref=order_ref, include_price=True)
+    if not po_lines and not received and not invoiced:
+        return None
+
+    report = reconcile_documents(
+        po_lines,
+        received,
+        invoiced,
+        products=products if products is not None else _load_products(),
+    )
+
+    lines = [
+        ReconcileLineView(
+            order_ref=line.order_ref,
+            item_code=line.item_code,
+            ordered=line.ordered,
+            received=line.received,
+            invoiced=line.invoiced,
+            po_price=line.po_price,
+            invoice_price=line.invoice_price,
+            status=line.status,
+            causes=[
+                ReconcileCauseView(code=c.code, qty=c.qty, eur=c.eur, text=c.text)
+                for c in line.causes
+            ],
+        )
+        for line in report.lines
+    ]
+    return ReconcileView(
+        status=report.status,
+        causes=sorted(report.causes),
+        notes=list(report.notes),
+        lines=lines,
+        explanation=explain(report),
+    )
+
+
 def pull_facts(
     claim: ClaimExtraction | dict[str, Any],
     *,
     store: MiniErpStore | None = None,
     catalog_path: Path | str | None = None,
+    products: list[dict[str, Any]] | None = None,
 ) -> DisputeFacts:
-    """Look up linked docs for a structured claim and run three-way matching."""
+    """Look up linked docs for a structured claim; run baseline threeway + Shipping reconcile."""
     if isinstance(claim, dict):
         extraction = claim_from_mapping(claim)
     else:
@@ -207,6 +361,9 @@ def pull_facts(
 
     proofs = erp.find_proofs(resolved_order_ref or extraction.order_ref)
     threeway = run_threeway(order, desadv, invoice)
+    shipping_reconcile = run_shipping_reconcile(
+        order, desadv, invoice, products=products
+    )
 
     claim_dict = extraction.to_dict()
     # Safety net: portal "other" + threeway invoice/PO price gap → pricing for Playbook.
@@ -219,6 +376,17 @@ def pull_facts(
             note = (claim_dict.get("raw_notes") or "").strip()
             suffix = "mapped to pricing via threeway price gap"
             claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
+    # Same mapping when Shipping reconcile names a price_difference and baseline is quiet.
+    if (
+        extraction.claim_type is ClaimType.OTHER
+        and claim_dict.get("claim_type") == ClaimType.OTHER.value
+        and shipping_reconcile is not None
+        and "price_difference" in shipping_reconcile.causes
+    ):
+        claim_dict["claim_type"] = ClaimType.PRICING.value
+        note = (claim_dict.get("raw_notes") or "").strip()
+        suffix = "mapped to pricing via shipping reconcile price_difference"
+        claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
 
     return DisputeFacts(
         claim=claim_dict,
@@ -227,6 +395,7 @@ def pull_facts(
         invoice=invoice,
         proofs=proofs,
         threeway=threeway,
+        reconcile=shipping_reconcile,
         misses=misses,
         catalog_path=str(erp.source_path) if erp.source_path else None,
     )
@@ -234,7 +403,7 @@ def pull_facts(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Pull Dispute facts: Mini ERP lookup + three-way match for a claim."
+        description="Pull Dispute facts: Mini ERP lookup + baseline threeway + Shipping reconcile."
     )
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument(

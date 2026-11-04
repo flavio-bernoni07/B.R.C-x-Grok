@@ -8,7 +8,7 @@ Parent index: [DECISIONS.md](DECISIONS.md). Stile schemino: come [order-dec.md](
 
 Solo la riga **Dispute**: Claim email → Read the claim → Pull the facts → Verdict + sources → (sign-off se serve) → Credit note **oppure** evidence reply.
 
-Fuori scope (per Dispute oggi): Sign-off web UI dedicata; Mini ERP SQLite condiviso (usano catalog fixture); nuova fattura di ricarico (vietata).
+**Pipeline: done.** Fuori scope ancora: Sign-off **web** UI condivisa (c’è il desk CLI `python -m dispute.desk`); nuova fattura di ricarico (vietata). La mappa HTML “>€500” è **obsoleta** — nessuna soglia in euro (4 Nov).
 
 ## Pipeline (come Order)
 
@@ -17,12 +17,14 @@ flowchart TD
   inClaim[Claim_email_or_short_payment] --> reader[Grok_claim_reader]
   reader -->|ClaimExtraction_JSON| facts[Pull_facts_code]
   facts --> erp[Mini_ERP_lookup]
-  erp --> threeway[Threeway_match]
+  erp --> threeway[Baseline_threeway]
+  erp --> reconcile[Shipping_reconcile]
   threeway --> factsOut[DisputeFacts]
+  reconcile --> factsOut
   factsOut --> verdict[Grok_verdict_plus_Playbook]
   verdict -->|accept_partial_reject_plus_sources| gate{needs_sign_off}
   gate -->|no_auto| outcome[Outcome_code]
-  gate -->|yes_person| signoff[Human_signoff]
+  gate -->|yes_person| signoff[Human_signoff_desk]
   signoff --> outcome
   outcome -->|accept_or_partial| credit[TD04_plus_INVOIC_381]
   outcome -->|reject| reply[Evidence_reply]
@@ -47,36 +49,42 @@ flowchart TD
 
 ### 3. Pull the facts — `pull_facts.py` + `mini_erp.py` (codice)
 
-- Risolve ordine / DESADV / invoice / proofs dal catalog mock (`data/disputes/erp/catalog.json`), anche con alias “loose”.
-- Esegue **threeway** (vendored `dispute/_threeway_core.py`): join order+item, tollera micro-diff qty/€, una reason per riga flaggata; DESADV = merce ricevuta lato match.
-- Produce `DisputeFacts`: claim + docs + threeway + `misses` (lookup falliti).
-- Nessun Grok obbligatorio se parti da extraction JSON.
+- Risolve ordine / DESADV / invoice / proofs dal Mini ERP esportato da Shipping e/o dal catalog mock (`data/disputes/erp/catalog.json`).
+- Esegue **baseline threeway** (vendored `dispute/_threeway_core.py`) **e** `shipping.reconcile.reconcile_documents` (stesso codice del bench).
+- Produce `DisputeFacts`: claim + docs + `threeway` + `reconcile` (status, causes, explanation) + `misses`.
+- Path jury: `handle_claim(..., include_fixtures=False)` / `python -m dispute.service --db …` / `run_dispute_claim.sh --erp-db …`.
 
 ### 4. Verdict + sources — `verdict.py` (Grok)
 
-- Legge **Playbook** (`data/disputes/playbook.md`) + **contract excerpt** + claim + facts.
-- Decide `accept` | `partial` | `reject` con `points[]` ciascuno con **source** (order, desadv, invoice, ddt/pod, threeway, contract, playbook, …).
-- Importi solo da claim / docs / threeway — codice clampa/droppa euro inventati.
-- `needs_sign_off`: **nessuna soglia in euro**. True se qualcosa è ambiguo: Grok unsure o confidence < 0.55, un punto senza source, tipo fuori Playbook (`other`), claim letto con confidence < 0.55, documento non trovato, importo non presente nei documenti. Lo calcola il codice e scrive il perché in `sign_off_reasons`.
+- Legge **Playbook** + **contract excerpt** + claim + facts.
+- Decide `accept` | `partial` | `reject` con `points[]` ciascuno con **source** (preferire `reconcile` + cause code quando presente).
+- Importi solo da claim / docs / threeway / reconcile eur — codice clampa/droppa euro inventati.
+- `needs_sign_off`: **nessuna soglia in euro**. True se qualcosa è ambiguo: Grok unsure o confidence < **0.55**, un punto senza source, tipo fuori Playbook (`other`), claim letto con confidence < 0.55, documento non trovato, importo non presente nei documenti.
 
 ### 5. Sign-off (condizionale)
 
 - Se `needs_sign_off` → persona approva/modifica; caso approvato può entrare nel Playbook “past cases”.
-- Se no → path auto verso outcome.
-- Finché una persona non approva (`--approved-by NOME`), `outcome.py` non scrive né TD04 né reply: l'esito resta `awaiting_sign_off`. UI web di sign-off: ancora da fare.
+- Desk CLI: `python -m dispute.desk --db data/demo.sqlite list|show|approve|reject`.
+- Finché una persona non approva, niente TD04/reply (`awaiting_sign_off`). Web UI CRM: ancora da fare; il desk usa la stessa coda.
 
 ### 6. Out — `outcome.py` (codice)
 
-- **accept / partial** → FatturaPA **TD04** (`a38`) + EDI INVOIC hint `BGM+381`. Importi/ref solo da verdict/facts.
-- **reject** → reply con evidenze (DESADV, DDT, threeway, contract, …) citate dal verdict.
-- Mai una nuova invoice di addebito: credit note **oppure** reply.
-- Output: `data/disputes/outcomes/`.
+- **accept / partial** → FatturaPA **TD04** (`a38`) + EDI INVOIC hint `BGM+381`.
+- **reject** → reply con evidenze (incluso `reconcile` causes).
+- Mai una nuova invoice di addebito.
+- Output: `data/disputes/outcomes/` + Mini ERP documents.
 
-## Regole fissate (dal codice / Playbook Dispute)
+## Lavoro corrente (dopo la pipeline)
+
+1. Citare Shipping reconcile nei verdict live (i facts già lo espongono).
+2. Desk CLI come superficie persona fino al CRM condiviso.
+3. Path `--erp-db` senza fixtures per claim scelti dalla giuria.
+
+## Regole fissate
 
 - Grok decide e spiega; **il codice scrive** i documenti e gli importi finali.
 - Ogni punto del verdict ha una **source** tracciabile.
-- Threeway gira dentro Dispute (e nel flusso shipping prima della fattura, altra riga).
+- Threeway baseline + Shipping reconcile girano dentro Dispute.
 - Fine disputa = TD04/credit **o** evidence reply.
 
 ## Cosa Dispute chiede / dà agli altri
@@ -84,11 +92,11 @@ flowchart TD
 | Direzione | Cosa |
 |---|---|
 | Da Core / Shipping | Order, DESADV, invoice, DDT/POD, stock events nel Mini ERP |
-| Da Forecast/quality | record qualità lotto come prova “contested goods” |
+| Da Forecast/quality | record qualità lotto come prova “contested goods” (non ancora cablato) |
 | A Core / retailer | verdict + credit note o reply salvati |
 | Interno Order | nessun handoff diretto; Dispute parte dal claim post-fattura |
 
 ## Non in questo documento
 
-- Implementare la UI di sign-off.
-- Unificare il catalog Dispute col Mini ERP condiviso di Core (oggi fixture locali).
+- UI web di sign-off (CRM).
+- Handoff qualità lotto / Forecast.

@@ -2,10 +2,13 @@
 # Run Dispute pipeline for one claim email (or remittance text).
 # Live: claim_reader → pull_facts → verdict → outcome (needs XAI_API_KEY or GROK_API_KEY).
 # Offline (default when no key, or --offline): use saved extraction + verdict fixtures.
+# Jury / Mini ERP: pass --erp-db PATH (after demo.py --db …) to run handle_claim with
+# include_fixtures=False — no catalog.json merge; misses are reported.
 #
 # Usage (from repo root):
 #   ./scripts/run_dispute_claim.sh data/disputes/claims/01_shortage_messy_it.txt
 #   ./scripts/run_dispute_claim.sh data/disputes/claims/04_short_payment_incomplete.txt --offline
+#   ./scripts/run_dispute_claim.sh data/world/golden/claim_email.txt --erp-db data/demo.sqlite --offline
 #   OUT_DIR=/tmp/dispute-run ./scripts/run_dispute_claim.sh path/to/claim.txt
 #
 # JSON only on stdout of each step is redirected to OUT_DIR; errors go to stderr.
@@ -16,7 +19,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME]" >&2
+  echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME] [--erp-db PATH] [--with-fixtures]" >&2
   exit 2
 fi
 
@@ -26,10 +29,21 @@ OUT_DIR="${OUT_DIR:-}"
 ISSUE_DATE="${ISSUE_DATE:-2026-11-04}"
 # Demo default: auto-approve ambiguous verdicts so reject replies / TD04 emit.
 APPROVED_BY="${APPROVED_BY:-demo}"
+ERP_DB="${ERP_DB:-}"
+WITH_FIXTURES=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --offline) OFFLINE=1; shift ;;
+    --with-fixtures) WITH_FIXTURES=1; shift ;;
+    --erp-db)
+      ERP_DB="$2"
+      shift 2
+      ;;
+    --erp-db=*)
+      ERP_DB="${1#*=}"
+      shift
+      ;;
     --out-dir)
       OUT_DIR="$2"
       shift 2
@@ -47,7 +61,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME]"
+      echo "usage: $0 <claim.txt> [--offline] [--out-dir DIR] [--approved-by NAME] [--erp-db PATH] [--with-fixtures]"
       exit 0
       ;;
     *)
@@ -92,6 +106,33 @@ mkdir -p "$OUT_DIR"
 has_key=0
 if [[ -n "${XAI_API_KEY:-}" || -n "${GROK_API_KEY:-}" ]]; then
   has_key=1
+fi
+
+# --- Jury path: shared Mini ERP only (no catalog.json unless --with-fixtures) ---
+if [[ -n "$ERP_DB" ]]; then
+  if [[ ! -f "$ERP_DB" ]]; then
+    echo "error: Mini ERP db not found: $ERP_DB (run: python3 demo.py --db $ERP_DB)" >&2
+    exit 2
+  fi
+  ARGS=(--db "$ERP_DB" "$CLAIM_ABS" --out-dir "$OUT_DIR" --issue-date "$ISSUE_DATE")
+  if [[ "$WITH_FIXTURES" -eq 1 ]]; then
+    ARGS+=(--with-fixtures)
+  fi
+  if [[ "$OFFLINE" -eq 1 || "$has_key" -eq 0 ]]; then
+    if [[ -f "data/world/golden/grok_offline.json" && "$STEM" == "claim_email" ]]; then
+      ARGS+=(--offline data/world/golden/grok_offline.json)
+    elif [[ -n "$EXT_NAME" && -n "$VERD_NAME" ]]; then
+      ARGS+=(--extraction "data/disputes/extractions/${EXT_NAME}.json")
+      ARGS+=(--verdict "data/disputes/verdicts/${VERD_NAME}.json")
+    else
+      echo "error: --erp-db offline needs golden claim_email or a numbered 01–05 claim" >&2
+      exit 2
+    fi
+  fi
+  echo "mode=erp-db db=$ERP_DB fixtures=$WITH_FIXTURES claim=$CLAIM_ABS out=$OUT_DIR" >&2
+  cp "$CLAIM_ABS" "$OUT_DIR/claim.txt"
+  python3 -m dispute.service "${ARGS[@]}" | tee "$OUT_DIR/summary.json"
+  exit 0
 fi
 
 if [[ "$OFFLINE" -eq 1 || "$has_key" -eq 0 ]]; then
@@ -157,6 +198,7 @@ summary = {
     "claim_type": ext.get("claim_type"),
     "order_ref": ext.get("order_ref") or (facts.get("order") or {}).get("order_ref"),
     "threeway": (facts.get("threeway") or {}).get("summary"),
+    "reconcile": (facts.get("reconcile") or {}).get("causes"),
     "verdict": verd.get("decision"),
     "verdict_amount": verd.get("amount"),
     "outcome_kind": oc.get("kind"),

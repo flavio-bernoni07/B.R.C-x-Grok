@@ -38,6 +38,24 @@ def test_pull_facts_shortage_flags_qty_gap() -> None:
     assert any(p.get("kind") == "ddt" for p in facts.proofs)
 
 
+def test_pull_facts_shortage_reconcile_names_both_causes() -> None:
+    """Baseline threeway gives one reason; Shipping reconcile names overbilled + short_delivery."""
+    claim = load_claim_json(EXTRACTIONS / "01_shortage.json")
+    facts = pull_facts(claim)
+    assert facts.reconcile is not None
+    assert facts.reconcile.source.startswith("shipping.reconcile")
+    assert facts.reconcile.status == "exception"
+    causes = set(facts.reconcile.causes)
+    assert "overbilled" in causes
+    assert "short_delivery" in causes
+    # Baseline keeps a single reason string — the improved view is what verdicts should cite.
+    assert facts.threeway is not None
+    assert len(facts.threeway.lines[0].reason.split(";")) == 1 or "and" not in facts.threeway.lines[0].reason.lower()
+    payload = facts.to_dict()
+    assert payload["reconcile"]["causes"] == sorted(causes)
+    assert any(c["code"] == "overbilled" for c in payload["reconcile"]["lines"][0]["causes"])
+
+
 def test_pull_facts_pricing_flags_price() -> None:
     claim = load_claim_json(EXTRACTIONS / "02_pricing.json")
     facts = pull_facts(claim)

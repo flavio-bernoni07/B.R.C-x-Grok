@@ -2,7 +2,8 @@
 
 Grok **must read this Playbook before proposing a verdict**. Rules below are the
 working set for the hackathon demo. Amounts always come from documents / threeway /
-the claim — never invent euro totals.
+Shipping reconcile / the claim — never invent euro totals. When `facts.reconcile`
+is present, prefer citing its cause codes (`reconcile` source) over baseline threeway.
 
 ## When a person signs off
 
@@ -23,8 +24,9 @@ Code checks the same list and sends the case to a person even if you say false.
 ### Shortage / OSD
 - Prefer DESADV shipped qty + signed DDT/POD + warehouse pick events over retailer
   receiving counts alone.
-- If threeway shows invoiced > received (DESADV/POD) → lean **accept** (or partial)
-  for the over-billed qty × PO unit price, citing threeway + DESADV/DDT.
+- If reconcile (or threeway) shows invoiced > received (DESADV/POD) → lean **accept**
+  (or partial) for the over-billed qty × PO unit price, citing `reconcile`/`overbilled`
+  (and `short_delivery` when named) + DESADV/DDT.
 - If order = DESADV = invoice = POD and retailer claims shortage → lean **reject**
   with evidence pack (likely retailer receiving error).
 
