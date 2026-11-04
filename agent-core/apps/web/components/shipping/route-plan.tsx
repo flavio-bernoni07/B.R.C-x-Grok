@@ -202,7 +202,7 @@ export function RoutePlanCard({ output, onDecided }: { readonly output: unknown;
 }
 
 /** The Shipping page's dispatch section: the waiting or last plan, or a button to ask for one. */
-export function RoutePlanPanel() {
+export function RoutePlanPanel({ onChanged }: { readonly onChanged?: () => void } = {}) {
   const [data, setData] = useState<PlanOutput>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -222,18 +222,29 @@ export function RoutePlanPanel() {
       .then(async (r) => {
         const d = (await r.json()) as PlanOutput;
         if (!r.ok) setError(d.error ?? "The logistics agent could not plan the day.");
-        else setData(d);
+        else {
+          setData(d);
+          onChanged?.();
+        }
       })
       .catch(() => setError("The logistics agent could not plan the day."))
       .finally(() => setBusy(false));
-  }, [data?.ship_date]);
+  }, [data?.ship_date, onChanged]);
 
   if (!data) return null;
   const so = data.plan_case;
   const canPlan = data.ready?.length && (!so || so.status === "rejected");
   return (
     <div className="space-y-2">
-      {so ? <RoutePlanCard output={data} onDecided={load} /> : null}
+      {so ? (
+        <RoutePlanCard
+          output={data}
+          onDecided={() => {
+            load();
+            onChanged?.();
+          }}
+        />
+      ) : null}
       {canPlan ? (
         <Panel title={`Dispatch ${day(data.ship_date)}`} aside="Logistics agent">
           <div className="flex flex-wrap items-center justify-between gap-3 text-[13px]">

@@ -2,7 +2,7 @@
 
 ![B.R.C x Grok dashboard: orders checked by code, invoices matched against what shipped, claims answered with sources](docs/img/banner.gif)
 
-A zero-touch back office on synthetic data + an architectural concept of how data flows from the factory to the administration.
+Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a person. Built on synthetic data, with an architecture for how data flows from the factory to the administration.
 
 ## The problem
 
@@ -16,25 +16,35 @@ The only automatic check is an exact text match. threeway, the track's baseline,
 
 We are in 2026... we can have better checks than a text matcher.
 
-## What we built
+## Case study: one order, without us and with us
 
-Code does the work, Grok takes the exceptions, and a person is called only when a case is unclear.
+Esselunga orders 12,000 packs of Carnaroli 1 kg at €2.20 (contract CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
-- **Code** reads every EDI message, checks stock against the forecast, plans the trucks, checks the pallet scans, writes the delivery note, the invoice and the credit note, and reconciles order, delivery and invoice line by line.
-- **Grok** gets what code cannot settle: a messy order, short stock to split, a claim email to read, a verdict to propose. It answers in fixed JSON and code checks it before anything happens; an amount Grok cannot tie to a document is dropped.
-- **A person** signs off whenever a case is ambiguous: Grok is unsure, a point has no source, a document is missing, the claim type is not in the Playbook. No euro threshold.
-- **Improving loop:** every decision is logged, and the closest past cases go into Grok's prompt. After the same decision three times with none overturned, code drafts a rule; once a person approves it, the rule decides those cases with no Grok call. In a replay of invented claims, the share that needs a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
+| What goes wrong | Without our system | Money lost | With B.R.C x Grok |
+|---|---|---|---|
+| Pallet PAL-ESS-GOLD-001-04 (960 packs) is scanned onto the wrong truck | Nothing compares the scan with the plan. The paperwork says 12 pallets on TRUCK-PV-01, the truck carries 11, and Esselunga claims the missing packs | **€2,112** credit note (960 × €2.20) | Code checks every scan against the plan and stops the truck at the dock. Grok proposes a rescan, Marco (warehouse lead) approves, the truck leaves complete |
+| 1,200 packs go on quality hold, so 10,800 ship and are invoiced | threeway matches on reference and item code and says "matched". Nobody re-ships the 1,200 or tells Esselunga | **€2,640** of ordered goods never delivered (1,200 × €2.20) | Reconciliation compares quantities line by line and names the short delivery, so the order shows 1,200 still owed |
+| Esselunga pays €300 less for a "promotional contribution" | It looks like any short payment and gets booked as one | **€300** | Code finds no credit note behind it; Grok checks the contract and finds no clause for it (RS-GDO-MASTER-2026 §12); Sara approves a request to repay, with the evidence |
+| Six orders ship on 6 Nov to five warehouses | One truck per order, plant to warehouse and back: 6 trucks, 1,591.7 km, €1,161.50 of diesel, 7 driver days | **€426.89** of diesel more than needed | The Logistics agent puts both Esselunga orders on one stop and drives two corridors: 2 trucks, 1,006.7 km, €734.61, 3 driver days. The transport planner approves the plan |
 
-## Case study: an invisible error without Grok
+That's **€5,478.89 at stake on one order and one dispatch day**. With us, code catches all four before they become a loss, and a person decides only where judgment is needed.
 
-`python demo.py` runs the golden order through every row, offline:
+## Agents on every step
 
-1. Esselunga orders 12,000 packs of Carnaroli. Stock and price check out, Giulia confirms, the ORDRSP goes back.
-2. The factory puts 1,200 packs on quality hold, so only 10,800 ship. One pallet is scanned onto the wrong truck; Grok proposes a rescan and Marco approves.
-3. Invoice FT-2026/0001 bills the 10,800 shipped (€23,760 net, FatturaPA TD01). We flag the short delivery; **threeway calls it matched**.
-4. Esselunga claims a missing pallet of 240 packs, €528. Code pulls order, delivery, invoice and signed proof of delivery; Grok proposes to accept, citing three sources. Nothing is unclear, so the credit note goes out with no person.
-5. A second, unclear claim waits in the sign-off queue until Sara approves the reply.
-6. Esselunga pays: the €528 deduction matches our credit note, and a €300 deduction with nothing behind it goes to a person. 63 audit events and a weekly digest close the run.
+Grok does the work and code checks it. A person signs off at a few gates with one click and one line on why.
+
+| Agent | What it does | What code checks | Who signs off |
+|---|---|---|---|
+| Order agent | Reads every ORDERS EDI. When a field is unclear (a date, a quantity) it proposes a fix, which is parsed again. Splits an order when stock is short | Stock from production events, contract price | The order desk confirms every ORDRSP |
+| Logistics agent | Groups orders for the same and nearby warehouses into shared trucks, finds the stop order, briefs the planner | 33 pallets and 24 t per truck, 9 h daily driving (EU 561/2006), real road km, every figure in Grok's briefing | The transport planner approves the plan before any truck is booked |
+| Warehouse agent | Proposes the fix for a scan or truck exception: rescan, move a pallet, another truck | Every pallet scan against the plan, quality holds, batches | The warehouse lead approves |
+| Documents and reconciliation | Code writes DESADV, DDT, FatturaPA TD01 and INVOIC, then reconciles order, delivery and invoice | Line by line, every cause named | A person only when the documents disagree |
+| Dispute agent | Reads the claim email, pulls the documents, proposes a verdict with a source per point | Every amount tied to a document, the complaint window, duplicates | A person whenever anything is unclear |
+| Cash agent | Matches each deduction to our credit notes; the rest become claims | Remittance against invoices and credit notes | A person decides each new claim |
+| Purchasing agent | Buy-or-wait signals for paddy | Backtest against buying the same amount every week | The buyer decides every purchase |
+| Learning | The closest past decisions go into Grok's prompt; three alike draft a rule | None overturned, and the person's reason still holds | A person approves each rule |
+
+**Grok and the person.** Grok reads, fixes, plans, investigates and proposes, up to the truck and after it. Code rejects any figure Grok cannot tie to a record. The person's one line on why becomes an example Grok gets for the next similar case. In the golden run, 56 of our 63 logged steps are done by code and Grok and 7 by a person (`python demo.py`). In a replay of invented claims, the share of cases that need a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
 
 ## From the factory to the administration
 
@@ -44,7 +54,8 @@ flowchart LR
   R["Retailer"] -->|ORDERS| O["Order<br/>parse, stock and price checks"]
   S --> O
   O -->|ORDRSP| R
-  O --> W["Warehouse<br/>trucks, picking, pallet scans"]
+  O --> L["Logistics<br/>shared trucks, shortest route"]
+  L --> W["Warehouse<br/>picking, pallet scans"]
   W -->|DESADV + DDT| R
   W --> A["Administration<br/>invoice, reconciliation"]
   A -->|FatturaPA TD01| SDI["SdI"]
@@ -56,21 +67,36 @@ flowchart LR
 
 Production enters only as events, so a batch on hold can never be promised or shipped. Every box writes to one Mini ERP (`core/erp.py`, one SQLite file) with the id of the document each record came from, so nothing is retyped and every action is traceable. Box by box: [docs/process-map.md](docs/process-map.md).
 
-## Result against the baseline
+## Results against a baseline
 
-On 21 labelled cases ([docs/results.md](docs/results.md)):
+| | Baseline | Ours | Source |
+|---|---|---|---|
+| Right call on whether someone must act | threeway 13/21 | 21/21 | `python -m bench.score`, [docs/results.md](docs/results.md) |
+| Every cause named, nothing extra | threeway 10/21 | 21/21 | same |
+| Km to deliver the 6 Nov orders | one truck per order: 1,591.7 | 1,006.7 (37% less) | OSRM road distances on OpenStreetMap |
+| Diesel for the 6 Nov orders | €1,161.50 | €734.61 | 32.6 l/100 km (ICCT 2018), €2.238/l (MASE, week of 2 Nov 2026) |
+| Trucks and driver days for the 6 Nov orders | 6 trucks, 7 days | 2 trucks, 3 days | same plan |
+| Cases that need a person | 80% in week 1 | 16% by week 4 | `python -m agent.replay`, invented history |
 
-| | threeway | ours |
-|---|---|---|
-| Right call on whether someone must act | 13/21 | 21/21 |
-| Every cause named, nothing extra | 10/21 | 21/21 |
-
-We wrote the cases ourselves to cover threeway's blind spots, so the jury's test set is the real test.
+We wrote the reconciliation cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. The 6 Nov orders are invented; the roads, fuel use and diesel price are real and listed in `data/world/logistics.json`.
 
 ## Run it
 
+The app the jury sees is in `agent-core/` (Next.js with the eve agent on Grok, one SQLite Mini ERP):
+
 ```bash
-./test.sh                     # every test (146), no key needed; the first run creates .venv with every package
+cd agent-core
+pnpm install
+cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
+pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
+pnpm dev:web                  # http://localhost:3000, then Shipping > "Plan the trucks with Grok"
+pnpm test                     # the app's tests (105)
+```
+
+The Python rows are the reference the app is ported from:
+
+```bash
+./test.sh                     # every Python test (155), no key needed; the first run creates .venv with every package
 source .venv/bin/activate     # then run the rest with the project's Python (system python3 lacks a38 and the rest)
 python demo.py                # the golden order end to end, offline (--live calls Grok: XAI_API_KEY or GROK_API_KEY, or in a gitignored .env.local)
 python -m scenarios.ambiguous_order   # an ambiguous order: Grok fixes the EDI, a person confirms, a crushed pallet, a €444 claim (--live, --me to decide yourself)
@@ -80,16 +106,18 @@ python demo.py --db data/demo.sqlite                 # keeps the database for th
 python -m core.trace data/demo.sqlite ESS-GOLD-001   # every document behind an order
 python -m finance.receivables data/demo.sqlite       # aging and disputed deductions
 python -m crm.api --db data/demo.sqlite              # JSON API for the CRM, chatbot at POST /api/ask
+python scripts/build_logistics.py                    # rebuild data/world/logistics.json (needs the internet once)
 ```
 
-Forecast and quality: `python -m forecast_quality.data`, then `.advisor`, `.quality`, `.demand`. The Rice Agent (paddy price outlook with Grok, web UI) is in `agent-core/`. Every folder is listed in [AGENTS.md](AGENTS.md).
+Forecast and quality: `python -m forecast_quality.data`, then `.advisor`, `.quality`, `.demand`. Every folder is listed in [AGENTS.md](AGENTS.md).
 
 ## Known limitations
 
 - All data is synthetic; nothing is sent to a retailer or to SdI. The case curve and the demand forecast run on invented history.
+- One loss we can't prevent yet: Esselunga says a 240-pack pallet (€528) never arrived, while our scans put it on the truck. We credit it with three sources, but only a scan at the retailer's dock would show where it went.
+- Logistics: road km come from OSRM's car profile, slowed to the 80 km/h truck limit; no traffic, delivery slots or tolls. CO2 is an estimate (2.65 kg per litre).
 - `shipping/` is rebuilt from Nicola's v0.5.0 write-up; his code replaces ours when it arrives.
 - Grok's live calls are tested with recorded answers only. Default model `grok-4-latest`; set `XAI_MODEL` or `GROK_MODEL` to override.
-- The CRM has its backend and API but no screen yet.
 - Buy-or-wait shows no proven saving yet (+0.38% against even buying, better in 32 of 64 campaigns), so we pitch it as signals, not savings ([docs/forecast-results.md](docs/forecast-results.md)).
 
 Team, how we work and what we deliver: [docs/team.md](docs/team.md).

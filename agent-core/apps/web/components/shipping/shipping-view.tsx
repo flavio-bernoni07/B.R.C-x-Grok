@@ -91,7 +91,7 @@ export function ShippingView() {
             : "Loading shipments…"
         }
       />
-      <RoutePlanPanel />
+      <RoutePlanPanel onChanged={loadList} />
       {bench ? (
         <Panel
           title="Against the threeway baseline"
