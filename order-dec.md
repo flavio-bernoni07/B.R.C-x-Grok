@@ -40,7 +40,7 @@ flowchart TD
   parse -->|clean_parse| stock[Check_availability_hook]
   stock -->|qty_ok| price[Check_PRI_vs_contract]
   stock -->|qty_short| grokQty[Grokbot]
-  grokQty -->|revised_qty_or_split| stock
+  grokQty -->|split_or_mail_then_revised_qty| stock
   price -->|price_ok_or_no_PRI| signoff[Human_signoff_always]
   price -->|price_mismatch| grokPrice[Grokbot]
   grokPrice -->|draft_mail| signoff
