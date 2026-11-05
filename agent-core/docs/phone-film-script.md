@@ -6,7 +6,8 @@
 
 ### VO (over Disputes, before the call)
 
-> A retailer can call Riso Scotti. Grok takes the claim. It lands here — same desk as email.
+> Here’s a quick demo of how we’ve facilitated the process of reporting a claim for your clients — and keeping track of it internally.
+> A retailer calls Riso Scotti. Grok takes the claim live. It lands here on Disputes — same desk as email.
 
 ### On camera
 
