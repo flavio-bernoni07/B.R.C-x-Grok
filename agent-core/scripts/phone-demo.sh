@@ -92,14 +92,31 @@ start_web() {
   exit 1
 }
 
+have_cloudflared() {
+  command -v cloudflared >/dev/null 2>&1
+}
+
 ensure_cloudflared() {
-  if command -v cloudflared >/dev/null 2>&1; then
+  if have_cloudflared; then
+    green "cloudflared: $(command -v cloudflared)"
     return 0
   fi
-  bold "Installing cloudflared (user local)…"
+
+  # Homebrew is the reliable path on macOS (GitHub tarball often hits curl 23 in sandboxes).
+  if command -v brew >/dev/null 2>&1; then
+    bold "Installing cloudflared via Homebrew…"
+    if brew install cloudflared; then
+      if have_cloudflared; then
+        green "cloudflared: $(command -v cloudflared)"
+        return 0
+      fi
+    fi
+  fi
+
+  bold "Downloading cloudflared into agent-core/.bin…"
   local bin="$ROOT/.bin"
   mkdir -p "$bin"
-  local os arch asset
+  local os arch asset url tmp
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
   case "$arch" in
@@ -108,20 +125,44 @@ ensure_cloudflared() {
     *) red "Unsupported arch: $arch"; exit 1 ;;
   esac
   case "$os" in
-    darwin) asset="cloudflared-$os-$arch.tgz" ;;
-    linux) asset="cloudflared-linux-$arch" ;;
+    darwin) asset="cloudflared-darwin-${arch}.tgz" ;;
+    linux) asset="cloudflared-linux-${arch}" ;;
     *) red "Unsupported OS: $os"; exit 1 ;;
   esac
-  local url="https://github.com/cloudflare/cloudflared/releases/latest/download/$asset"
+  url="https://github.com/cloudflare/cloudflared/releases/latest/download/$asset"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/cloudflared.XXXXXX")"
+  if ! curl -fL --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 120 -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    red "Could not download cloudflared."
+    red "Install it yourself, then re-run:  brew install cloudflared"
+    exit 1
+  fi
   if [ "$os" = "darwin" ]; then
-    curl -fsSL "$url" -o "$bin/cloudflared.tgz"
-    tar -xzf "$bin/cloudflared.tgz" -C "$bin"
-    rm -f "$bin/cloudflared.tgz"
+    if ! tar -xzf "$tmp" -C "$bin"; then
+      rm -f "$tmp"
+      red "cloudflared archive extract failed. Try: brew install cloudflared"
+      exit 1
+    fi
+    rm -f "$tmp"
+    # tarball usually contains a bare "cloudflared" binary
+    if [ ! -x "$bin/cloudflared" ]; then
+      local found
+      found="$(find "$bin" -type f -name cloudflared 2>/dev/null | head -n1 || true)"
+      if [ -n "$found" ]; then
+        mv "$found" "$bin/cloudflared"
+        chmod +x "$bin/cloudflared"
+      fi
+    fi
   else
-    curl -fsSL "$url" -o "$bin/cloudflared"
+    mv "$tmp" "$bin/cloudflared"
     chmod +x "$bin/cloudflared"
   fi
   export PATH="$bin:$PATH"
+  if ! have_cloudflared; then
+    red "cloudflared still missing after install. Try: brew install cloudflared"
+    exit 1
+  fi
+  green "cloudflared: $(command -v cloudflared)"
 }
 
 stop_old_tunnel() {
@@ -136,24 +177,35 @@ stop_old_tunnel() {
   fi
 }
 
+# Writes the public HTTPS origin to the path in $1 (avoids bash 3.2 set -e issues inside $()).
 start_tunnel() {
-  ensure_cloudflared
+  local out_file="$1"
+  if ! have_cloudflared; then
+    red "cloudflared not on PATH"; exit 1
+  fi
   stop_old_tunnel
   : >"$TUNNEL_LOG"
   bold "Opening public tunnel to $URL…"
   nohup cloudflared tunnel --url "$URL" --no-autoupdate >"$TUNNEL_LOG" 2>&1 &
   echo $! >"$TUNNEL_PID_FILE"
-  local public=""
-  for _ in $(seq 1 60); do
-    public="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -n1 || true)"
+  local public="" i
+  for i in $(seq 1 60); do
+    if ! kill -0 "$(cat "$TUNNEL_PID_FILE")" 2>/dev/null; then
+      red "cloudflared exited early. Log:"
+      cat "$TUNNEL_LOG" >&2 || true
+      exit 1
+    fi
+    public="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -n1 || true)"
     if [ -n "$public" ]; then
-      echo "$public"
+      printf '%s\n' "$public" >"$out_file"
+      green "Tunnel: $public"
       return 0
     fi
     sleep 1
   done
-  red "Tunnel URL not found. Log:"
+  red "Tunnel URL not found after 60s. Log:"
   cat "$TUNNEL_LOG" >&2 || true
+  red "If cloudflared is blocked, install via brew and re-run: brew install cloudflared"
   exit 1
 }
 
@@ -173,14 +225,18 @@ upsert_public_base() {
 
 smoke_simulate() {
   bold "Smoke-testing simulate → Disputes…"
-  local res
-  res="$(curl -sf -X POST "$URL/api/telephony/simulate" \
+  local res status
+  # First hit can be slow (Next compile + optional Grok). Give it time; show progress.
+  status="$(curl -sS -o /tmp/brc-phone-simulate.json -w '%{http_code}' --connect-timeout 5 --max-time 120 \
+    -X POST "$URL/api/telephony/simulate" \
     -H 'content-type: application/json' \
-    -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Phone demo rehearsal — received only 1100 of 1200 Carnaroli","language":"en"}')"
-  echo "$res" | grep -q '"ok":true' || {
-    red "Simulate failed: $res"
+    -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Phone demo rehearsal — received only 1100 of 1200 Carnaroli","language":"en"}" || true)"
+  res="$(cat /tmp/brc-phone-simulate.json 2>/dev/null || true)"
+  if [ "$status" != "200" ] || ! printf '%s' "$res" | grep -q '"ok":true'; then
+    red "Simulate failed (HTTP $status): $res"
+    red "If the dashboard was already running on an old build, stop it and re-run so routes refresh."
     exit 1
-  }
+  fi
   local id
   id="$(printf '%s' "$res" | sed -n 's/.*"dispute_id":"\([^"]*\)".*/\1/p')"
   green "Wrote $id into local Disputes (open $URL/disputes)."
@@ -233,9 +289,16 @@ EOF
 main() {
   ensure_env
   ensure_deps
+  ensure_cloudflared
   start_web
-  local public
-  public="$(start_tunnel)"
+  local public_file public
+  public_file="$(mktemp "${TMPDIR:-/tmp}/brc-phone-url.XXXXXX")"
+  start_tunnel "$public_file"
+  public="$(cat "$public_file")"
+  rm -f "$public_file"
+  if [ -z "$public" ]; then
+    red "Empty tunnel URL"; exit 1
+  fi
   upsert_public_base "$public"
   smoke_simulate
   print_builder "$public"

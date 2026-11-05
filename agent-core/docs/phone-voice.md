@@ -7,10 +7,13 @@ Inbound calls → xAI Speech-to-Speech → our tools → same Mini ERP dispute p
 From `agent-core`, with `XAI_API_KEY` already in `.env.local`:
 
 ```bash
+# macOS: install the tunnel binary once if you don't have it
+brew install cloudflared
+
 pnpm phone:demo
 ```
 
-That resets the Mini ERP, starts the dashboard on `:3000`, opens a Cloudflare quick tunnel, smoke-tests `POST /api/telephony/simulate` (a real Phone `DSP-…` lands under Disputes), and prints the Voice Agent Builder URL to paste.
+That resets the Mini ERP (when nothing is on `:3000`), starts the dashboard, opens a Cloudflare quick tunnel, smoke-tests `POST /api/telephony/simulate` (a real Phone `DSP-…` lands under Disputes), and prints the Voice Agent Builder URL to paste. Prefer Homebrew for `cloudflared`; the script falls back to a GitHub download.
 
 Then in [console.x.ai](https://console.x.ai) → **Voice Agents**:
 
