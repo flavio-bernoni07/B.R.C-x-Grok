@@ -211,9 +211,11 @@ function looksItalian(text: string): boolean {
 export function deterministicIntake(text: string, prior: PortalIntake | null): PortalIntake {
   const lower = text.toLowerCase();
   const italian = looksItalian(text) || prior?.language === "it";
+  // Prefer real order tokens (ORD-/PO-/RS…) over ESS… so "Esselunga" is never an order_ref.
   const orderMatch =
-    text.match(/\b(ORD[- ]?\d{3,}|ESS[-A-Z0-9]+|RS\d+|PO[- ]?\d+)\b/i) ||
-    text.match(/\border\s+(?:ref(?:erence)?|number|#)?\s*[:#]?\s*([A-Z0-9][-A-Z0-9]+)/i);
+    text.match(/\b(ORD[- ]?\d{3,}|PO[- ]?\d+|RS\d{3,})\b/i) ||
+    text.match(/\b(ESS[- ]?\d{3,}[-A-Z0-9]*)\b/i) ||
+    text.match(/\border\s+(?:ref(?:erence)?|number|#)?\s*[:#]?\s*((?:ORD|PO|RS|ESS)[-A-Z0-9]+|\d{3,})\b/i);
   const invoiceMatch = text.match(/\b(FT[-/]?\d{4}[-/]?\d+|INV[- ]?\d+)\b/i);
   // Prefer explicit received/ordered quantities; never treat the digits inside ORD-3001 as a qty.
   const scrubbed = text.replace(/\b(ORD|ESS|RS|PO|DSP|CLM|FT|DDT|DESADV)[-/]?\s*[A-Z0-9-]+/gi, " ");

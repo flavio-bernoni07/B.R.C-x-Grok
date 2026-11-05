@@ -51,12 +51,12 @@ xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with 
 
 1. Open [console.x.ai](https://console.x.ai) → team **grok hackathon** → **Voice Agents (Beta)**.
 2. Open one of your **Untitled** agents, or click **Create agent** / **Customer Support**.
-3. Paste instructions roughly like:
-   > You are Riso Scotti retailer support. Collect order ref (e.g. ORD-3001), problem (shortage/pricing/damage), and claimed quantity. Never promise refunds or credit notes. When you have the details, call the submit_dispute tool. Tell the caller the DSP id only if the tool returns success.
+3. Paste the playbook from `PHONE_INSTRUCTIONS` in `agent/lib/dispute/phone_agent.ts` (or the block below). Core rule: **ask only for missing fields**, including **which retailer** (Esselunga / Carrefour / …) if not said yet.
 4. Add an **API Request** tool named `submit_dispute`:
    - Method: **POST**
    - URL: `https://YOUR-TUNNEL-HOST/api/telephony/simulate`
-   - Body JSON fields (map from the call):
+   - Body JSON fields (**Generated**, not System):
+     - `retailer` (string, required) — Esselunga, Carrefour, Conad, Coop, Auchan
      - `order_ref` (string, required)
      - `category` (string: shortage | pricing | damage | late_delivery | other)
      - `claimed_quantity` (number, optional)

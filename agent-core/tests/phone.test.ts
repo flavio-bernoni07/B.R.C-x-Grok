@@ -8,9 +8,10 @@ import { seedPortalDemoOrders } from "../agent/lib/demo/portal_orders";
 import {
   buildSubmitMessage,
   dispatchPhoneTool,
+  PHONE_INSTRUCTIONS,
   simulatePhoneDispute,
 } from "../agent/lib/dispute/phone_agent";
-import { resolvePhoneSession } from "../agent/lib/dispute/phone_identity";
+import { resolvePhoneSession, resolveRetailerGln } from "../agent/lib/dispute/phone_identity";
 import {
   extractCallerFrom,
   extractCallId,
@@ -68,17 +69,40 @@ describe("phone webhook signature", () => {
 });
 
 describe("phone dispute tools", () => {
+  it("maps spoken retailer names and asks when missing", () => {
+    const erp = freshErp();
+    seedPortalDemoOrders(erp);
+    expect(resolveRetailerGln(erp, "Esselunga")).toBe("BUYER001");
+    expect(resolveRetailerGln(erp, "carrefour italia")).toBe("8000000000100");
+    expect(resolveRetailerGln(erp, "")).toBeNull();
+    expect(resolvePhoneSession(erp, "+39333", {}).ok).toBe(false);
+    expect(PHONE_INSTRUCTIONS).toMatch(/Retailer/);
+  });
+
   it("lookup_order denies unauthorized refs and returns evidence for ORD-3001", async () => {
     const erp = freshErp();
     seedPortalDemoOrders(erp);
-    const identity = resolvePhoneSession(erp, "+393331112233");
-    expect(identity.ok).toBe(true);
-    if (!identity.ok) return;
 
-    const bad = await dispatchPhoneTool(erp, identity.session, "lookup_order", { order_ref: "ORD-9999" }, {});
+    const missingRetailer = await dispatchPhoneTool(erp, null, "lookup_order", { order_ref: "ORD-3001" }, {});
+    expect(missingRetailer.ok).toBe(false);
+    expect(missingRetailer.reason).toBe("retailer_required");
+
+    const bad = await dispatchPhoneTool(
+      erp,
+      null,
+      "lookup_order",
+      { retailer: "Esselunga", order_ref: "ORD-9999" },
+      {},
+    );
     expect(bad.ok).toBe(false);
 
-    const good = await dispatchPhoneTool(erp, identity.session, "lookup_order", { order_ref: "ORD-3001" }, {});
+    const good = await dispatchPhoneTool(
+      erp,
+      null,
+      "lookup_order",
+      { retailer: "Esselunga", order_ref: "ORD-3001" },
+      {},
+    );
     expect(good.ok).toBe(true);
     expect(good.order_ref).toBe("ORD-3001");
   });
@@ -86,11 +110,9 @@ describe("phone dispute tools", () => {
   it("submit_dispute creates a DSP- with channel=phone in Actions", async () => {
     const erp = freshErp();
     seedPortalDemoOrders(erp);
-    const identity = resolvePhoneSession(erp, "+393331112233");
-    expect(identity.ok).toBe(true);
-    if (!identity.ok) return;
 
     const msg = buildSubmitMessage({
+      retailer: "Esselunga",
       order_ref: "ORD-3001",
       category: "shortage",
       claimed_quantity: 1100,
@@ -98,13 +120,15 @@ describe("phone dispute tools", () => {
       language: "en",
     });
     expect(msg).toMatch(/ORD-3001/);
+    expect(msg).toMatch(/Esselunga/);
 
     const callId = `test-${createHash("sha256").update(String(Date.now())).digest("hex").slice(0, 8)}`;
     const out = await dispatchPhoneTool(
       erp,
-      identity.session,
+      null,
       "submit_dispute",
       {
+        retailer: "Esselunga",
         order_ref: "ORD-3001",
         category: "shortage",
         claimed_quantity: 1100,
@@ -131,6 +155,7 @@ describe("phone dispute tools", () => {
     const erp = freshErp();
     seedPortalDemoOrders(erp);
     const result = await simulatePhoneDispute(erp, {
+      retailer: "Esselunga",
       order_ref: "ORD-3001",
       category: "shortage",
       claimed_quantity: 1100,

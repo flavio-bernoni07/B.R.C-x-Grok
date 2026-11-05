@@ -1,6 +1,6 @@
 /**
  * Offline / rehearsal phone dispute (no live SIP). Creates a real DSP- via the same tools.
- * POST { order_ref, category, claimed_quantity?, claimed_amount?, customer_description, caller?, language? }
+ * POST { retailer?, order_ref, category, claimed_quantity?, claimed_amount?, customer_description, caller?, language? }
  */
 import { getReadyErp } from "@agent/lib/db/app";
 import { simulatePhoneDispute } from "@agent/lib/dispute/phone_agent";
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
+    retailer?: string;
     order_ref?: string;
     category?: string;
     claimed_quantity?: number;
@@ -25,9 +26,19 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (!body.retailer?.trim()) {
+    return Response.json(
+      {
+        error: "retailer is required",
+        ask: "Ask which retailer they call for (Esselunga, Carrefour, Conad, Coop, Auchan).",
+      },
+      { status: 400 },
+    );
+  }
 
   const erp = await getReadyErp();
   const result = await simulatePhoneDispute(erp, {
+    retailer: body.retailer,
     order_ref: body.order_ref,
     category: body.category,
     claimed_quantity: body.claimed_quantity ?? null,

@@ -7,7 +7,7 @@
 import WebSocket from "ws";
 import type { Erp } from "../core/erp";
 import { apiKey } from "../grok/client";
-import { resolvePhoneSession } from "./phone_identity";
+import { listRetailerHints, resolvePhoneSession } from "./phone_identity";
 import {
   handleCustomerMessage,
   lookupAuthorizedOrder,
@@ -17,16 +17,25 @@ import {
 
 export const PHONE_VOICE = process.env.XAI_SPEECH_VOICE?.trim() || "eve";
 
+/** Paste-ready playbook for Voice Agent Builder + our SIP phone_agent. */
 export const PHONE_INSTRUCTIONS = `
 You are Riso Scotti's retailer support agent on a live phone call (Grok Voice).
-Language: answer in the caller's language (Italian or English).
-Collect: order reference (e.g. ORD-3001), what went wrong (shortage / pricing / damage / late), and claimed quantity or amount.
-You may call lookup_order with the order reference to read Scotti records.
-When you have enough detail, call submit_dispute with structured fields.
+Language: answer in the caller's language (Italian or English). Keep turns short and natural.
+
+Collect ONLY what is still missing — never re-ask for facts the caller already gave.
+Required before submit_dispute:
+1) Retailer / who they call for (e.g. Esselunga, Carrefour, Conad, Coop, Auchan) — if unclear, ask once.
+2) Order reference (e.g. ORD-3001).
+3) Problem type: shortage | pricing | damage | late_delivery | other.
+4) Claimed quantity and/or claimed amount when relevant (shortage → qty; pricing → amount).
+5) A short description of what went wrong.
+
+Do not invent retailer, order ids, quantities, or dispute ids.
+You may call lookup_order after you know retailer + order_ref.
+When required fields are complete, call submit_dispute (include retailer).
 Never promise a refund, credit note, invoice change, or admit liability.
-Only tell the caller a DSP- dispute reference after submit_dispute returns success with dispute_id.
-If submit_dispute fails, say honestly that registration failed and no reference was assigned.
-Keep turns short and natural for phone.
+Only tell the caller a DSP- reference after submit_dispute returns success with dispute_id.
+If a tool fails (unauthorized retailer/order, missing fields), say so honestly and ask for the missing piece.
 `.trim();
 
 export const PHONE_TOOLS = [
@@ -37,9 +46,13 @@ export const PHONE_TOOLS = [
     parameters: {
       type: "object",
       properties: {
+        retailer: {
+          type: "string",
+          description: "Retailer name or GLN (Esselunga, Carrefour, Conad, Coop, Auchan)",
+        },
         order_ref: { type: "string", description: "Order reference such as ORD-3001" },
       },
-      required: ["order_ref"],
+      required: ["retailer", "order_ref"],
     },
   },
   {
@@ -50,6 +63,10 @@ export const PHONE_TOOLS = [
     parameters: {
       type: "object",
       properties: {
+        retailer: {
+          type: "string",
+          description: "Retailer name or GLN the caller represents",
+        },
         order_ref: { type: "string" },
         category: {
           type: "string",
@@ -60,12 +77,13 @@ export const PHONE_TOOLS = [
         customer_description: { type: "string" },
         language: { type: "string", enum: ["en", "it"] },
       },
-      required: ["order_ref", "category", "customer_description"],
+      required: ["retailer", "order_ref", "category", "customer_description"],
     },
   },
 ] as const;
 
 export type PhoneToolArgs = {
+  retailer?: string;
   order_ref?: string;
   category?: string;
   claimed_quantity?: number;
@@ -77,7 +95,11 @@ export type PhoneToolArgs = {
 export function buildSubmitMessage(args: PhoneToolArgs): string {
   const parts: string[] = [];
   const lang = args.language === "it" ? "it" : "en";
+  // Put ORD-… first so intake never mistakes "Esselunga" for an ESS- order ref.
   if (args.order_ref) parts.push(lang === "it" ? `Ordine ${args.order_ref}` : `Order ${args.order_ref}`);
+  if (args.retailer) {
+    parts.push(lang === "it" ? `per il cliente ${args.retailer}` : `for the client ${args.retailer}`);
+  }
   if (args.category) parts.push(args.category);
   if (args.claimed_quantity != null) {
     parts.push(
@@ -89,6 +111,31 @@ export function buildSubmitMessage(args: PhoneToolArgs): string {
   if (args.claimed_amount != null) parts.push(`€${args.claimed_amount}`);
   if (args.customer_description) parts.push(args.customer_description);
   return parts.join(". ").trim();
+}
+
+function sessionForTool(
+  erp: Erp,
+  caller: string | null | undefined,
+  retailerSpoken: string | null | undefined,
+): { ok: true; session: SimulatedRetailerSession } | { ok: false; result: Record<string, unknown> } {
+  const identity = resolvePhoneSession(erp, caller ?? null, { retailerSpoken });
+  if (!identity.ok) {
+    const retailers = listRetailerHints(erp);
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        reason: identity.reason,
+        missing: identity.missing ?? null,
+        ask:
+          identity.reason === "retailer_required"
+            ? "Please ask which retailer they call for (Esselunga, Carrefour, Conad, Coop, or Auchan)."
+            : null,
+        known_retailers: retailers,
+      },
+    };
+  }
+  return { ok: true, session: identity.session };
 }
 
 export async function runPhoneLookup(
@@ -108,6 +155,14 @@ export async function runPhoneSubmit(
 ): Promise<Record<string, unknown>> {
   const message = buildSubmitMessage(args);
   if (!message) return { ok: false, reason: "empty_dispute", submitted: false };
+  if (!args.retailer?.trim()) {
+    return {
+      ok: false,
+      reason: "retailer_required",
+      submitted: false,
+      ask: "Ask which retailer they represent before submitting.",
+    };
+  }
 
   const result: PortalTurnResult = await handleCustomerMessage(erp, session, {
     message,
@@ -157,13 +212,15 @@ export async function runPhoneSubmit(
 
 export async function dispatchPhoneTool(
   erp: Erp,
-  session: SimulatedRetailerSession,
+  _session: SimulatedRetailerSession | null,
   name: string,
   args: PhoneToolArgs,
   ctx: { conversationId?: string | null; callId?: string | null; caller?: string | null },
 ): Promise<Record<string, unknown>> {
-  if (name === "lookup_order") return runPhoneLookup(erp, session, args);
-  if (name === "submit_dispute") return runPhoneSubmit(erp, session, args, ctx);
+  const bound = sessionForTool(erp, ctx.caller, args.retailer);
+  if (!bound.ok) return bound.result;
+  if (name === "lookup_order") return runPhoneLookup(erp, bound.session, args);
+  if (name === "submit_dispute") return runPhoneSubmit(erp, bound.session, args, ctx);
   return { ok: false, reason: "unknown_tool", name };
 }
 
@@ -196,10 +253,12 @@ export async function handleIncomingPhoneCall(
   const key = apiKey();
   if (!key) return { ok: false, reason: "missing_api_key" };
 
-  const identity = resolvePhoneSession(erp, opts.caller);
-  if (!identity.ok) return { ok: false, reason: identity.reason };
+  // Allowlist check only — retailer is collected on the call, then bound inside tools.
+  const gate = resolvePhoneSession(erp, opts.caller, { defaultGln: "BUYER001" });
+  if (!gate.ok && gate.reason === "caller_not_allowlisted") {
+    return { ok: false, reason: gate.reason };
+  }
 
-  const session = identity.session;
   let conversationId: string | null = null;
   let lastDisputeId: string | null = null;
 
@@ -261,7 +320,7 @@ export async function handleIncomingPhoneCall(
           } catch {
             args = {};
           }
-          const output = await dispatchPhoneTool(erp, session, name, args, {
+          const output = await dispatchPhoneTool(erp, null, name, args, {
             conversationId,
             callId: opts.callId,
             caller: opts.caller,
@@ -326,6 +385,7 @@ export async function simulatePhoneDispute(
   erp: Erp,
   opts: {
     caller?: string | null;
+    retailer?: string | null;
     order_ref: string;
     category: string;
     claimed_quantity?: number | null;
@@ -334,24 +394,25 @@ export async function simulatePhoneDispute(
     language?: "en" | "it";
   },
 ): Promise<Record<string, unknown>> {
-  const identity = resolvePhoneSession(erp, opts.caller ?? null);
-  if (!identity.ok) return { ok: false, reason: identity.reason };
-
-  const lookup = await runPhoneLookup(erp, identity.session, { order_ref: opts.order_ref });
+  const args: PhoneToolArgs = {
+    retailer: opts.retailer ?? undefined,
+    order_ref: opts.order_ref,
+    category: opts.category,
+    claimed_quantity: opts.claimed_quantity ?? undefined,
+    claimed_amount: opts.claimed_amount ?? undefined,
+    customer_description: opts.customer_description,
+    language: opts.language,
+  };
+  const callId = `sim-${Date.now()}`;
+  const lookup = await dispatchPhoneTool(erp, null, "lookup_order", args, {
+    callId,
+    caller: opts.caller ?? null,
+  });
   if (!lookup.ok) return { ok: false, stage: "lookup", ...lookup };
 
-  const submit = await runPhoneSubmit(
-    erp,
-    identity.session,
-    {
-      order_ref: opts.order_ref,
-      category: opts.category,
-      claimed_quantity: opts.claimed_quantity ?? undefined,
-      claimed_amount: opts.claimed_amount ?? undefined,
-      customer_description: opts.customer_description,
-      language: opts.language,
-    },
-    { callId: `sim-${Date.now()}`, caller: identity.caller },
-  );
+  const submit = await dispatchPhoneTool(erp, null, "submit_dispute", args, {
+    callId,
+    caller: opts.caller ?? null,
+  });
   return { ok: Boolean(submit.submitted), lookup, submit };
 }
