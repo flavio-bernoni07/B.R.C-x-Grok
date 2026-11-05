@@ -95,61 +95,61 @@ export function OrdersView() {
 
   return (
     <>
-      {/* Same dock as Home: table scrolls; Grok ask bar is pinned to the bottom of the sheet. */}
-      <div className="absolute inset-0 overflow-y-auto pb-[148px]">
-        <div className="mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-8">
-          <PageHeader title={retailer ?? "Orders"}>
-            <Segmented options={FILTERS.map((f) => ({ ...f, count: scoped.filter((r) => inFilter(f.value, r.status)).length }))} value={filter} onChange={setFilter} />
-          </PageHeader>
-          {failed ? (
-            <p className="text-[15px] text-ink-68">The orders could not be loaded.</p>
-          ) : !rows ? (
-            <div className="h-80 animate-pulse rounded-[16px] bg-hh-honeydew" />
-          ) : (
-            <DataTable
-              rows={shown}
-              rowKey={(r) => r.orderRef}
-              selectedKey={selected}
-              onRowClick={(r) => go(r.orderRef)}
-              empty="No orders here."
-              columns={[
-                {
-                  key: "o",
-                  header: "Order",
-                  main: true,
-                  cell: (r) => r.orderRef,
-                },
-                {
-                  key: "r",
-                  header: "Retailer",
-                  cell: (r) => (
-                    <span className="flex items-center gap-2.5">
-                      <RetailerLogo name={r.retailer} size={22} />
-                      {r.retailer}
-                    </span>
-                  ),
-                },
-                { key: "p", header: "Product", cell: (r) => `${r.description.replace(/ · .*$/, "").replace(/^Riso Scotti |^Scotti /, "")} · ${qty(r.units)}` },
-                {
-                  key: "w",
-                  header: "On it",
-                  cell: (r) => (
-                    <OnIt kind={r.owner.kind} name={r.owner.name} />
-                  ),
-                },
-                { key: "v", header: "Value", align: "right", cell: (r) => <b className="font-bold text-[16px] text-ink">{r.value ? eur(r.value, 0) : "–"}</b> },
-                {
-                  key: "s",
-                  header: "Status",
-                  cell: (r) => (r.split ? <Pill tone="grok">Grok: split</Pill> : <Pill tone={STATUS_TONE[r.status]}>{r.statusLabel}</Pill>),
-                },
-              ]}
-            />
-          )}
+      {/* Same column dock as Home: table scrolls above; ask bar sits in the bottom band. */}
+      <div className="absolute inset-0 flex flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-8">
+            <PageHeader title={retailer ?? "Orders"}>
+              <Segmented options={FILTERS.map((f) => ({ ...f, count: scoped.filter((r) => inFilter(f.value, r.status)).length }))} value={filter} onChange={setFilter} />
+            </PageHeader>
+            {failed ? (
+              <p className="text-[15px] text-ink-68">The orders could not be loaded.</p>
+            ) : !rows ? (
+              <div className="h-80 animate-pulse rounded-[16px] bg-hh-honeydew" />
+            ) : (
+              <DataTable
+                rows={shown}
+                rowKey={(r) => r.orderRef}
+                selectedKey={selected}
+                onRowClick={(r) => go(r.orderRef)}
+                empty="No orders here."
+                columns={[
+                  {
+                    key: "o",
+                    header: "Order",
+                    main: true,
+                    cell: (r) => r.orderRef,
+                  },
+                  {
+                    key: "r",
+                    header: "Retailer",
+                    cell: (r) => (
+                      <span className="flex items-center gap-2.5">
+                        <RetailerLogo name={r.retailer} size={22} />
+                        {r.retailer}
+                      </span>
+                    ),
+                  },
+                  { key: "p", header: "Product", cell: (r) => `${r.description.replace(/ · .*$/, "").replace(/^Riso Scotti |^Scotti /, "")} · ${qty(r.units)}` },
+                  {
+                    key: "w",
+                    header: "On it",
+                    cell: (r) => (
+                      <OnIt kind={r.owner.kind} name={r.owner.name} />
+                    ),
+                  },
+                  { key: "v", header: "Value", align: "right", cell: (r) => <b className="font-bold text-[16px] text-ink">{r.value ? eur(r.value, 0) : "–"}</b> },
+                  {
+                    key: "s",
+                    header: "Status",
+                    cell: (r) => (r.split ? <Pill tone="grok">Grok: split</Pill> : <Pill tone={STATUS_TONE[r.status]}>{r.statusLabel}</Pill>),
+                  },
+                ]}
+              />
+            )}
+          </div>
         </div>
-      </div>
-      <div className="absolute right-0 bottom-0 left-0 z-10 bg-gradient-to-t from-hh-seasalt from-70% to-transparent px-9 pt-10 pb-6">
-        <div className="mx-auto w-full max-w-[1280px]">
+        <div className="mx-auto w-full max-w-[980px] shrink-0 px-4 pt-3 pb-6 sm:px-6">
           <SectionChat
             className="border-t-0 pt-0"
             placeholder="Ask Grok about the orders…"
