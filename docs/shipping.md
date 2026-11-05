@@ -15,9 +15,9 @@
 - [python-a38](https://github.com/Truelite/python-a38) builds, validates and parses FatturaPA XML, and parses the official samples on fatturapa.gov.it.
 - The invoice is made from what was shipped, not from what was ordered.
 
-## What I found
-
 ## What I decided
+
+- `shipping/` covers trucks, picking, pallet scans, dispatch, the DDT and DESADV, the invoice (INVOIC 380 + FatturaPA TD01) and the line-by-line reconcile. The rules are the 4 Nov shipping row in [DECISIONS.md](../DECISIONS.md). A scan on the wrong truck, a held batch or a bad quantity stays off the shipment.
 
 ## What I need from others
 
@@ -31,4 +31,4 @@
 
 ## Open questions
 
-- Idea not on the map yet: the driver scans each pallet onto the truck, tied to the truck's plate (targa), so a missing pallet is flagged before the truck leaves and disputes have proof of what left on which truck. A second scan at the retailer's dock would prove it arrived.
+- The truck scan is in `shipping/warehouse.py` (plate, pallet, result). A second scan at the retailer's dock, to prove the pallet arrived, is still open.
