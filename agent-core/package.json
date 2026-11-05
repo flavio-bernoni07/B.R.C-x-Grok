@@ -61,6 +61,7 @@
     "setup:py": "cd ../planning && uv sync",
     "db:reset": "tsx scripts/db-reset.ts",
     "test": "vitest run",
-    "test:live": "tsx scripts/live-grok-suite.ts"
+    "test:live": "tsx scripts/live-grok-suite.ts",
+    "test:scenarios": "tsx scripts/run-scenario-cases.ts"
   }
 }
