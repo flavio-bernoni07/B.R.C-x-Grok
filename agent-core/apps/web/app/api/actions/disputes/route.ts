@@ -1,4 +1,4 @@
-/** Employee Actions → Disputes inbox (customer-portal cases). */
+/** Employee workspace rows for phone/chat customer disputes (feeds Disputes drawer). */
 import { getReadyErp } from "@agent/lib/db/app";
 import { listEmployeePortalDisputes } from "@agent/lib/dispute/portal";
 

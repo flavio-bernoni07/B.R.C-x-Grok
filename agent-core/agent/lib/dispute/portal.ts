@@ -3,7 +3,7 @@
  *
  * Reuses the shared Mini ERP claims + sign-off queue and the existing Grok client / threeway
  * pull. It never issues a credit note or admits liability: customers register claims; employees
- * decide in Actions. Auth is a clearly labeled simulated retailer session for the hackathon.
+ * decide on Disputes / Sign-off. Auth is a clearly labeled simulated retailer session for the hackathon.
  */
 import { createHash } from "node:crypto";
 import type { Erp } from "../core/erp";
@@ -480,8 +480,8 @@ function replyUnauthorized(lang: "en" | "it"): string {
 
 function replySubmitted(lang: "en" | "it", disputeId: string, status: PortalStatus): string {
   return lang === "it"
-    ? `Grazie. Ho registrato la sua segnalazione. Il riferimento è ${disputeId}. Stato attuale: ${status}. Il team interno è stato avvisato nella casella Actions. Può chiedere lo stato in qualsiasi momento qui.`
-    : `Thank you. I've recorded your report. Your dispute reference is ${disputeId}. Current status: ${status}. Our internal team has been notified in the Actions inbox. You can ask for its status here anytime.`;
+    ? `Grazie. Ho registrato la sua segnalazione. Il riferimento è ${disputeId}. Stato attuale: ${status}. Il team interno è stato avvisato su Disputes. Può chiedere lo stato in qualsiasi momento qui.`
+    : `Thank you. I've recorded your report. Your dispute reference is ${disputeId}. Current status: ${status}. Our internal team has been notified on Disputes. You can ask for its status here anytime.`;
 }
 
 function grokAnalysis(intake: PortalIntake, evidence: ReturnType<typeof evidenceSnapshot>): Record<string, unknown> {

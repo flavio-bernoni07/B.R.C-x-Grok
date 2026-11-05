@@ -255,7 +255,7 @@ export function SupportChat() {
               </p>
             </div>
             <a href="/disputes" className="rounded-full bg-hh-flex/15 px-3 py-1.5 text-[12px] text-hh-flex underline-offset-2 hover:underline">
-              Employee Actions →
+              Employee Disputes →
             </a>
           </div>
           {session ? (
