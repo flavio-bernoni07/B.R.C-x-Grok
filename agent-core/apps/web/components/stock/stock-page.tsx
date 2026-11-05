@@ -431,30 +431,34 @@ export function StockPage() {
   const product = params.get("product");
   return (
     <>
-    <Page>
-      <PageHeader title="Stock">
-        <Segmented
-          options={[
-            { value: "products", label: "Products" },
-            { value: "forecast", label: "Forecast" },
-            { value: "buying", label: "Buying" },
-          ]}
-          value={view}
-          onChange={(v) => router.replace(v === "products" ? "/stock" : `/stock?view=${v}`, { scroll: false })}
-        />
-      </PageHeader>
-      {view === "products" ? inv ? <ProductsView inv={inv} onOpen={(g) => router.replace(`/stock?product=${encodeURIComponent(g)}`, { scroll: false })} /> : loading : null}
-      {view === "forecast" ? inv ? <ForecastView inv={inv} initial={params.get("gtin")} /> : loading : null}
-      {view === "buying" ? paddy ? <BuyingView paddy={paddy} initial={params.get("variety")} /> : loading : null}
-      <SectionChat
-        placeholder="Ask Grok about stock, batches or paddy…"
-        context={{ page: "stock", view }}
-        suggestions={["Which products run short next?", "When should we buy Carnaroli paddy?"]}
-      />
-    </Page>
-    <Drawer open={!!product && view === "products"} onClose={() => router.replace("/stock", { scroll: false })}>
-      {inv && product ? <ProductDetail inv={inv} gtin={product} /> : null}
-    </Drawer>
+      <Page
+        ask={
+          <SectionChat
+            className="border-t-0 pt-0"
+            placeholder="Ask Grok about stock, batches or paddy…"
+            context={{ page: "stock", view }}
+            suggestions={["Which products run short next?", "When should we buy Carnaroli paddy?"]}
+          />
+        }
+      >
+        <PageHeader title="Stock">
+          <Segmented
+            options={[
+              { value: "products", label: "Products" },
+              { value: "forecast", label: "Forecast" },
+              { value: "buying", label: "Buying" },
+            ]}
+            value={view}
+            onChange={(v) => router.replace(v === "products" ? "/stock" : `/stock?view=${v}`, { scroll: false })}
+          />
+        </PageHeader>
+        {view === "products" ? inv ? <ProductsView inv={inv} onOpen={(g) => router.replace(`/stock?product=${encodeURIComponent(g)}`, { scroll: false })} /> : loading : null}
+        {view === "forecast" ? inv ? <ForecastView inv={inv} initial={params.get("gtin")} /> : loading : null}
+        {view === "buying" ? paddy ? <BuyingView paddy={paddy} initial={params.get("variety")} /> : loading : null}
+      </Page>
+      <Drawer open={!!product && view === "products"} onClose={() => router.replace("/stock", { scroll: false })}>
+        {inv && product ? <ProductDetail inv={inv} gtin={product} /> : null}
+      </Drawer>
     </>
   );
 }

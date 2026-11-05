@@ -147,8 +147,30 @@ export function RetailerLogo({ name, dot, size = 20 }: { readonly name: string; 
 /** Tell the shell (badge) and other views that a decision changed the records. */
 export const announceChange = () => window.dispatchEvent(new Event("brc:changed"));
 
-/** A scrolling page inside the content sheet. */
-export function Page({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+/**
+ * A scrolling page inside the content sheet.
+ * Pass `ask` (usually SectionChat) to dock the Grok bar at the bottom of the sheet, like Home.
+ */
+export function Page({
+  children,
+  className,
+  ask,
+}: {
+  readonly children: ReactNode;
+  readonly className?: string;
+  /** Grok ask bar pinned to the bottom of the sheet; content scrolls above it. */
+  readonly ask?: ReactNode;
+}) {
+  if (ask) {
+    return (
+      <div className="absolute inset-0 flex flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={cn("mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-8", className)}>{children}</div>
+        </div>
+        <div className="mx-auto w-full max-w-[980px] shrink-0 px-4 pt-3 pb-6 sm:px-6">{ask}</div>
+      </div>
+    );
+  }
   return (
     <div className="h-full overflow-y-auto">
       <div className={cn("mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-16", className)}>{children}</div>

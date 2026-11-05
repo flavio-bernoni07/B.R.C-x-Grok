@@ -441,7 +441,16 @@ export function SignoffDesk() {
 
   return (
     <>
-      <Page>
+      <Page
+        ask={
+          <SectionChat
+            className="border-t-0 pt-0"
+            placeholder="Ask Grok about a case before you decide…"
+            context={{ page: "signoff", case: selected ?? "" }}
+            suggestions={["What should I check before deciding?", "What did people decide on similar cases?"]}
+          />
+        }
+      >
         <PageHeader title="Sign-off">
           <Segmented
             value={filter}
@@ -498,11 +507,6 @@ export function SignoffDesk() {
             ]}
           />
         )}
-        <SectionChat
-          placeholder="Ask Grok about a case before you decide…"
-          context={{ page: "signoff", case: selected ?? "" }}
-          suggestions={["What should I check before deciding?", "What did people decide on similar cases?"]}
-        />
       </Page>
       <Drawer open={!!selected} onClose={() => go()}>
         {openCase ? <CasePanel key={openCase.caseId} c={openCase} onDecided={load} /> : <div className="m-8 h-64 animate-pulse rounded-[16px] bg-hh-honeydew" />}
