@@ -16,7 +16,7 @@ const satoshi = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "B.R.C x Grok",
+  title: "Risolve",
   description: "Riso Scotti back office: orders checked by code, invoices matched against what shipped, claims answered with sources.",
 };
 

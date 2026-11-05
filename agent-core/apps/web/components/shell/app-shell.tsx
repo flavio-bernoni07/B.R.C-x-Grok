@@ -2,7 +2,7 @@
 
 /**
  * The app window from the HeyHandy UI kit (brand/UI.md): a window tint, a glass sidebar inset
- * 12 px with the B.R.C x Grok lockup, nav items with a selection that glides between them, the
+ * 12 px with the Risolve lockup, nav items with a selection that glides between them, the
  * sign-off badge, the retailer list, and the Seasalt content sheet beside it.
  */
 import Link from "next/link";
@@ -56,7 +56,7 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
       <aside className="relative flex w-[230px] shrink-0 flex-col overflow-hidden rounded-[18px] bg-hh-sidebar px-3 pt-7 pb-4 shadow-[inset_0_0_0_1px_rgb(32_49_25/0.05)] max-md:w-full max-md:flex-row max-md:items-center max-md:gap-2 max-md:overflow-x-auto max-md:px-2 max-md:py-2">
         <Link href="/" className="mb-8 flex items-center gap-2.5 px-2.5 font-bold text-[19px] tracking-[-0.03em] max-md:mb-0 max-md:shrink-0">
           <BrandTile size={30} />
-          <span className="max-md:hidden">B.R.C x Grok</span>
+          <span className="max-md:hidden">Risolve</span>
         </Link>
 
         <nav className="relative flex flex-col gap-1 max-md:flex-row">

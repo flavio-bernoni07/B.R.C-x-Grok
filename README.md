@@ -1,6 +1,6 @@
-# B.R.C x Grok
+# Risolve
 
-![B.R.C x Grok dashboard: orders checked by code, invoices matched against what shipped, claims answered with sources](docs/img/banner.gif)
+![From our launch film: Grok fixes an order it could not read, puts two warehouses on one truck, rejects a claim with the evidence, and the stock forecast plans the next batches](docs/img/banner.gif)
 
 A zero-touch back office on synthetic data + how data flows from the factory to the administration.
 
@@ -10,11 +10,15 @@ Grok agents run Riso Scotti's back office from the order to the cash. Code check
 
 A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and contract price, the warehouse plans trucks and loads pallets, the office writes the delivery note, the invoice and the FatturaPA for SdI. Then maybe the retailer counts less than the invoice says and someone is forced to dig through four documents. IT'S A LOT OF STUFF TO MANAGE!
 
+![A generic old back office: raw EDI in Notepad, error dialogs and spreadsheets piling up](docs/img/film/old-crm.gif)
+
 The only automatic check in Riso Scotti's CRM is an exact text match, "threeway". These are some problem we found when testing it:
 
 - a one-letter typo in a reference turns into two false alarms
 - a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a price error behind a quantity problem is never named
+
+![threeway on three real cases: a typo becomes two orphans, a short delivery comes out matched, a price error is never named](docs/img/film/threeway.gif)
 
 We are in 2026... we can have better checks than a text matcher.
 
@@ -22,7 +26,7 @@ We are in 2026... we can have better checks than a text matcher.
 
 Esselunga orders 12000 packs of Carnaroli 1 kg at €2.20 (CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
-| What goes wrong | Without our system | Money lost | With B.R.C x Grok |
+| What goes wrong | Without our system | Money lost | With Risolve |
 |---|---|---|---|
 | Order (PAL-ESS-GOLD-001-04) is scanned onto the wrong truck | No error is flagged and Esselunga claims the missing packs | **€2,112** credit note (960 × €2.20) | Code checks every scan against the plan and flags the error so that orders can be sorted correctly |
 | 1,200 packs are held for quality, so only 10,800 ship | threeway says "matched" and nobody sends the missing packs | **€2,640** of ordered goods never delivered (1,200 × €2.20) | Code compares quantities line by line and flags the 1,200 packs still owed |
@@ -48,6 +52,18 @@ Grok does the work and code checks it. A person signs off at a few gates with on
 | Learning | When a person closes an issue, the ticket is fed back to the agent, which learns from it | None overturned, and the person's reason still holds | A person approves each rule |
 
 **Grok and the person.** Grok reads, fixes, plans, investigates and proposes, up to the truck and after it. Code rejects any figure Grok cannot tie to a record. The person's one line on why becomes an example Grok gets for the next similar case. In the golden run, 56 of our 63 logged steps are done by code and Grok and 7 by a person (`python demo.py`). In a replay of invented claims, the share of cases that need a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
+
+### One hard order, start to finish
+
+From our launch film: Coop Italia's order COO-26-09120 runs into every exception, and Grok handles each one.
+
+| Order agent | Learning |
+|---|---|
+| ![Grok fixes the date and the quantity in Coop's EDI](docs/img/film/case-order.gif) | ![The feedback loop confirms the fix on its own](docs/img/film/case-loop.gif) |
+| Coop writes the date and the quantity the Italian way, so the parser stops. Grok fixes both and code reads the file again. | People approved the same fix on three earlier Coop orders, so the feedback loop lets Grok confirm it alone. |
+| **Logistics agent** | **Dispute agent** |
+| ![Coop and Conad on one truck, 396 km less](docs/img/film/case-route.gif) | ![Grok rejects Coop's penalty claim with the evidence](docs/img/film/case-claim.gif) |
+| Coop and Conad are on the same road south: one truck instead of two, 396 km less. The transport planner approves it in one click. | Coop claims a 5% penalty. Grok checks clause 7 of the contract and rejects the claim, with a source for every point. |
 
 ## From the factory to the administration
 
@@ -89,6 +105,10 @@ https://brc-x-grok.vercel.app
 
 That link is the dashboard. It stays up when this Mac is off. There is no account and no install. The first open after a quiet stretch takes a few seconds while the demo database loads.
 
+![Asking Grok out loud: "Should I buy Carnaroli?" opens the buying plan, and Grok answers from it](docs/img/film/voice.gif)
+
+Ask Grok out loud: "Should I buy Carnaroli?" opens the buying plan, and Grok reads the answer from it (buy as usual, 60.8 t, about €40,858, 6.4 weeks of cover). How it works: [voice-feature.md](voice-feature.md).
+
 ## Open it from the terminal
 
 ```bash
@@ -105,7 +125,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order, 6 Nov dispatch day, and support demo orders ORD-3001/3002/3003
 pnpm test                     # the app's tests
-pnpm dev:web                  # starts the server and opens the B.R.C x Grok app; /support (+ mic) for retailer chat; Disputes + Sign-off for phone/chat claims
+pnpm dev:web                  # starts the server and opens the Risolve app; /support (+ mic) for retailer chat; Disputes + Sign-off for phone/chat claims
 ```
 
 The Python rows are the reference the app is ported from:
