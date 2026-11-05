@@ -23,8 +23,6 @@ const BY_ROW = {
   purchasing: decidePurchasing,
 } as const;
 
-const DESK_TABS = new Set(["board", "sendoff", "price", "quantity", "pending", "other", "decided"]);
-
 /** After the redesign, form POSTs land on Sign-off (`?case=` only; tabs are dropped by /actions → /signoff). */
 function deskHref(_tab: string, opts?: { caseId?: string; err?: string; mail?: boolean }) {
   const q = new URLSearchParams();
