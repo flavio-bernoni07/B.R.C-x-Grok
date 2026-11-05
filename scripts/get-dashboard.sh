@@ -53,22 +53,54 @@ ensure_repo() {
   [ -d "${ROOT}/agent-core" ] || die "Repo missing at ${ROOT}/agent-core"
 }
 
-ensure_node_pnpm() {
-  if ! command -v node >/dev/null 2>&1; then
-    die "Node missing. Run: brew install node@24 && brew link --overwrite --force node@24"
-  fi
+node_major() {
+  # Always print only digits; never trust a dirty PATH without checking.
+  node -p 'process.versions.node.split(".")[0]' 2>/dev/null | tr -d '[:space:]'
+}
+
+ensure_node24() {
   local major
-  major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-  say "Node $(node -v)"
+  major="$(node_major || true)"
+  if [ "${major}" = "24" ]; then
+    say "Node $(node -v) OK"
+    return 0
+  fi
+  say "Need Node 24 (have $(command -v node >/dev/null && node -v || echo none)). Trying to install it..."
+  if ! command -v brew >/dev/null 2>&1; then
+    die "Homebrew missing. Install Node 24 from https://nodejs.org (24.x), then re-run."
+  fi
+  brew install node@24 || die "brew install node@24 failed"
+  brew link --overwrite --force node@24 || true
+  # Prefer the keg binary even if link is noisy.
+  if [ -x /opt/homebrew/opt/node@24/bin/node ]; then
+    export PATH="/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:${PATH}"
+  elif [ -x /usr/local/opt/node@24/bin/node ]; then
+    export PATH="/usr/local/opt/node@24/bin:/usr/local/bin:${PATH}"
+  fi
+  hash -r 2>/dev/null || true
+  major="$(node_major || true)"
   if [ "${major}" != "24" ]; then
-    die "Need Node 24 (have $(node -v)). Run: brew install node@24 && brew link --overwrite --force node@24 && hash -r && node -v"
+    die "Still not on Node 24 (have $(node -v 2>/dev/null || echo none), major=${major:-?}). Run manually: brew install node@24 && brew link --overwrite --force node@24 && hash -r && node -v"
+  fi
+  say "Node $(node -v) OK"
+}
+
+ensure_node_pnpm() {
+  ensure_node24
+  # Pin pnpm to the repo packageManager when possible.
+  if command -v corepack >/dev/null 2>&1; then
+    say "Activating pnpm 10.33.0 via corepack..."
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare pnpm@10.33.0 --activate || true
   fi
   if ! command -v pnpm >/dev/null 2>&1; then
-    say "Installing pnpm via corepack..."
-    corepack enable >/dev/null 2>&1 || true
-    corepack prepare pnpm@10.33.0 --activate || die "Install pnpm: brew install pnpm"
+    if command -v brew >/dev/null 2>&1; then
+      brew install pnpm || die "Install pnpm: brew install pnpm"
+    else
+      die "pnpm missing. Install pnpm, then re-run."
+    fi
   fi
-  say "pnpm $(pnpm -v)"
+  say "pnpm $(pnpm -v) (node $(node -v))"
 }
 
 ensure_deps() {
@@ -77,9 +109,15 @@ ensure_deps() {
   if [ ! -e "${ROOT}/agent-core/node_modules/next/package.json" ]; then need=1; fi
   if [ ! -e "${ROOT}/agent-core/node_modules/better-sqlite3/package.json" ]; then need=1; fi
   if [ "${need}" = 1 ]; then
-    say "Installing dependencies (this can take a minute)..."
+    say "Installing dependencies with $(node -v) / pnpm $(pnpm -v)..."
     rm -rf "${ROOT}/agent-core/node_modules"
-    (cd "${ROOT}/agent-core" && pnpm install --frozen-lockfile) || die "pnpm install failed. See errors above."
+    if ! (cd "${ROOT}/agent-core" && pnpm install --frozen-lockfile); then
+      echo "---- tip ----" >&2
+      echo "If better-sqlite3 failed, install Apple build tools:" >&2
+      echo "  xcode-select --install" >&2
+      echo "Then re-run with FORCE=1." >&2
+      die "pnpm install failed. See errors above."
+    fi
   else
     say "Dependencies already installed."
   fi
