@@ -1,6 +1,6 @@
 # Phone claim — filmed demo (~60–90s)
 
-**Setup (off camera):** `pnpm phone:demo` running, Voice Agent tool URL set, number Live. Browser on **Disputes** at `http://127.0.0.1:3000/disputes`. Phone on speaker.
+**Setup (off camera):** `pnpm phone:demo` running, Voice Agent tool URL set, number Live. Run `pnpm phone:clear` so no rehearsal Phone rows remain. Browser on **Disputes** at `http://127.0.0.1:3000/disputes`. Phone on speaker.
 
 ---
 

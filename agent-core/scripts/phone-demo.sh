@@ -239,8 +239,14 @@ smoke_simulate() {
     exit 1
   fi
   local id
+  local id
   id="$(printf '%s' "$res" | sed -n 's/.*"dispute_id":"\([^"]*\)".*/\1/p')"
-  green "Wrote $id into local Disputes (open $URL/disputes)."
+  green "Smoke OK ($id). Clearing Phone rehearsal rows so the live call is the only Phone badge…"
+  curl -sf -X POST "$URL/api/telephony/clear-phone" >/dev/null || {
+    red "Could not clear Phone claims after smoke. Run: pnpm phone:clear"
+    exit 1
+  }
+  green "Disputes is clear of Phone claims — ready for the filmed call."
 }
 
 print_builder() {

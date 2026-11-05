@@ -28,6 +28,8 @@ Leave the `phone:demo` process running; each new quick-tunnel host needs a Build
 
 Filmed take: [`phone-film-script.md`](phone-film-script.md).
 
+Before the call, clear rehearsal Phone rows: `pnpm phone:clear` (email `CLM-…` claims stay).
+
 ## Env (in `agent-core/.env.local`)
 
 ```bash
