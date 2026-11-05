@@ -55,10 +55,11 @@
   "scripts": {
     "dev": "eve dev",
     "start": "eve start",
-    "build": "eve build",
+    "build": "node scripts/pack-hosted-root.mjs && eve build",
+    "pack:hosted-root": "node scripts/pack-hosted-root.mjs",
     "typecheck": "tsc --noEmit",
     "dev:web": "bash scripts/dev-web.sh",
-    "build:web": "next build apps/web",
+    "build:web": "node scripts/pack-hosted-root.mjs && next build apps/web",
     "data:fetch": "cd ../planning && uv run python -m rice_forecast fetch",
     "setup:py": "cd ../planning && uv sync",
     "db:reset": "tsx scripts/db-reset.ts",

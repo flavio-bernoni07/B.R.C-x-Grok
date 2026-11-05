@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "cp -a apps/web/public public && NODE_OPTIONS=--max-old-space-size=4096 pnpm exec next build apps/web"
+  "buildCommand": "node scripts/pack-hosted-root.mjs && cp -a apps/web/public public && NODE_OPTIONS=--max-old-space-size=4096 pnpm exec next build apps/web"
 }

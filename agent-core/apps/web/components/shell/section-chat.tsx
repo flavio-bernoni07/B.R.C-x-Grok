@@ -4,6 +4,9 @@
  * A chat at the end of a section (and in the order panel): the same Grok agent and the same cards
  * as Home, with the page's subject sent along as context. The thread stays on the page, above the
  * input; it starts empty each time the page opens.
+ *
+ * When docked via Page `ask`, the parent caps the height. The thread scrolls inside this section
+ * so the page above (stock, orders, …) stays reachable.
  */
 import { interaction, interactions } from "eve/events";
 import { useEveAgent } from "eve/react";
@@ -29,12 +32,17 @@ export function SectionChat({
   const [text, setText] = useState("");
   const agent = useEveAgent({ agent: WEB_CHAT_AGENT, prewarm: text.trim().length > 0 });
   const busy = agent.status === "busy";
+  const listRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const count = agent.messages.length;
 
-  // A new question scrolls into view; the answer then grows below it.
+  // Keep the latest turn in view inside the chat list — not the page behind it.
   useEffect(() => {
-    if (count) endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (!count) return;
+    const list = listRef.current;
+    const end = endRef.current;
+    if (!list || !end) return;
+    end.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [count]);
 
   const send = (q: string) => {
@@ -45,14 +53,27 @@ export function SectionChat({
   };
 
   const canRespond = (id: string) => interaction(agent.view, id)?.status === "open";
-  const questionsFor = (callId: string) => interactions(agent.view).filter((i) => i.request.kind === "question" && i.call?.callId === callId);
+  const questionsFor = (callId: string) =>
+    interactions(agent.view).filter((i) => i.request.kind === "question" && i.call?.callId === callId);
   const last = agent.messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || last.parts.length === 0);
+  const hasThread = count > 0;
 
   return (
-    <section className={cn("border-hairline border-t pt-6", className)}>
-      {count ? (
-        <div className="mb-4 space-y-5">
+    <section
+      className={cn(
+        "flex flex-col",
+        hasThread ? "min-h-0 flex-1" : "border-hairline border-t pt-6",
+        // Inline embeds (order panel, claim panel) have no Page dock: cap them too.
+        hasThread && "max-h-[min(55vh,560px)]",
+        className,
+      )}
+    >
+      {hasThread ? (
+        <div
+          ref={listRef}
+          className="mb-3 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+        >
           {agent.messages.map((m) =>
             m.role === "assistant" && m.parts.length === 0 ? null : (
               <div key={m.id} className="hh-rise">
@@ -68,7 +89,9 @@ export function SectionChat({
               </div>
             ),
           )}
-          {thinking ? <p className="hh-rise shimmer w-fit text-[14px] text-ink-68">Grok is looking at the records…</p> : null}
+          {thinking ? (
+            <p className="hh-rise shimmer w-fit text-[14px] text-ink-68">Grok is looking at the records…</p>
+          ) : null}
           <div ref={endRef} />
         </div>
       ) : suggestions.length ? (
@@ -81,7 +104,7 @@ export function SectionChat({
           e.preventDefault();
           send(text);
         }}
-        className="flex items-end gap-2 rounded-[18px] bg-white p-2 pl-4 shadow-[inset_0_0_0_1px_rgb(32_49_25/0.1),0_10px_30px_-20px_rgb(32_49_25/0.35)]"
+        className="flex shrink-0 items-end gap-2 rounded-[18px] bg-white p-2 pl-4 shadow-[inset_0_0_0_1px_rgb(32_49_25/0.1),0_10px_30px_-20px_rgb(32_49_25/0.35)]"
       >
         <textarea
           value={text}

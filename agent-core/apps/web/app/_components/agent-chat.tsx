@@ -63,16 +63,27 @@ export function AgentChat({
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
   const hasSubmittedMessage = useRef(false);
+  // onSessionChange fires on every stream cursor advance, not only when the session id
+  // appears. Calling replaceState each time hits Chromium's 100/10s history rate limit and
+  // aborts the turn mid-reply. Write the URL once per new session id.
+  const routedSessionId = useRef<string | undefined>(sessionId);
   const replaceSessionRoute = (nextSessionId: string) => {
     if (sessionId !== undefined) return;
+    if (routedSessionId.current === nextSessionId) return;
+    const nextPath = `/s/${encodeURIComponent(nextSessionId)}`;
+    if (window.location.pathname === nextPath) {
+      routedSessionId.current = nextSessionId;
+      return;
+    }
     // Framework routers (Next.js, TanStack Router) patch window.history; navigating
     // through them would remount this route and detach the active stream.
     History.prototype.replaceState.call(
       window.history,
       window.history.state,
       "",
-      `/s/${encodeURIComponent(nextSessionId)}`,
+      nextPath,
     );
+    routedSessionId.current = nextSessionId;
   };
   const agent = useEveAgent({
     agent: WEB_CHAT_AGENT,
