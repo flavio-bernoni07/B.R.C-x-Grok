@@ -1,4 +1,4 @@
-# B.R.C x Grok
+# Risolve
 
 ![From our launch film: Grok fixes an order it could not read, puts two warehouses on one truck, rejects a claim with the evidence, and the stock forecast plans the next batches](docs/img/banner.gif)
 
@@ -26,7 +26,7 @@ We are in 2026... we can have better checks than a text matcher.
 
 Esselunga orders 12000 packs of Carnaroli 1 kg at €2.20 (CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
-| What goes wrong | Without our system | Money lost | With B.R.C x Grok |
+| What goes wrong | Without our system | Money lost | With Risolve |
 |---|---|---|---|
 | Order (PAL-ESS-GOLD-001-04) is scanned onto the wrong truck | No error is flagged and Esselunga claims the missing packs | **€2,112** credit note (960 × €2.20) | Code checks every scan against the plan and flags the error so that orders can be sorted correctly |
 | 1,200 packs are held for quality, so only 10,800 ship | threeway says "matched" and nobody sends the missing packs | **€2,640** of ordered goods never delivered (1,200 × €2.20) | Code compares quantities line by line and flags the 1,200 packs still owed |
@@ -125,7 +125,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order, 6 Nov dispatch day, and support demo orders ORD-3001/3002/3003
 pnpm test                     # the app's tests
-pnpm dev:web                  # starts the server and opens the B.R.C x Grok app; /support (+ mic) for retailer chat; Disputes + Sign-off for phone/chat claims
+pnpm dev:web                  # starts the server and opens the Risolve app; /support (+ mic) for retailer chat; Disputes + Sign-off for phone/chat claims
 ```
 
 The Python rows are the reference the app is ported from:

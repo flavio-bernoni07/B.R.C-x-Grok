@@ -38,7 +38,7 @@ import { VoiceButton } from "@/components/shell/voice-hold";
 import { AgentMessage } from "./agent-message";
 import { WEB_CHAT_AGENT } from "@/app/eve-agent";
 
-const DEFAULT_AGENT_NAME = "B.R.C x Grok";
+const DEFAULT_AGENT_NAME = "Risolve";
 
 /** Sends a message from inside the thread, e.g. a suggestion under the intro. */
 export type AskAgent = (text: string, context?: Record<string, string | number | boolean>) => void;

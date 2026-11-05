@@ -1,4 +1,5 @@
-/** Sidebar icons and the B.R.C leaf tile, drawn exactly as in HeyHandy/videos/brc-banner (one line weight, round joins). */
+/** Sidebar icons and the Risolve mark, drawn exactly as in HeyHandy/videos/brc-banner (one line weight, round joins). */
+import { RISOLVE_MARK } from "./brand-mark";
 import { useId, type SVGProps } from "react";
 
 const base = { viewBox: "0 0 28 28", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinejoin: "round" as const, strokeLinecap: "round" as const };
@@ -55,24 +56,24 @@ export const StockIcon = (p: P) => (
 );
 
 /**
- * The B.R.C x Grok mark: a grain of rice with its groove, laid on the diagonal (the app icon in
- * ~/Developer/brc-mac-app/icon.svg). Honeydew on a Dark Green tile.
+ * The Risolve mark. Light (#eef3e8) by default, for dark grounds such as the toolbar's Dark Green dot;
+ * pass fill="#203119" on light grounds.
  */
 export function BrandMark({ className, fill = "#eef3e8" }: { readonly className?: string; readonly fill?: string }) {
   return (
-    <svg viewBox="0 0 28 28" className={className} aria-hidden>
-      <ellipse cx="14" cy="14" rx="6.2" ry="11" transform="rotate(32 14 14)" fill={fill} />
-      <path d="M9.5 21.5C12 16 15.5 10.5 19 6.5" stroke="#203119" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+    <svg viewBox="0 0 1377 1545" className={className} aria-hidden>
+      <g transform="translate(-80.37 1619.85) scale(1 -1)" fill={fill}>
+        <path d={RISOLVE_MARK} />
+      </g>
     </svg>
   );
 }
 
+/** The sidebar lockup's mark: Dark Green on the light sidebar, no tile. */
 export function BrandTile({ size = 26 }: { readonly size?: number }) {
   return (
-    <span className="relative inline-block shrink-0 rounded-[7px] bg-hh-dark" style={{ width: size, height: size }}>
-      <span className="absolute" style={{ left: size * 0.2, top: size * 0.2, width: size * 0.6, height: size * 0.6 }}>
-        <BrandMark className="size-full" />
-      </span>
+    <span className="relative inline-block shrink-0" style={{ width: size, height: size }}>
+      <BrandMark className="size-full" fill="#203119" />
     </span>
   );
 }

@@ -1,6 +1,6 @@
 # agent-core: guide for coding agents
 
-The final app: **B.R.C x Grok**, Riso Scotti's back office. It is one Next.js 16 app that also hosts the [eve](https://github.com/vercel/eve) agent (eve `1.0.0-rc.3`, Grok through `@ai-sdk/xai`). Everything runs locally: no Vercel account, no Docker, no database server. State lives in one SQLite file (Drizzle + better-sqlite3).
+The final app: **Risolve**, Riso Scotti's back office. It is one Next.js 16 app that also hosts the [eve](https://github.com/vercel/eve) agent (eve `1.0.0-rc.3`, Grok through `@ai-sdk/xai`). Everything runs locally: no Vercel account, no Docker, no database server. State lives in one SQLite file (Drizzle + better-sqlite3).
 
 The Order, Shipping, Dispute, threeway and benchmark code is a one-to-one TypeScript port of the Python rows in the repo root, which stay as the reference. Read `PORTING.md` for the contract every row follows, and `../DECISIONS.md` for the rules.
 
