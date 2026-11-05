@@ -17,11 +17,21 @@ import { SectionChat } from "@/components/shell/section-chat";
 import { cn } from "@/lib/utils";
 import { CaseDetail } from "./actions-view";
 
-type Filter = "pending" | "decided" | "all";
+type Filter = "sendoff" | "errors" | "decided" | "all";
 type J = Record<string, unknown>;
 const obj = (v: unknown): J | undefined => (v && typeof v === "object" && !Array.isArray(v) ? (v as J) : undefined);
 
-/** What kind of decision this is, in two words. */
+/** Send-off: checks passed; a person only confirms before ORDRSP / shipping. */
+function isSendOff(c: Signoff): boolean {
+  return c.status === "pending" && c.row === "order" && c.kind === "confirm";
+}
+
+/** Waiting cases that are not a clean send-off (price, qty, EDI, warehouse, claims…). */
+function isErrorCase(c: Signoff): boolean {
+  return c.status === "pending" && !isSendOff(c);
+}
+
+/** What kind of decision this is, in two words (open panel + On it — same as before). */
 function kindLabel(c: Signoff): string {
   if (c.row === "dispute") return "Claim";
   if (c.row === "purchasing") return "Paddy purchase";
@@ -29,11 +39,21 @@ function kindLabel(c: Signoff): string {
   if (c.row === "shipping") return "Warehouse";
   if (c.kind === "confirm") return "Order";
   if (c.kind === "price_fix") return "Price check";
+  if (c.kind === "qty_choice" || c.kind === "stock_short") return "Quantity check";
   if (c.kind === "manual_edi") return "Unreadable order";
   return c.row.charAt(0).toUpperCase() + c.row.slice(1);
 }
 
 const STATUS: Record<string, [PillTone, string]> = { pending: ["attention", "Needs you"], approved: ["live", "Approved"], rejected: ["quiet", "Rejected"] };
+
+/** Table category only: Send-off vs error kinds vs closed status. */
+function categoryPill(c: Signoff): [PillTone, string] {
+  if (c.status === "approved" || c.status === "rejected") return STATUS[c.status] ?? ["quiet", c.status];
+  if (isSendOff(c)) return ["ok", "Send-off"];
+  if (c.kind === "price_fix") return ["attention", "Price error"];
+  if (c.kind === "qty_choice" || c.kind === "stock_short") return ["attention", "Quantity error"];
+  return ["attention", kindLabel(c)];
+}
 
 /** Grok's confidence, when the proposal carries one. */
 function confidence(c: Signoff): number | null {
@@ -305,12 +325,26 @@ function CasePanel({ c, onDecided }: { readonly c: Signoff; readonly onDecided: 
   );
 }
 
+function matchesFilter(c: Signoff, f: Filter): boolean {
+  if (f === "all") return true;
+  if (f === "sendoff") return isSendOff(c);
+  if (f === "errors") return isErrorCase(c);
+  return c.status !== "pending";
+}
+
+function filterForCase(c: Signoff): Filter {
+  if (isSendOff(c)) return "sendoff";
+  if (isErrorCase(c)) return "errors";
+  return "decided";
+}
+
 export function SignoffDesk() {
   const params = useSearchParams();
   const router = useRouter();
   const selected = params.get("case") ?? undefined;
   const [cases, setCases] = useState<Signoff[]>();
-  const [filter, setFilter] = useState<Filter>("pending");
+  const [filter, setFilter] = useState<Filter>("errors");
+  const filterTouched = useRef(false);
 
   const load = useCallback(() => {
     fetch("/api/signoffs?all=1")
@@ -320,17 +354,38 @@ export function SignoffDesk() {
   }, []);
   useEffect(load, [load]);
 
-  // A link to a decided case opens the matching filter, then the panel.
+  // Deep link: open the matching scheda once when the case arrives (don't fight manual tabs).
   useEffect(() => {
+    if (!selected || filterTouched.current) return;
     const c = cases?.find((x) => x.caseId === selected);
-    if (c && c.status !== "pending" && filter === "pending") setFilter("all");
-  }, [cases, selected, filter]);
+    if (c) setFilter(filterForCase(c));
+  }, [cases, selected]);
+
+  // First load with no deep link: prefer Errors if any, else Send-off.
+  useEffect(() => {
+    if (!cases || selected || filterTouched.current) return;
+    const errors = cases.some(isErrorCase);
+    const send = cases.some(isSendOff);
+    setFilter(errors ? "errors" : send ? "sendoff" : "decided");
+  }, [cases, selected]);
 
   const all = cases ?? [];
-  const rows = all.filter((c) => filter === "all" || (filter === "pending" ? c.status === "pending" : c.status !== "pending"));
-  const count = (f: Filter) => all.filter((c) => f === "all" || (f === "pending" ? c.status === "pending" : c.status !== "pending")).length;
+  const rows = all.filter((c) => matchesFilter(c, filter));
+  const count = (f: Filter) => all.filter((c) => matchesFilter(c, f)).length;
   const openCase = selected ? all.find((c) => c.caseId === selected) : undefined;
   const go = (id?: string) => router.replace(id ? `/signoff?case=${encodeURIComponent(id)}` : "/signoff", { scroll: false });
+  const setTab = (f: Filter) => {
+    filterTouched.current = true;
+    setFilter(f);
+  };
+  const empty =
+    filter === "sendoff"
+      ? "No clean orders waiting to send off."
+      : filter === "errors"
+        ? "No cases with errors."
+        : filter === "decided"
+          ? "No decisions yet."
+          : "No cases.";
 
   return (
     <>
@@ -338,9 +393,10 @@ export function SignoffDesk() {
         <PageHeader title="Sign-off">
           <Segmented
             value={filter}
-            onChange={setFilter}
+            onChange={setTab}
             options={[
-              { value: "pending", label: "Waiting", count: count("pending") },
+              { value: "sendoff", label: "Send-off", count: count("sendoff") },
+              { value: "errors", label: "Errors", count: count("errors") },
               { value: "decided", label: "Decided", count: count("decided") },
               { value: "all", label: "All", count: count("all") },
             ]}
@@ -354,7 +410,7 @@ export function SignoffDesk() {
             rowKey={(c) => c.caseId}
             selectedKey={selected}
             onRowClick={(c) => go(c.caseId)}
-            empty={filter === "pending" ? "Nothing waits for a person." : "No decisions yet."}
+            empty={empty}
             columns={[
               {
                 key: "c",
@@ -377,6 +433,11 @@ export function SignoffDesk() {
                 key: "s",
                 header: "Status",
                 cell: (c) => {
+                  // Pending: show Send-off vs error category; closed: Approved / Rejected as before.
+                  if (c.status === "pending") {
+                    const [tone, label] = categoryPill(c);
+                    return <Pill tone={tone}>{label}</Pill>;
+                  }
                   const [tone, label] = STATUS[c.status] ?? ["quiet", c.status];
                   return <Pill tone={tone}>{label}</Pill>;
                 },
