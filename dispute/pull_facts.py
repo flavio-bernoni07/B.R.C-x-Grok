@@ -366,27 +366,37 @@ def pull_facts(
     )
 
     claim_dict = extraction.to_dict()
+
+    def _upgrade_other_issues(suffix: str) -> None:
+        """Map top-level and per-issue ``other`` → pricing when docs show a price gap."""
+        note = (claim_dict.get("raw_notes") or "").strip()
+        claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
+        if claim_dict.get("claim_type") == ClaimType.OTHER.value:
+            claim_dict["claim_type"] = ClaimType.PRICING.value
+        issues = claim_dict.get("issues")
+        if isinstance(issues, list):
+            for issue in issues:
+                if isinstance(issue, dict) and issue.get("claim_type") == ClaimType.OTHER.value:
+                    issue["claim_type"] = ClaimType.PRICING.value
+
     # Safety net: portal "other" + threeway invoice/PO price gap → pricing for Playbook.
-    if extraction.claim_type is ClaimType.OTHER and threeway is not None:
+    price_gap = False
+    if threeway is not None:
         price_gap = any(
             "price differs" in (line.reason or "").lower() for line in threeway.lines
         )
-        if price_gap:
-            claim_dict["claim_type"] = ClaimType.PRICING.value
-            note = (claim_dict.get("raw_notes") or "").strip()
-            suffix = "mapped to pricing via threeway price gap"
-            claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
+    has_other = extraction.claim_type is ClaimType.OTHER or any(
+        i.claim_type is ClaimType.OTHER for i in extraction.issues
+    )
+    if has_other and price_gap:
+        _upgrade_other_issues("mapped to pricing via threeway price gap")
     # Same mapping when Shipping reconcile names a price_difference and baseline is quiet.
-    if (
-        extraction.claim_type is ClaimType.OTHER
-        and claim_dict.get("claim_type") == ClaimType.OTHER.value
+    elif (
+        has_other
         and shipping_reconcile is not None
         and "price_difference" in shipping_reconcile.causes
     ):
-        claim_dict["claim_type"] = ClaimType.PRICING.value
-        note = (claim_dict.get("raw_notes") or "").strip()
-        suffix = "mapped to pricing via shipping reconcile price_difference"
-        claim_dict["raw_notes"] = f"{note}; {suffix}" if note else suffix
+        _upgrade_other_issues("mapped to pricing via shipping reconcile price_difference")
 
     return DisputeFacts(
         claim=claim_dict,

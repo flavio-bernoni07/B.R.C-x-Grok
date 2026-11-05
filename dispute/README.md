@@ -4,7 +4,7 @@ Dispute-owned code for the Riso Scotti zero-touch back office (hackathon Track B
 
 ## Claim reader
 
-`claim_reader.py` turns a messy retailer claim email (or short-payment remittance text) into a structured object via Grok / xAI.
+`claim_reader.py` turns a messy retailer claim email (or short-payment remittance text) into a structured object via Grok / xAI. Multi-problem emails populate `issues[]` (one entry per distinct problem); a legacy single `claim_type` / qty / amount is accepted and becomes a one-element `issues` list.
 
 ### Environment
 
@@ -108,7 +108,7 @@ Remittance `PRI/UNK` / short-pay text is post-processed to `claim_type: pricing`
 
 ## On the Mini ERP
 
-`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim, pulls the facts from what Shipping exported (plus fixtures unless `include_fixtures=False`), asks for the verdict, and either writes the outcome or opens a sign-off. `approve_verdict()` / `reject_verdict()` close the loop. Tests: `tests/test_dispute_service.py`, `tests/test_dispute_desk.py`.
+`dispute/service.py` runs the whole row on the shared Mini ERP: `handle_claim()` reads the claim (including multi-issue), pulls the facts once, decides each issue, auto-closes the clear ones, opens **one** sign-off pack for ambiguous leftovers, and writes **one** combined outcome when nothing is pending. `approve_verdict()` / `reject_verdict()` close the loop. Tests: `tests/test_dispute_service.py`, `tests/test_dispute_desk.py`.
 
 ## Sign-off desk (case pack)
 

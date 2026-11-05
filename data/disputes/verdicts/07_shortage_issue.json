@@ -1,0 +1,18 @@
+{
+  "decision": "accept",
+  "amount": 186.0,
+  "confidence": 0.92,
+  "needs_sign_off": false,
+  "summary": "Over-billed 12 CTN versus DESADV; credit 12 × €15.50.",
+  "points": [
+    {
+      "text": "Over-billed 12 CTN versus DESADV received qty",
+      "amount": 186.0,
+      "source": {
+        "kind": "reconcile",
+        "ref": "overbilled",
+        "detail": "invoiced 40 received 28; 12 × 15.50 = 186.00"
+      }
+    }
+  ]
+}

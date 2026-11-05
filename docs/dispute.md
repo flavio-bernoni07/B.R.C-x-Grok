@@ -18,10 +18,10 @@
 ## What I decided
 
 - **Split of work:** Grok decides and cites sources; **code** writes TD04 / EDI / amounts / evidence reply. Dispute ends in a credit note **or** a reply — never a new invoice.
-- **Claim reader** (`dispute/claim_reader.py`): Grok extracts structured fields; missing refs stay `null`. Remittance `PRI` / `PRI/UNK` maps to `pricing`.
-- **Pull the facts** (`dispute/pull_facts.py`): Mini ERP / fixture lookup, then **both** vendored baseline threeway and `shipping.reconcile.reconcile_documents` (same code `bench.score` measures). Verdicts should cite `reconcile` cause codes when present.
-- **Verdict + sources** (`dispute/verdict.py`): Playbook + contract + facts → accept / partial / reject with sources. Confidence gate **0.55** (not 0.7).
-- **Outcome** (`dispute/outcome.py`): TD04 + INVOIC 381, or evidence reply. Ambiguous cases wait for a person.
+- **Claim reader** (`dispute/claim_reader.py`): Grok extracts structured fields including **`issues[]`** when one email raises more than one problem; missing refs stay `null`. Legacy single-type JSON still works. Remittance `PRI` / `PRI/UNK` maps to `pricing` per issue.
+- **Pull the facts** (`dispute/pull_facts.py`): Mini ERP / fixture lookup **once per claim**, then **both** vendored baseline threeway and `shipping.reconcile.reconcile_documents` (same code `bench.score` measures). Verdicts should cite `reconcile` cause codes when present.
+- **Verdict + sources** (`dispute/verdict.py` via `dispute/service.py`): each issue gets accept / partial / reject with sources (confidence gate **0.55**). Clear issues auto-settle; ambiguous leftovers share **one** desk sign-off; then **one** combined outcome (summed credit or one reply). Agent-core port later.
+- **Outcome** (`dispute/outcome.py`): TD04 + INVOIC 381, or evidence reply. Nothing goes to the retailer until the whole pack is settled.
 - **Sign-off desk** (`python -m dispute.desk --db …`): list / show / approve / reject pending dispute cases on `core.signoff`. Shared CRM can replace this later.
 - **Jury Mini-ERP path:** `python -m dispute.service --db data/demo.sqlite claim.txt --out-dir …` (default **no** fixture merge). Same via `./scripts/run_dispute_claim.sh … --erp-db data/demo.sqlite`.
 
