@@ -89,16 +89,11 @@ https://brc-x-grok.vercel.app
 
 That link is the dashboard. It stays up when this Mac is off. There is no account and no install. The first open after a quiet stretch takes a few seconds while the demo database loads.
 
-## Install the app
-
-Node **24** and pnpm. On your Mac:
+## Open it from the terminal
 
 ```bash
-brew install node@24 && brew link --overwrite --force node@24
-curl -fsSL https://raw.githubusercontent.com/flavio-bernoni07/B.R.C-x-Grok/main/scripts/get-dashboard.sh | bash
+open https://brc-x-grok.vercel.app
 ```
-
-If it still fails: `FORCE=1 bash <(curl -fsSL https://raw.githubusercontent.com/flavio-bernoni07/B.R.C-x-Grok/main/scripts/get-dashboard.sh)` and check `~/Library/Logs/brc-grok.log`.
 
 ## Run it
 
