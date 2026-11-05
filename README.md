@@ -85,13 +85,11 @@ We wrote the reconciliation cases ourselves to cover threeway's blind spots, so 
 
 ## Install the app
 
-Node 24 and pnpm. From the repository root:
+Node 24 and pnpm. This downloads the Mac app, installs it in `/Applications`, and opens it. It also downloads this repo when the Mac does not already have it.
 
 ```bash
-cd agent-core && pnpm install && pnpm dev:web
+curl -fsSL https://raw.githubusercontent.com/flavio-bernoni07/B.R.C-x-Grok/main/scripts/get-dashboard.sh | bash
 ```
-
-That downloads the dependencies, starts the dashboard, and opens http://127.0.0.1:3000. If the dashboard is already running, the same command just opens it.
 
 ## Run it
 
@@ -103,7 +101,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
 pnpm test                     # the app's tests (147)
-pnpm dev:web                  # opens http://127.0.0.1:3000 and stays in this terminal. Then Shipping > "Send to the transport planner"
+pnpm dev:web                  # starts the server and opens the B.R.C x Grok app. Then Shipping > "Send to the transport planner"
 ```
 
 The Python rows are the reference the app is ported from:
