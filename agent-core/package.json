@@ -55,7 +55,7 @@
     "start": "eve start",
     "build": "eve build",
     "typecheck": "tsc --noEmit",
-    "dev:web": "next dev apps/web",
+    "dev:web": "bash scripts/dev-web.sh",
     "build:web": "next build apps/web",
     "data:fetch": "cd ../planning && uv run python -m rice_forecast fetch",
     "setup:py": "cd ../planning && uv sync",
