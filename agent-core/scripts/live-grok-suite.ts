@@ -65,11 +65,59 @@ async function postJson(path: string, body: unknown) {
   return json as Record<string, unknown>;
 }
 
-type Fact = { type?: string; name?: string; tool?: string; call?: { name?: string }; content?: string; text?: string };
+type Fact = {
+  type?: string;
+  name?: string;
+  tool?: string;
+  call?: { name?: string };
+  content?: string;
+  text?: string;
+  data?: Record<string, unknown>;
+};
 
-async function chatTurn(message: string, timeoutMs = 120_000): Promise<{ sessionId: string; tools: string[]; text: string; facts: Fact[]; error?: string }> {
+/** eve NDJSON: heartbeats, progress deltas, or `{ at, facts: [...] }` batches. */
+function extractFacts(line: string): Fact[] {
+  const s = line.trim();
+  if (!s || s.startsWith('{"$eve"')) return [];
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(s.startsWith("data:") ? s.slice(5).trim() : s) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  if (Array.isArray(obj.facts)) return obj.facts as Fact[];
+  if (obj.progress && typeof obj.progress === "object") {
+    const p = obj.progress as Fact;
+    return [{ ...p, type: p.type ?? "content.delta" }];
+  }
+  if (typeof obj.type === "string") return [obj as Fact];
+  return [];
+}
+
+function factToolName(fact: Fact): string | undefined {
+  const d = (fact.data ?? {}) as Record<string, unknown>;
+  const capability = d.capability as Record<string, unknown> | undefined;
+  const call = (d.call ?? d.tool ?? fact.call) as Record<string, unknown> | undefined;
+  const name =
+    (capability && typeof capability.name === "string" && capability.name) ||
+    (typeof d.name === "string" && d.name) ||
+    (typeof d.toolName === "string" && d.toolName) ||
+    (typeof d.tool === "string" && d.tool) ||
+    (call && typeof call.name === "string" && call.name) ||
+    fact.name ||
+    fact.tool;
+  return name || undefined;
+}
+
+function factText(fact: Fact): string | undefined {
+  const d = (fact.data ?? {}) as Record<string, unknown>;
+  const v = d.value ?? d.text ?? d.content ?? fact.content ?? fact.text;
+  return v != null ? String(v) : undefined;
+}
+
+async function chatTurn(message: string, timeoutMs = 180_000): Promise<{ sessionId: string; tools: string[]; text: string; facts: Fact[]; error?: string }> {
   const created = await postJson("/eve/v1/session", { message });
-  const sessionId = String(created.id ?? created.sessionId ?? created.session_id ?? "");
+  const sessionId = String(created.sessionId ?? created.id ?? created.session_id ?? "");
   if (!sessionId) throw new Error(`no session id in ${JSON.stringify(created).slice(0, 300)}`);
 
   const deadline = Date.now() + timeoutMs;
@@ -79,62 +127,48 @@ async function chatTurn(message: string, timeoutMs = 120_000): Promise<{ session
   let settled = false;
   let error: string | undefined;
 
-  while (Date.now() < deadline && !settled) {
-    const r = await fetch(`${BASE}/eve/v1/session/${encodeURIComponent(sessionId)}/stream`);
-    if (!r.ok || !r.body) {
-      error = `stream ${r.status}`;
-      break;
-    }
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        const s = line.trim();
-        if (!s) continue;
-        let fact: Fact;
-        try {
-          fact = JSON.parse(s) as Fact;
-        } catch {
-          // some streams wrap as {facts:[...]} or data: prefix
-          if (s.startsWith("data:")) {
-            try {
-              fact = JSON.parse(s.slice(5).trim()) as Fact;
-            } catch {
-              continue;
-            }
-          } else continue;
-        }
+  const r = await fetch(`${BASE}/eve/v1/session/${encodeURIComponent(sessionId)}/stream`);
+  if (!r.ok || !r.body) {
+    return { sessionId, tools: [], text: "", facts: [], error: `stream ${r.status}` };
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (!settled && Date.now() < deadline) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      for (const fact of extractFacts(line)) {
         facts.push(fact);
         const t = fact.type ?? "";
-        if (t === "call.requested" || t === "tool.requested") {
-          const name = fact.name ?? fact.tool ?? fact.call?.name;
+        if (t === "call.requested" || t === "tool.requested" || t === "call.started") {
+          const name = factToolName(fact);
+          if (name) tools.push(name);
+        }
+        // Some eve builds nest the tool name under data.tool / data.call.name only on settled
+        if (t === "call.settled" || t === "tool.settled") {
+          const name = factToolName(fact);
           if (name) tools.push(name);
         }
         if (t === "content.completed" || t === "message.completed") {
-          const c = fact.content ?? fact.text;
-          if (c) texts.push(String(c));
+          const c = factText(fact);
+          if (c) texts.push(c);
         }
-        if (t === "turn.settled" || t === "turn.completed" || t === "error") {
+        if (t === "turn.settled" || t === "turn.completed") settled = true;
+        if (t === "error" || t === "turn.failed" || t === "model.failed") {
           settled = true;
-          if (t === "error") error = JSON.stringify(fact).slice(0, 400);
+          error = JSON.stringify(fact).slice(0, 500);
         }
-      }
-      if (settled) {
-        try {
-          await reader.cancel();
-        } catch {
-          /* ignore */
-        }
-        break;
       }
     }
-    if (!settled) await new Promise((r) => setTimeout(r, 400));
+  }
+  try {
+    await reader.cancel();
+  } catch {
+    /* ignore */
   }
   if (!settled && !error) error = "timeout waiting for turn.settled";
   return { sessionId, tools: [...new Set(tools)], text: texts.join("\n").trim(), facts, error };
