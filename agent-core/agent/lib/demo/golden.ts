@@ -195,9 +195,6 @@ export async function runGolden(
     // shipped, invoiced, delivered and paid; claims Grok settles; and the exceptions a person decides.
     // The products added in the TypeScript app get their stock after the golden steps (ids stay Python's).
     seedMoreStock(erp, { say });
-    // Lot compliance passports (Art. 18 / origin / MRL / plant certs) and the Basmati missing-papers hold.
-    const { seedCompliance } = await import("../compliance/seed");
-    seedCompliance(erp, { say });
     if (opts.history ?? true) {
       say("== 8. Order history, August to November");
       await seedHistory(erp, { say, live });
@@ -207,6 +204,9 @@ export async function runGolden(
         await seedExtremeCase(erp, { say });
       }
     }
+    // After history so every milled batch (including history lots) gets a compliance passport.
+    const { seedCompliance } = await import("../compliance/seed");
+    seedCompliance(erp, { say });
   }
   return result;
 }

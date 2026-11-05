@@ -135,34 +135,35 @@ function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gt
       ) : null}
       <Card title="Batches">
         {batches.length ? (
-          <ul className="space-y-1 text-[14px]">
+          <ul className="text-[14px]">
             {batches.map((b) => {
               const open = openBatch === b.batch;
               const pass = passports[b.batch];
+              const statusLabel = b.status === "hold" ? "On hold" : b.status === "planned" ? "Planned" : b.status === "released" ? "Released" : b.status;
               return (
                 <li key={b.batch} className="border-hairline border-b last:border-0">
                   <button
                     type="button"
-                    className="flex w-full items-baseline justify-between gap-3 py-1.5 text-left hover:text-ink"
+                    className="flex w-full items-center justify-between gap-3 py-2.5 text-left"
                     onClick={() => setOpenBatch(open ? null : b.batch)}
                     aria-expanded={open}
                   >
-                    <span>
-                      <b>{b.batch}</b>{" "}
-                      <span className="text-ink-68">
-                        · {b.status}
-                        {open ? " · passport" : " · passport ›"}
+                    <span className="min-w-0">
+                      <span className="block font-bold text-ink">{b.batch}</span>
+                      <span className="mt-0.5 block text-[13px] text-ink-68">
+                        {statusLabel}
+                        {open ? "" : " — open passport"}
                       </span>
                     </span>
-                    <span className="text-ink-68 tabular-nums">
-                      {n0(b.qty)}
-                      {b.availableFrom ? ` · ${day(b.availableFrom)}` : ""}
+                    <span className="shrink-0 text-right text-ink-68 tabular-nums">
+                      <span className="block">{n0(b.qty)}</span>
+                      {b.availableFrom ? <span className="block text-[12px]">from {day(b.availableFrom)}</span> : null}
                     </span>
                   </button>
                   {open ? (
-                    <div className="border-hairline border-t bg-hh-seasalt/40 px-1 py-3">
+                    <div className="border-hairline border-t bg-hh-seasalt/50 px-1 py-3.5">
                       {pass === undefined ? <p className="text-[13px] text-ink-68">Loading passport…</p> : null}
-                      {pass === null ? <p className="text-[13px] text-ink-68">No compliance passport for this batch.</p> : null}
+                      {pass === null ? <p className="text-[13px] text-ink-68">No product record for this batch.</p> : null}
                       {pass ? <PassportBody p={pass} /> : null}
                     </div>
                   ) : null}

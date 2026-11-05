@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { orderCompliance, passport } from "../agent/lib/compliance/passport";
 import { seedCompliance } from "../agent/lib/compliance/seed";
-import { allBatches } from "../agent/lib/core/stock";
+import { allBatches, recordEvent } from "../agent/lib/core/stock";
 import { freshErp } from "../agent/lib/core/world";
 import { decideSignoff } from "../agent/lib/shipping/decide";
 
@@ -57,5 +57,18 @@ describe("lot compliance passport", () => {
     expect(c.status).toBe("ok");
     expect(c.passports.some((p) => p.batch === "LOT-C-0417")).toBe(true);
   });
+
+  it("synthesizes a passport for history lots not listed in fixtures", () => {
+    const erp = freshErp(":memory:");
+    recordEvent(erp, "batch_finished", { batch: "LOT-B1-0288", gtin: "8003660012446", qty: 1000, note: "history lot" });
+    seedCompliance(erp);
+    const p = passport(erp, "LOT-B1-0288");
+    expect(p).toBeTruthy();
+    expect(p!.status).toBe("ok");
+    expect(p!.variety).toBe("Basmati");
+    expect(p!.origin.cultivation).toBe("India");
+    expect(p!.documents.length).toBeGreaterThan(2);
+  });
 });
+
 
