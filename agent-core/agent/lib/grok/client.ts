@@ -5,7 +5,8 @@
  * - `validate` returns a list of problems; the answer goes back once with them, and a second
  *   bad answer throws GrokAnswerRejected so the case goes to a person.
  * - Model per task: XAI_MODEL_<TASK> (dots and dashes become underscores, e.g.
- *   XAI_MODEL_DISPUTE_VERDICT), then XAI_MODEL, then GROK_MODEL, then the default.
+ *   XAI_MODEL_DISPUTE_VERDICT), then the caller's `model` (voice needs a fast one), then
+ *   XAI_MODEL, then GROK_MODEL, then the default.
  * - Key from XAI_API_KEY or GROK_API_KEY.
  * - `caller` replaces the network in tests and offline demos (recorded answers).
  *
@@ -39,11 +40,12 @@ export function apiKey(): string | null {
 
 export const hasKey = () => apiKey() !== null;
 
-export function modelFor(task?: string | null): string {
+export function modelFor(task?: string | null, model?: string): string {
   if (task) {
     const specific = process.env[`XAI_MODEL_${task.toUpperCase().replace(/[.-]/g, "_")}`]?.trim();
     if (specific) return specific;
   }
+  if (model) return model;
   for (const name of ["XAI_MODEL", "GROK_MODEL"]) {
     const v = process.env[name]?.trim();
     if (v) return v;
@@ -73,14 +75,17 @@ export function extractJsonObject(text: string): Record<string, unknown> {
 }
 
 /** One call to xAI; returns the message text. */
-export async function postChat(messages: Message[], opts: { task?: string; temperature?: number; timeoutMs?: number } = {}): Promise<string> {
+export async function postChat(messages: Message[], opts: { task?: string; model?: string; temperature?: number; timeoutMs?: number } = {}): Promise<string> {
   const key = apiKey();
   if (!key) throw new MissingApiKeyError("Missing API key. Set XAI_API_KEY or GROK_API_KEY.");
   const xai = createXai({ apiKey: key, baseURL: process.env.XAI_BASE_URL || undefined });
+  // AI SDK 7 refuses system messages inside `messages`; they go in `instructions`.
+  const instructions = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
   const { text } = await generateText({
-    model: xai.responses(modelFor(opts.task)),
+    model: xai.responses(modelFor(opts.task, opts.model)),
     temperature: opts.temperature ?? 0,
-    messages: messages as ModelMessage[],
+    ...(instructions ? { instructions } : {}),
+    messages: messages.filter((m) => m.role !== "system") as ModelMessage[],
     abortSignal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),
   });
   return text;
@@ -89,13 +94,13 @@ export async function postChat(messages: Message[], opts: { task?: string; tempe
 /** Ask Grok for a JSON object, check it, retry once with the problems found. */
 export async function chatJson(
   messages: Message[],
-  opts: { task: string; validate?: Validator; caller?: Caller | null; retries?: number; timeoutMs?: number },
+  opts: { task: string; model?: string; validate?: Validator; caller?: Caller | null; retries?: number; timeoutMs?: number },
 ): Promise<Record<string, unknown>> {
   let convo = [...messages];
   let problems: string[] = [];
   const retries = opts.retries ?? 1;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const reply = opts.caller ? await opts.caller(convo) : await postChat(convo, { task: opts.task, timeoutMs: opts.timeoutMs });
+    const reply = opts.caller ? await opts.caller(convo) : await postChat(convo, { task: opts.task, model: opts.model, timeoutMs: opts.timeoutMs });
     let payload: Record<string, unknown> | null = null;
     let text: string;
     if (reply && typeof reply === "object") {

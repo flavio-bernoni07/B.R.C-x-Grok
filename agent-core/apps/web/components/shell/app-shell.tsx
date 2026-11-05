@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { BrandTile, DisputesIcon, OrdersIcon, OverviewIcon, ShippingIcon, SignoffIcon, StockIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
-import { VoiceHold } from "./voice-hold";
+import { VoiceProvider, VoiceSubtitles } from "./voice-hold";
 
 const NAV = [
   { href: "/", label: "Home", icon: OverviewIcon, match: (p: string) => p === "/" || p === "/s" || p.startsWith("/s/") },
@@ -51,6 +51,7 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
   const active = NAV.findIndex((n) => ("match" in n ? n.match(path) : path.startsWith(n.href)));
 
   return (
+    <VoiceProvider>
     <div className="flex h-dvh gap-2.5 bg-hh-window p-2.5 max-md:flex-col">
       <aside className="relative flex w-[230px] shrink-0 flex-col overflow-hidden rounded-[18px] bg-hh-sidebar px-3 pt-7 pb-4 shadow-[inset_0_0_0_1px_rgb(32_49_25/0.05)] max-md:w-full max-md:flex-row max-md:items-center max-md:gap-2 max-md:overflow-x-auto max-md:px-2 max-md:py-2">
         <Link href="/" className="mb-8 flex items-center gap-2.5 px-2.5 font-bold text-[19px] tracking-[-0.03em] max-md:mb-0 max-md:shrink-0">
@@ -104,11 +105,12 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
         ) : null}
       </aside>
 
-      <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[18px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">
+      <main className="voice-sheet relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[18px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">
         {children}
+        <VoiceSubtitles />
       </main>
-      <VoiceHold />
     </div>
+    </VoiceProvider>
   );
 }
 

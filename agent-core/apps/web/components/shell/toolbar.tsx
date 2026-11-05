@@ -2,13 +2,15 @@
 
 /**
  * The film's toolbar, on every page: the Search capsule (orders, retailers, invoices, claims,
- * trucks; results drop down under it), the + capsule (a new question for Grok) and the account.
+ * trucks; results drop down under it), the + capsule (a new question for Grok), the voice button
+ * (ask Grok out loud) and the account.
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BrandMark } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
+import { VoiceButton } from "./voice-hold";
 
 const GLASS =
   "bg-white/45 backdrop-blur-[26px] backdrop-saturate-[1.85] shadow-[inset_0_1.5px_0.5px_rgb(255_255_255/0.95),inset_0_0_0_1px_rgb(255_255_255/0.5),inset_0_0_0_1px_rgb(32_49_25/0.06),0_18px_40px_-18px_rgb(32_49_25/0.35),0_2px_6px_rgb(32_49_25/0.07)]";
@@ -84,6 +86,7 @@ export function Toolbar() {
           <path d="M12 5v14 M5 12h14" />
         </svg>
       </Link>
+      <VoiceButton />
       <span title="Riso Scotti back office" className="flex size-[38px] items-center justify-center rounded-full bg-hh-dark shadow-[0_10px_22px_-10px_rgb(32_49_25/0.55)]">
         <BrandMark className="size-[18px]" />
       </span>

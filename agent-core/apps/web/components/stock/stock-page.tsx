@@ -283,8 +283,12 @@ function ProposeButton({ r }: { readonly r: PaddyRow }) {
   );
 }
 
-function BuyingView({ paddy }: { readonly paddy: PaddyPlan }) {
-  const [sel, setSel] = useState(paddy.rows[0]?.variety ?? "");
+function BuyingView({ paddy, initial }: { readonly paddy: PaddyPlan; readonly initial?: string | null }) {
+  const known = initial && paddy.rows.some((row) => row.variety === initial) ? initial : paddy.rows[0]?.variety ?? "";
+  const [sel, setSel] = useState(known);
+  useEffect(() => {
+    if (initial && paddy.rows.some((row) => row.variety === initial)) setSel(initial);
+  }, [initial, paddy.rows]);
   const r = paddy.rows.find((x) => x.variety === sel) ?? paddy.rows[0];
   const [price, setPrice] = useState<PriceForecast | null>();
   useEffect(() => {
@@ -441,7 +445,7 @@ export function StockPage() {
       </PageHeader>
       {view === "products" ? inv ? <ProductsView inv={inv} onOpen={(g) => router.replace(`/stock?product=${encodeURIComponent(g)}`, { scroll: false })} /> : loading : null}
       {view === "forecast" ? inv ? <ForecastView inv={inv} initial={params.get("gtin")} /> : loading : null}
-      {view === "buying" ? paddy ? <BuyingView paddy={paddy} /> : loading : null}
+      {view === "buying" ? paddy ? <BuyingView paddy={paddy} initial={params.get("variety")} /> : loading : null}
       <SectionChat
         placeholder="Ask Grok about stock, batches or paddy…"
         context={{ page: "stock", view }}

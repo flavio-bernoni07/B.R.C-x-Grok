@@ -13,6 +13,9 @@ import { apiKey, hasKey } from "./client";
 
 const VOICE_MODEL = "grok-voice-transcribe-2.0";
 const REALTIME_MODEL = "grok-voice-latest";
+const TTS_VOICE = "eve";
+/** Bias Grok Voice toward the words this back office actually uses. */
+const KEYTERMS = ["Esselunga", "Coop Italia", "Auchan", "Carrefour", "Conad", "Carnaroli", "Arborio", "ORDRSP", "paddy", "Riso Scotti"];
 const ENV_KEYS = ["XAI_API_KEY", "GROK_API_KEY", "XAI_BASE_URL", "XAI_VOICE_MODEL"] as const;
 
 let envLoaded = false;
@@ -108,6 +111,10 @@ export async function transcribeAudio(audio: Uint8Array, mediaType = "audio/webm
   new Uint8Array(copy).set(audio);
   const form = new FormData();
   form.append("model", VOICE_MODEL);
+  // Written form: "zero zero two" becomes 002. The file field stays last.
+  form.append("language", "en");
+  form.append("format", "true");
+  for (const term of KEYTERMS) form.append("keyterm", term);
   form.append("file", new Blob([copy], { type }), `take.${fileExtension(type)}`);
   const base = (process.env.XAI_BASE_URL || "https://api.x.ai/v1").replace(/\/$/, "");
   const response = await fetch(`${base.endsWith("/v1") ? base : `${base}/v1`}/stt`, {
@@ -118,6 +125,25 @@ export async function transcribeAudio(audio: Uint8Array, mediaType = "audio/webm
   if (!response.ok) throw new Error(`Grok Voice transcription failed (${response.status}).`);
   const data = (await response.json()) as { text?: string };
   const text = (data.text ?? "").trim();
-  if (!text) throw new Error("Didn't catch that. Tap the voice bar and speak.");
+  if (!text) throw new Error("Didn't catch that. Tap the voice button and speak.");
   return { text, mode: "grok_voice" };
+}
+
+/** Speak one answer in Grok's voice. The bytes are audio/mpeg. The key stays here. */
+export async function speakText(text: string): Promise<Uint8Array> {
+  loadVoiceEnv();
+  const key = apiKey();
+  if (!key) throw new Error("Missing XAI_API_KEY or GROK_API_KEY for voice.");
+  const spoken = text.trim().slice(0, 700);
+  if (!spoken) throw new Error("Nothing to say.");
+  const base = (process.env.XAI_BASE_URL || "https://api.x.ai/v1").replace(/\/$/, "");
+  const response = await fetch(`${base.endsWith("/v1") ? base : `${base}/v1`}/tts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text: spoken, voice_id: TTS_VOICE, language: "en" }),
+  });
+  if (!response.ok) throw new Error(`Grok Voice speech failed (${response.status}).`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.byteLength) throw new Error("Grok Voice returned no audio.");
+  return bytes;
 }

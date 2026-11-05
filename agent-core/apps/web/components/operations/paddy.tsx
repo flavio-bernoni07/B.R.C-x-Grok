@@ -13,18 +13,18 @@ function Row({ row, onPropose, busy }: { readonly row: PaddyRow; readonly onProp
   const p = row.price;
   return (
     <Fragment>
-      <tr className="border-hairline border-t first:border-t-0 align-middle text-[14px] tabular-nums">
-        <td className="h-[54px] pr-4 font-bold">{row.variety}</td>
-        <td className="pr-4 text-right">{row.cover_weeks == null ? "–" : `${row.cover_weeks} wk`}</td>
-        <td className="pr-4 text-right">{t(row.need_paddy_t)}</td>
-        <td className="pr-4 text-right">
+      <tr className="border-hairline border-t first:border-t-0 align-top text-[14px] tabular-nums">
+        <td className="py-3 pr-4 align-top font-bold">{row.variety}</td>
+        <td className="py-3 pr-4 text-right align-top">{row.cover_weeks == null ? "–" : `${row.cover_weeks} wk`}</td>
+        <td className="py-3 pr-4 text-right align-top">{t(row.need_paddy_t)}</td>
+        <td className="py-3 pr-4 text-right align-top">
           <b>{t(row.suggested_t)}</b>
           <div className="text-[12px] text-ink-68">{row.spend_eur == null ? "no price" : eur(row.spend_eur, 0)}</div>
         </td>
-        <td className="pr-4">
+        <td className="py-3 pr-4 align-top">
           <Pill tone={CALL_TONE[row.call]}>{callLabel(row.call)}</Pill>
         </td>
-        <td className="pr-4 text-[13px]">
+        <td className="py-3 pr-4 align-top text-[13px]">
           {p ? (
             <>
               {eur(p.last, 0)} → {eur(p.forecast, 0)}/t
@@ -37,7 +37,7 @@ function Row({ row, onPropose, busy }: { readonly row: PaddyRow; readonly onProp
             <span className="text-ink-68">Price forecast unavailable</span>
           )}
         </td>
-        <td className="pr-4">
+        <td className="py-3 pr-4 align-top">
           <Pill tone={row.confidence === "ok" ? "ok" : "attention"}>{row.confidence === "ok" ? "Model beats naive" : row.confidence === "low" ? "Low confidence" : "No price"}</Pill>
           {p ? (
             <div className="mt-1 text-[12px] text-ink-68">
@@ -45,7 +45,7 @@ function Row({ row, onPropose, busy }: { readonly row: PaddyRow; readonly onProp
             </div>
           ) : null}
         </td>
-        <td className="whitespace-nowrap text-right text-[13px]">
+        <td className="py-3 text-right align-top text-[13px]">
           <button type="button" className="text-ink-68 hover:text-ink" onClick={() => setOpen((v) => !v)}>
             {open ? "Hide" : "How we got this number"}
           </button>
@@ -105,8 +105,8 @@ export function PaddyToBuy({ plan, interactive = false }: { readonly plan: Paddy
   };
   return (
     <Panel title="Paddy to buy" aside={`next ${plan.horizon_weeks} weeks · suggestion only${plan.demo ? " · silo data is demo" : ""}`}>
-      <div className="w-full overflow-x-auto">
-        <table className="w-full border-collapse text-left">
+      <div className="w-full min-w-0 overflow-x-auto">
+        <table className="w-full min-w-[1080px] border-collapse text-left">
           <thead>
             <tr className="text-[12px] text-ink-68">
               <th className="pr-4 pb-2 font-medium">Variety</th>
