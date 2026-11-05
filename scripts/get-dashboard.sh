@@ -14,7 +14,7 @@ if [ -d "${HOME}/.nvm/versions/node" ]; then
     NVM_BIN="${HOME}/.nvm/versions/node/${NVM_LATEST}/bin"
   fi
 fi
-export PATH="/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/share/pnpm:${NVM_BIN}:${PATH}"
+export PATH="/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:${HOME}/.local/share/pnpm:${NVM_BIN}:${PATH}"
 
 FORCE="${FORCE:-0}"
 APP="/Applications/B.R.C x Grok.app"
@@ -102,6 +102,28 @@ ensure_node_pnpm() {
     fi
   fi
   say "pnpm $(pnpm -v) (node $(node -v))"
+}
+
+# Stock → Buying Cost / Price outlook need the Prophet CLI (uv + planning/).
+# Without it the dashboard still shows numbers from the shipped demo forecasts.
+ensure_uv() {
+  if command -v uv >/dev/null 2>&1; then
+    say "uv $(uv --version 2>/dev/null | head -1) OK"
+    return 0
+  fi
+  say "Installing uv (paddy price forecast)..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install uv || true
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -fsSL https://astral.sh/uv/install.sh | sh || true
+    export PATH="${HOME}/.local/bin:${PATH}"
+  fi
+  if command -v uv >/dev/null 2>&1; then
+    say "uv $(uv --version 2>/dev/null | head -1) OK"
+  else
+    say "uv missing — Stock Buying will use the shipped demo price forecast."
+  fi
 }
 
 ensure_deps() {
@@ -236,6 +258,7 @@ if [ "${1:-}" = "--local" ]; then
   say "B.R.C x Grok setup"
   ensure_repo
   ensure_node_pnpm
+  ensure_uv
   ensure_deps
   ensure_app
   ensure_server
