@@ -17,7 +17,7 @@ import { SectionChat } from "@/components/shell/section-chat";
 import { cn } from "@/lib/utils";
 import { CaseDetail } from "./actions-view";
 
-type Filter = "sendoff" | "errors" | "decided" | "all";
+type Filter = "sendoff" | "errors" | "claims" | "decided" | "all";
 type J = Record<string, unknown>;
 const obj = (v: unknown): J | undefined => (v && typeof v === "object" && !Array.isArray(v) ? (v as J) : undefined);
 
@@ -26,9 +26,14 @@ function isSendOff(c: Signoff): boolean {
   return c.status === "pending" && c.row === "order" && c.kind === "confirm";
 }
 
-/** Waiting cases that are not a clean send-off (price, qty, EDI, warehouse, claims…). */
+/** Pending retailer claims waiting on the credit desk. */
+function isClaimCase(c: Signoff): boolean {
+  return c.status === "pending" && c.row === "dispute";
+}
+
+/** Waiting order/warehouse issues (not send-off, not claims). */
 function isErrorCase(c: Signoff): boolean {
-  return c.status === "pending" && !isSendOff(c);
+  return c.status === "pending" && !isSendOff(c) && !isClaimCase(c);
 }
 
 /** What kind of decision this is, in two words (open panel + On it — same as before). */
@@ -46,10 +51,11 @@ function kindLabel(c: Signoff): string {
 
 const STATUS: Record<string, [PillTone, string]> = { pending: ["attention", "Needs you"], approved: ["live", "Approved"], rejected: ["quiet", "Rejected"] };
 
-/** Table category only: Send-off vs error kinds vs closed status. */
+/** Table category only: Send-off / Claims / error kinds / closed status. */
 function categoryPill(c: Signoff): [PillTone, string] {
   if (c.status === "approved" || c.status === "rejected") return STATUS[c.status] ?? ["quiet", c.status];
   if (isSendOff(c)) return ["ok", "Send-off"];
+  if (isClaimCase(c)) return ["attention", "Claim"];
   if (c.kind === "price_fix") return ["attention", "Price error"];
   if (c.kind === "qty_choice" || c.kind === "stock_short") return ["attention", "Quantity error"];
   return ["attention", kindLabel(c)];
@@ -329,11 +335,13 @@ function matchesFilter(c: Signoff, f: Filter): boolean {
   if (f === "all") return true;
   if (f === "sendoff") return isSendOff(c);
   if (f === "errors") return isErrorCase(c);
+  if (f === "claims") return isClaimCase(c);
   return c.status !== "pending";
 }
 
 function filterForCase(c: Signoff): Filter {
   if (isSendOff(c)) return "sendoff";
+  if (isClaimCase(c)) return "claims";
   if (isErrorCase(c)) return "errors";
   return "decided";
 }
@@ -361,12 +369,13 @@ export function SignoffDesk() {
     if (c) setFilter(filterForCase(c));
   }, [cases, selected]);
 
-  // First load with no deep link: prefer Errors if any, else Send-off.
+  // First load with no deep link: Errors, else Claims, else Send-off.
   useEffect(() => {
     if (!cases || selected || filterTouched.current) return;
-    const errors = cases.some(isErrorCase);
-    const send = cases.some(isSendOff);
-    setFilter(errors ? "errors" : send ? "sendoff" : "decided");
+    if (cases.some(isErrorCase)) setFilter("errors");
+    else if (cases.some(isClaimCase)) setFilter("claims");
+    else if (cases.some(isSendOff)) setFilter("sendoff");
+    else setFilter("decided");
   }, [cases, selected]);
 
   const all = cases ?? [];
@@ -383,9 +392,11 @@ export function SignoffDesk() {
       ? "No clean orders waiting to send off."
       : filter === "errors"
         ? "No cases with errors."
-        : filter === "decided"
-          ? "No decisions yet."
-          : "No cases.";
+        : filter === "claims"
+          ? "No claims waiting."
+          : filter === "decided"
+            ? "No decisions yet."
+            : "No cases.";
 
   return (
     <>
@@ -397,6 +408,7 @@ export function SignoffDesk() {
             options={[
               { value: "sendoff", label: "Send-off", count: count("sendoff") },
               { value: "errors", label: "Errors", count: count("errors") },
+              { value: "claims", label: "Claims", count: count("claims") },
               { value: "decided", label: "Decided", count: count("decided") },
               { value: "all", label: "All", count: count("all") },
             ]}
