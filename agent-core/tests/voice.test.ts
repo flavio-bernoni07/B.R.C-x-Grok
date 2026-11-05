@@ -48,6 +48,26 @@ describe("voice answers", () => {
     expect(grok.seen).toHaveLength(0);
   });
 
+  it("opens a product lot passport for compliance, including STT mangling", async () => {
+    const grok = recorded({ text: "unused", href: null });
+    const a = await answerQuestion(erp, "Show me the compliance documents for Carnaroli", { caller: grok.caller });
+    expect(a.href).toMatch(/^\/stock\?product=8000000000001&batch=LOT-C-/);
+    expect(a.text.toLowerCase()).toMatch(/carnaroli|passport|lot/);
+    expect(grok.seen).toHaveLength(0);
+
+    for (const heard of [
+      "show me carnaroli passport",
+      "open the compliments for basmati",
+      "show basmati batches",
+      "traceability for carnaroli",
+      "show me the password for LOT-C-0418",
+    ]) {
+      const ans = await answerQuestion(erp, heard, { caller: grok.caller });
+      expect(ans.href ?? "", `href for: ${heard}`).toMatch(/^\/stock\?product=/);
+      expect(grok.seen.length, `grok calls for: ${heard}`).toBe(0);
+    }
+  });
+
   it("answers why an order was split from its record, found by the retailer's name", async () => {
     const split = erp.orders().find((o) => ((o.notes ?? {}) as { backorders?: unknown[] }).backorders?.length);
     expect(split).toBeDefined();

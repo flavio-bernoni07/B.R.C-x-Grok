@@ -74,10 +74,35 @@ function HowComputed({ children }: { readonly children: React.ReactNode }) {
 }
 
 /** One product in the side panel: what is free, what is promised, the batches, who waits, what to make next. */
-function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gtin: string }) {
+function ProductDetail({
+  inv,
+  gtin,
+  initialBatch,
+  openPassport,
+}: {
+  readonly inv: InventoryData;
+  readonly gtin: string;
+  readonly initialBatch?: string | null;
+  readonly openPassport?: boolean;
+}) {
   const p = inv.products.find((x) => x.gtin === gtin);
-  const [openBatch, setOpenBatch] = useState<string | null>(null);
+  const batchesSorted = p
+    ? [...p.batches].sort((a, b) => ((a.availableFrom ?? "") < (b.availableFrom ?? "") ? -1 : 1))
+    : [];
+  const defaultBatch =
+    initialBatch && batchesSorted.some((b) => b.batch === initialBatch)
+      ? initialBatch
+      : openPassport
+        ? (batchesSorted.find((b) => b.status === "hold")?.batch ??
+          batchesSorted.find((b) => b.status === "released")?.batch ??
+          batchesSorted[0]?.batch ??
+          null)
+        : null;
+  const [openBatch, setOpenBatch] = useState<string | null>(defaultBatch);
   const [passports, setPassports] = useState<Record<string, LotPassport | null>>({});
+  useEffect(() => {
+    setOpenBatch(defaultBatch);
+  }, [gtin, defaultBatch]);
   useEffect(() => {
     if (!openBatch || openBatch in passports) return;
     fetch(`/api/compliance/batch/${encodeURIComponent(openBatch)}`)
@@ -92,7 +117,7 @@ function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gt
   const next = pr?.plan.batches[0];
   const waiting = inv.backorders?.[gtin] ?? [];
   const free = Math.max(p.released - p.reserved, 0);
-  const batches = [...p.batches].sort((a, b) => ((a.availableFrom ?? "") < (b.availableFrom ?? "") ? -1 : 1));
+  const batches = batchesSorted;
   return (
     <div className="space-y-6 p-8">
       <div>
@@ -473,7 +498,11 @@ export function StockPage() {
             className="border-t-0 pt-0"
             placeholder="Ask Grok about stock, batches or paddy…"
             context={{ page: "stock", view }}
-            suggestions={["Which products run short next?", "When should we buy Carnaroli paddy?"]}
+            suggestions={[
+              "Which products run short next?",
+              "Show me Carnaroli compliance passport",
+              "When should we buy Carnaroli paddy?",
+            ]}
           />
         }
       >
@@ -493,7 +522,9 @@ export function StockPage() {
         {view === "buying" ? paddy ? <BuyingView paddy={paddy} initial={params.get("variety")} /> : loading : null}
       </Page>
       <Drawer open={!!product && view === "products"} onClose={() => router.replace("/stock", { scroll: false })}>
-        {inv && product ? <ProductDetail inv={inv} gtin={product} /> : null}
+        {inv && product ? (
+          <ProductDetail inv={inv} gtin={product} initialBatch={params.get("batch")} openPassport={params.get("passport") === "1" || !!params.get("batch")} />
+        ) : null}
       </Drawer>
     </>
   );

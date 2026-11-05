@@ -4,6 +4,7 @@
  * the rest from the Home facts, and code checks every number and the page it opens.
  * The sentence is what Grok's voice reads. Nothing here buys, confirms or sends.
  */
+import { passport } from "../compliance/passport";
 import type { Claim, Erp, Order } from "../core/erp";
 import { overviewSnapshot } from "../core/overview";
 import { search, type SearchHit } from "../core/search";
@@ -34,7 +35,8 @@ const weeks = (n: number) => {
 };
 
 function explicitRefs(question: string): string[] {
-  return [...question.toUpperCase().matchAll(ORDER_REF)].map((m) => m[0]);
+  // Batch ids look like LOT-C-0418 and must not be treated as order refs.
+  return [...question.toUpperCase().matchAll(ORDER_REF)].map((m) => m[0]).filter((ref) => !ref.startsWith("LOT-"));
 }
 
 /** Digit groups a person said as the end of an order ref. A bare year is not one. */
@@ -191,6 +193,156 @@ function wantsPaddy(question: string): boolean {
   return varietyIn(question) !== null;
 }
 
+/**
+ * Lot compliance / passport / norms. Includes how Grok Voice often mangles the words
+ * (compliments, password, trace ability, GMOs, etc.).
+ */
+export function wantsCompliance(question: string): boolean {
+  return (
+    /\b(compl(?:iance|iant|iments?|ains?|eance|eans)|pass\s*ports?|passwords?|trace(?:\s*ability|able)?|certificat(?:e|es|ion)s?|norms?|regulations?|g\.?\s*m\.?\s*o\.?s?|mrl|residues?|fair\s*trade|organic|origine|origin\s+label|ifs|brcgs|lot\s+mark)\b/i.test(
+      question,
+    ) || /\b(docs?|documents?|papers?)\b.*\b(lot|batch|product|rice)\b/i.test(question)
+  );
+}
+
+/** Prefer pack sizes people ask about: "basmati 1 kg" before "basmati 500g". */
+function productRank(name: string): number {
+  const n = name.toLowerCase();
+  if (/\b1\s*kg\b/.test(n) && !/carton/.test(n)) return 0;
+  if (/500\s*g/.test(n)) return 1;
+  if (/carton/.test(n)) return 2;
+  return 3;
+}
+
+/** The finished-goods product a question names (fuzzy, same idea as varietyIn). */
+export function productIn(erp: Erp, question: string): { gtin: string; name: string } | null {
+  const products = [...erp.products()].sort((a, b) => productRank(a.name) - productRank(b.name) || a.name.localeCompare(b.name));
+  const text = question.toLowerCase();
+  const words = text.replace(/[^a-zà-ù0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  let best: { gtin: string; name: string; d: number; rank: number } | null = null;
+  for (const p of products) {
+    const short = p.name.replace(/^riso scotti\s+|^scotti\s+/i, "").toLowerCase();
+    const keys = [short, short.replace(/\s+\d.*$/, "").trim(), short.split(/\s+/)[0] ?? ""].filter((k) => k.length >= 4);
+    for (const key of keys) {
+      if (text.includes(key)) {
+        const rank = productRank(p.name);
+        if (!best || rank < best.rank || (rank === best.rank && 0 < best.d)) best = { gtin: p.gtin, name: p.name, d: 0, rank };
+        continue;
+      }
+      const want = key.replace(/\s+/g, "");
+      const limit = Math.max(1, Math.floor(want.length / 3));
+      for (let i = 0; i < words.length; i++) {
+        let joined = "";
+        for (let k = i; k < Math.min(words.length, i + 4); k++) {
+          joined += words[k];
+          if (Math.abs(joined.length - want.length) > limit) continue;
+          const d = editDistance(joined, want);
+          const rank = productRank(p.name);
+          if (d <= limit && (!best || d < best.d || (d === best.d && rank < best.rank))) {
+            best = { gtin: p.gtin, name: p.name, d, rank };
+          }
+        }
+      }
+    }
+  }
+  return best ? { gtin: best.gtin, name: best.name } : null;
+}
+
+function batchIn(question: string): string | null {
+  const m = question.toUpperCase().match(/\bLOT-[A-Z0-9]+(?:-\d+)?\b/);
+  return m?.[0] ?? null;
+}
+
+function shortProduct(name: string): string {
+  return name.replace(/^Riso Scotti\s+|^Scotti\s+/i, "");
+}
+
+/** Open Stock on a product drawer (and a batch passport when we can name one). */
+function complianceAnswer(erp: Erp, question: string): VoiceAnswer {
+  const namedBatch = batchIn(question);
+  if (namedBatch) {
+    const row = erp.sqlite.prepare("SELECT gtin FROM batches WHERE batch = ? OR batch = ?").get(namedBatch, `${namedBatch}-HOLD`) as
+      | { gtin: string }
+      | undefined;
+    if (row?.gtin) {
+      const product = erp.product({ gtin: row.gtin });
+      const pass = passport(erp, namedBatch);
+      const gap = pass?.status === "gap";
+      const label = product ? shortProduct(product.name) : "that product";
+      return {
+        text: gap
+          ? `${namedBatch} on ${label} still needs compliance papers. Opening its passport.`
+          : `Opening the compliance passport for ${namedBatch} on ${label}.`,
+        href: `/stock?product=${encodeURIComponent(row.gtin)}&batch=${encodeURIComponent(namedBatch)}`,
+      };
+    }
+  }
+
+  const product = productIn(erp, question);
+  if (product) {
+    const batches = (
+      erp.sqlite.prepare("SELECT batch, status FROM batches WHERE gtin = ? ORDER BY batch").all(product.gtin) as {
+        batch: string;
+        status: string;
+      }[]
+    ).filter((b) => !b.batch.endsWith("-HOLD"));
+    const gapBatch = batches.map((b) => b.batch).find((id) => passport(erp, id)?.status === "gap");
+    const holdBatch = batches.find((b) => b.status === "hold")?.batch;
+    const openBatch = gapBatch ?? holdBatch ?? batches.find((b) => b.status === "released")?.batch ?? batches[0]?.batch;
+    const label = shortProduct(product.name);
+    const n = batches.length;
+    const href = openBatch
+      ? `/stock?product=${encodeURIComponent(product.gtin)}&batch=${encodeURIComponent(openBatch)}`
+      : `/stock?product=${encodeURIComponent(product.gtin)}&passport=1`;
+    if (gapBatch) {
+      return {
+        text: `${label} has a lot that still needs papers. Opening ${gapBatch}.`,
+        href,
+      };
+    }
+    return {
+      text:
+        n === 0
+          ? `Opening ${label} in stock.`
+          : n === 1
+            ? `Opening ${label} and its lot passport.`
+            : `Opening ${label}: ${n} batches. Showing the passport for ${openBatch}.`,
+      href,
+    };
+  }
+
+  // No product named: open the demo gap lot if present, else Carnaroli packs.
+  const gap = erp.sqlite
+    .prepare("SELECT batch, gtin FROM batches WHERE status = 'hold' ORDER BY batch")
+    .all() as { batch: string; gtin: string }[];
+  for (const row of gap) {
+    if (passport(erp, row.batch)?.status === "gap") {
+      const productName = erp.product({ gtin: row.gtin })?.name;
+      return {
+        text: `${row.batch}${productName ? ` on ${shortProduct(productName)}` : ""} still needs compliance papers. Opening its passport.`,
+        href: `/stock?product=${encodeURIComponent(row.gtin)}&batch=${encodeURIComponent(row.batch)}`,
+      };
+    }
+  }
+  const carnaroli = erp.products().find((p) => /carnaroli/i.test(p.name) && /1\s*kg/i.test(p.name) && !/carton/i.test(p.name));
+  if (carnaroli) {
+    const batch = (
+      erp.sqlite.prepare("SELECT batch FROM batches WHERE gtin = ? AND status = 'released' ORDER BY batch").get(carnaroli.gtin) as
+        | { batch: string }
+        | undefined
+    )?.batch;
+    return {
+      text: batch
+        ? `Opening Carnaroli stock and the passport for ${batch}.`
+        : "Opening Carnaroli stock so you can open a lot passport.",
+      href: batch
+        ? `/stock?product=${encodeURIComponent(carnaroli.gtin)}&batch=${encodeURIComponent(batch)}`
+        : `/stock?product=${encodeURIComponent(carnaroli.gtin)}&passport=1`,
+    };
+  }
+  return { text: "Opening stock. Pick a product, then open a batch for its compliance passport.", href: "/stock?passport=1" };
+}
+
 async function paddyAnswer(erp: Erp, question: string): Promise<VoiceAnswer> {
   const href = "/stock?view=buying";
   try {
@@ -223,6 +375,9 @@ function countSentence(n: number, one: string, many: string): string {
 export async function answerQuestion(erp: Erp, question: string, opts: VoiceOptions = {}): Promise<VoiceAnswer> {
   const q = question.trim();
   if (!q) return { text: NOTHING, href: null };
+
+  // Lot compliance / passport / norms — before buying or bare stock, including STT mangling.
+  if (wantsCompliance(q) && !explicitRefs(q).length) return complianceAnswer(erp, q);
 
   // The demo question, however Grok Voice spells it: "Should I buy Carnaroli?", "should I by car na roli".
   if ((BUYING.test(q) || (BUY_WORD.test(q) && varietyIn(q))) && !explicitRefs(q).length) return paddyAnswer(erp, q);
@@ -289,7 +444,20 @@ export async function answerQuestion(erp: Erp, question: string, opts: VoiceOpti
     return { text: `${countSentence(orders.length, "order", "orders")} Opening orders.`, href: "/orders" };
   }
 
+  // "Show me Basmati batches" / "open Carnaroli lots" — product drawer, not the bare list.
+  if (/\b(batch|batches|lots?|pass\s*ports?)\b/i.test(q)) {
+    const product = productIn(erp, q);
+    if (product) return complianceAnswer(erp, q);
+  }
+
   if (/\b(stock|stocks|silo|silos|inventory|batch|batches)\b/i.test(q)) {
+    const product = productIn(erp, q);
+    if (product) {
+      return {
+        text: `Opening ${shortProduct(product.name)} in stock.`,
+        href: `/stock?product=${encodeURIComponent(product.gtin)}`,
+      };
+    }
     return { text: "Opening stock.", href: "/stock" };
   }
 
@@ -312,9 +480,24 @@ const PAGES: Record<string, string> = {
   "/shipping": "Shipping: the truck plan, the loading dock, invoices against what shipped",
   "/stock": "Stock: what we can promise and the 8-week projection",
   "/stock?view=buying": "Paddy to buy, by variety",
+  "/stock?passport=1": "Stock: open a product, then a batch for its compliance passport",
   "/disputes": "Disputes: claims, payments and deductions",
   "/signoff": "Sign-off: cases waiting for a person",
 };
+
+/** Stock product / batch passport deep links Grok or code may open. */
+function stockComplianceHrefs(erp: Erp): string[] {
+  const out = ["/stock?passport=1"];
+  for (const p of erp.products()) {
+    out.push(`/stock?product=${encodeURIComponent(p.gtin)}`);
+    out.push(`/stock?product=${encodeURIComponent(p.gtin)}&passport=1`);
+    for (const b of erp.sqlite.prepare("SELECT batch FROM batches WHERE gtin = ?").all(p.gtin) as { batch: string }[]) {
+      if (b.batch.endsWith("-HOLD")) continue;
+      out.push(`/stock?product=${encodeURIComponent(p.gtin)}&batch=${encodeURIComponent(b.batch)}`);
+    }
+  }
+  return out;
+}
 
 /** A spoken answer has to come back in a second or two; a reasoning model takes 6 to 12. */
 const VOICE_MODEL = "grok-4.20-non-reasoning";
@@ -336,6 +519,10 @@ function voiceFacts(erp: Erp, hits: SearchHit[], order: ReturnType<typeof orderF
     signoffs_waiting: snap.counts.signoffsWaiting,
     cases_waiting: snap.waiting.slice(0, 8).map((w) => ({ case: w.caseId, about: w.subjectRef, title: w.title })),
     stock_on_hold: snap.stockAlerts.slice(0, 6).map((a) => ({ product: a.name, held_packs: a.held, free_packs: a.atp })),
+    compliance: {
+      note: "Lot passports live under Stock → a product → a batch. For compliance, origin, GMO, MRL or certificates, open /stock?product=<gtin>&batch=<LOT-…>.",
+      example_hrefs: stockComplianceHrefs(erp).slice(0, 12),
+    },
     latest_orders: erp.orders().slice(-12).map((o) => ({ ref: o.orderRef, retailer: o.buyerGln ? names.get(o.buyerGln) ?? null : null, status: o.status })),
     matches: hits,
     ...(order ? { order_asked_about: order } : {}),
@@ -358,8 +545,13 @@ export function checkVoiceAnswer(payload: Record<string, unknown>, facts: Return
       ...facts.latest_orders.map((o) => `/orders?ref=${encodeURIComponent(o.ref)}`),
       ...facts.cases_waiting.map((c) => `/signoff?case=${encodeURIComponent(c.case)}`),
       ...facts.matches.map((m) => m.href),
+      ...(facts.compliance?.example_hrefs ?? []),
     ]);
-    if (typeof href !== "string" || !allowed.has(href)) problems.push(`href ${JSON.stringify(href)} is not one of the pages`);
+    // Any /stock?product=…(&batch=…) deep link is fine even if not in the short example list.
+    const stockDeep = typeof href === "string" && /^\/stock\?(?:.*&)?product=[^&]+/.test(href);
+    if (typeof href !== "string" || (!allowed.has(href) && !stockDeep)) {
+      problems.push(`href ${JSON.stringify(href)} is not one of the pages`);
+    }
   }
   return problems;
 }
@@ -387,7 +579,8 @@ async function grokAnswer(
           "text: one or two short sentences, under 40 words, plain speech. Write numbers as digits with thousands separators (280,203) and money as euros. Don't say dates unless asked.",
           "Use only the facts. Every number you say must appear in the facts, and means what its field says. The counts and totals cover every retailer: never give them as one retailer's, product's or truck's. If the facts don't answer the question, say so in one sentence and open the closest page.",
           "Don't read lists of ids aloud. Give the count and at most one example by its title.",
-          "href: the page that shows your answer. One of the pages listed, or /orders?ref=<a ref in the facts> or /signoff?case=<a case in the facts> when the answer is about that one record, or a matches href, or null.",
+          "href: the page that shows your answer. One of the pages listed, or /orders?ref=<a ref in the facts> or /signoff?case=<a case in the facts> when the answer is about that one record, or /stock?product=<gtin>&batch=<LOT-…> for lot compliance / passport / certificates / origin / GMO / MRL, or a matches href, or null.",
+          "If the person asks for compliance, passports, norms, regulations, certificates, traceability, GMO or lab docs, open a stock product+batch passport href from the facts — never invent a Compliance page.",
           "Never say you approved, confirmed, sent or bought anything: a person decides.",
         ].join("\n"),
       },
