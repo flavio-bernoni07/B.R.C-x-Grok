@@ -19,14 +19,14 @@ pnpm install
 pnpm setup:py                 # Python env for the paddy price forecaster
 cp .env.example .env.local    # set XAI_API_KEY=xai-...
 pnpm db:reset                 # Mini ERP with the golden order run through every row
-pnpm dev:web                  # opens http://127.0.0.1:3000
+pnpm dev:web                  # starts the server and opens the B.R.C x Grok app
 ```
 
 Without a key, the app and every page still work. The golden demo uses recorded Grok answers; only chatting with the agent needs the key.
 
 | Command | What |
 |---|---|
-| `pnpm dev:web` | The app with the agent. Opens http://127.0.0.1:3000, or just opens it if it is already running |
+| `pnpm dev:web` | The server, then the B.R.C x Grok Mac app. If the server is already running, it just opens the app |
 | `pnpm dev` | The agent alone, in eve's terminal UI |
 | `pnpm db:reset` | Fresh Mini ERP plus the golden demo (`--empty` for the world only) |
 | `pnpm test` | All Vitest suites (core, order, shipping, benchmark, dispute, golden) |

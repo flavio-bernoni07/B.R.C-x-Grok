@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
-# Start the dashboard and open it. If it is already running, just open it.
-# The Mac app launcher calls this with no terminal and opens its own window, so
-# the browser opens only when you run the command yourself.
+# Start the dashboard server. In a terminal, open the Mac app (not a browser).
+# The app's own launcher calls this with no terminal, and opens its window itself.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 URL="http://127.0.0.1:3000"
 OPEN=0
 [ -t 1 ] && OPEN=1
+GET_APP="$(cd "$(dirname "$0")/../../scripts" && pwd)/get-dashboard.sh"
 
 open_dashboard() {
   [ "$OPEN" = 1 ] || return 0
-  if command -v open >/dev/null 2>&1; then
-    open "$URL"
-  elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL" >/dev/null 2>&1 || true
-  fi
+  bash "$GET_APP" --app-only
 }
 
 ready() { curl -sf --max-time 3 "$URL/api/shell" >/dev/null; }

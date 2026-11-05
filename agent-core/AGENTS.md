@@ -67,7 +67,7 @@ tests/                    Vitest: core, order, shipping, bench, dispute, golden 
 pnpm test                                         # all Vitest suites
 pnpm typecheck                                    # agent code
 pnpm exec tsc --noEmit -p apps/web/tsconfig.json  # web app
-pnpm dev:web                                      # opens http://127.0.0.1:3000, agent included
+pnpm dev:web                                      # server on port 3000, then the Mac app
 ```
 
 To test a real turn over HTTP while `dev:web` runs: `POST /eve/v1/session {"message": …}`, then read `GET /eve/v1/session/<id>/stream` (NDJSON, `facts[].type`: `call.requested`, `call.settled`, `content.completed`, `turn.settled`). `GET /eve/v1/info` lists the tools and skills. Stop any dev server you start.
