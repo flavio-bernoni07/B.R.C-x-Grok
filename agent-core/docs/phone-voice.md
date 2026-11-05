@@ -2,6 +2,49 @@
 
 Inbound calls → xAI Speech-to-Speech → our tools → same Mini ERP dispute path as `/support` chat → **Disputes**.
 
+## Laptop demo (do this)
+
+From `agent-core`, with `XAI_API_KEY` already in `.env.local`:
+
+```bash
+# macOS: install the tunnel binary once if you don't have it
+brew install cloudflared
+
+pnpm phone:demo
+```
+
+That resets the Mini ERP (when nothing is on `:3000`), starts the dashboard, opens a Cloudflare quick tunnel, smoke-tests `POST /api/telephony/simulate` (a real Phone `DSP-…` lands under Disputes), and prints the Voice Agent Builder URL to paste. Prefer Homebrew for `cloudflared`; the script falls back to a GitHub download.
+
+Then in [console.x.ai](https://console.x.ai) → **Voice Agents**:
+
+1. Welcome: `Hey, how's it going — how can I help you?`
+2. Instructions: paste `docs/phone-builder-instructions.txt`
+3. Tool `submit_dispute` → **POST** the tunnel URL the script printed (`…/api/telephony/simulate`)
+4. Claim the free number → **Publish / Live**
+5. Call and say: *Esselunga, order ORD-3001, shortage — received only 1100 of 1200 Carnaroli*
+6. Open `http://127.0.0.1:3000/disputes` — Phone badge + `DSP-…`
+
+Leave the `phone:demo` process running; each new quick-tunnel host needs a Builder tool URL update.
+
+Filmed take: [`phone-film-script.md`](phone-film-script.md).
+
+Before the call, clear rehearsal Phone rows: `pnpm phone:clear` (email `CLM-…` claims stay).
+
+### If the call talks but never says a DSP-…
+
+Grok collected the fields, then the Builder **HTTP tool** to `/api/telephony/simulate` failed or timed out.
+
+1. Confirm the tunnel terminal is still running (`phone:demo` / cloudflared).
+2. Builder tool URL must match **today’s** tunnel host (quick tunnels change every restart).
+3. Warm the route once, then call:
+   ```bash
+   curl -s -X POST http://127.0.0.1:3000/api/telephony/simulate \
+     -H 'content-type: application/json' \
+     -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli packs","language":"en"}'
+   ```
+   Should return `"ok":true` with a `dispute_id` in under a few seconds. Then `pnpm phone:clear` before the filmed take.
+4. Publish/Live the Voice Agent after any tool URL change.
+
 ## Env (in `agent-core/.env.local`)
 
 ```bash
@@ -13,12 +56,13 @@ BRC_PHONE_ALLOWLIST=+39...          # optional; your mobile for demos
 # BRC_PHONE_ALLOW_UNSIGNED_WEBHOOK=1  # local fixture posts only — never in prod
 ```
 
-## Do this order
+## Do this order (manual)
 
 1. **Key** in `.env.local` (`XAI_API_KEY`) — you already did this.
 2. **Step C — tunnel** (public HTTPS) — needed before any webhook.
 3. **Step B — number** — pick Path 1 (easiest for demo) or Path 2 (full SIP).
 4. Or skip the phone and use **simulate** (still creates a real `DSP-…` under Disputes).
+   Prefer `pnpm phone:demo` above when you want the tunnel + smoke test in one go.
 
 ---
 
@@ -54,7 +98,7 @@ xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with 
 3. **Welcome message** (on in the Voice Agent UI): paste exact text  
    `Hey, how's it going — how can I help you?`  
    (same as `PHONE_WELCOME_MESSAGE` in `phone_agent.ts`). Leave **Caller can interrupt** on.
-4. Paste the playbook from `PHONE_INSTRUCTIONS` in `agent/lib/dispute/phone_agent.ts` (or the block below). Core rule: **ask only for missing fields**, including **which retailer** (Esselunga / Carrefour / …) if not said yet.
+4. Paste the playbook from `docs/phone-builder-instructions.txt` (same text as `PHONE_INSTRUCTIONS` in `phone_agent.ts`). Core rule: **ask only for missing fields**, including **which retailer** (Esselunga / Carrefour / …) if not said yet.
 5. Add an **API Request** tool named `submit_dispute`:
    - Method: **POST**
    - URL: `https://YOUR-TUNNEL-HOST/api/telephony/simulate`

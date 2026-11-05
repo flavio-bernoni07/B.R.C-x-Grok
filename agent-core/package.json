@@ -63,6 +63,8 @@
     "setup:py": "cd ../planning && uv sync",
     "db:reset": "tsx scripts/db-reset.ts",
     "voice:check": "tsx scripts/voice-check.ts",
+    "phone:demo": "bash scripts/phone-demo.sh",
+    "phone:clear": "tsx scripts/phone-clear.ts",
     "test": "vitest run"
   }
 }
