@@ -30,6 +30,21 @@ Filmed take: [`phone-film-script.md`](phone-film-script.md).
 
 Before the call, clear rehearsal Phone rows: `pnpm phone:clear` (email `CLM-…` claims stay).
 
+### If the call talks but never says a DSP-…
+
+Grok collected the fields, then the Builder **HTTP tool** to `/api/telephony/simulate` failed or timed out.
+
+1. Confirm the tunnel terminal is still running (`phone:demo` / cloudflared).
+2. Builder tool URL must match **today’s** tunnel host (quick tunnels change every restart).
+3. Warm the route once, then call:
+   ```bash
+   curl -s -X POST http://127.0.0.1:3000/api/telephony/simulate \
+     -H 'content-type: application/json' \
+     -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli packs","language":"en"}'
+   ```
+   Should return `"ok":true` with a `dispute_id` in under a few seconds. Then `pnpm phone:clear` before the filmed take.
+4. Publish/Live the Voice Agent after any tool URL change.
+
 ## Env (in `agent-core/.env.local`)
 
 ```bash

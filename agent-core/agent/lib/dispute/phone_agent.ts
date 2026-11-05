@@ -6,7 +6,7 @@
  */
 import WebSocket from "ws";
 import type { Erp } from "../core/erp";
-import { apiKey } from "../grok/client";
+import { apiKey, type Caller } from "../grok/client";
 import { listRetailerHints, resolvePhoneSession } from "./phone_identity";
 import {
   handleCustomerMessage,
@@ -14,6 +14,15 @@ import {
   type PortalTurnResult,
   type SimulatedRetailerSession,
 } from "./portal";
+
+/**
+ * Phone tools already send structured fields; never re-call live Grok for intake.
+ * Voice Agent Builder HTTP tools time out around ~10s — a live intake made simulate take ~18s
+ * and the call never got a DSP- back.
+ */
+const PHONE_OFFLINE_INTAKE: Caller = async () => {
+  throw new Error("phone path must use offline intake");
+};
 
 export const PHONE_VOICE = process.env.XAI_SPEECH_VOICE?.trim() || "eve";
 
@@ -179,6 +188,8 @@ export async function runPhoneSubmit(
     conversationId: opts.conversationId,
     idempotencyKey: opts.callId ? `phone:${opts.callId}` : null,
     channel: "phone",
+    // Structured tool args → deterministic intake (must stay fast for Voice Builder timeouts).
+    caller: PHONE_OFFLINE_INTAKE,
   });
 
   // Stamp call metadata on the conversation transcript when we have a call id.

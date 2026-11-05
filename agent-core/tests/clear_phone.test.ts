@@ -11,6 +11,7 @@ describe("clearPhoneClaims", () => {
     const erp = new Erp(":memory:");
     loadWorld(erp);
     seedPortalDemoOrders(erp);
+    const t0 = Date.now();
     const sim = await simulatePhoneDispute(erp, {
       retailer: "Esselunga",
       order_ref: "ORD-3001",
@@ -19,7 +20,10 @@ describe("clearPhoneClaims", () => {
       customer_description: "received only 1100 packs",
       language: "en",
     });
+    const ms = Date.now() - t0;
     expect(sim.ok).toBe(true);
+    // Voice Agent Builder HTTP tools time out ~10s; must stay well under that.
+    expect(ms, `simulate took ${ms}ms`).toBeLessThan(5000);
     expect(listClaims(erp).some((c) => c.channel === "phone")).toBe(true);
 
     const { removed } = clearPhoneClaims(erp);
