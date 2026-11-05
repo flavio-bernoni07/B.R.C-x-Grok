@@ -1,0 +1,9 @@
+{
+ "_comment": "Recorded Grok answer for the stock-short step of CRF-SPL-002, so the demo shows Grok's split with the network off. Code computed the options (split or mail) from stock; Grok only chose one and wrote the message, and the message passes the same number check as a live answer.",
+ "order.qty_short": {
+  "action": "split",
+  "message": "Gentile Carrefour Italia, per l'ordine CRF-SPL-002 possiamo consegnare subito 3000 confezioni di Riso Scotti Carnaroli 1 kg e le restanti 4000 dal 2026-11-09, con il prossimo lotto. Vi confermiamo le due consegne con l'ORDRSP. Cordiali saluti, Riso Scotti.",
+  "why": "The free stock covers part of the order today and the planned batch covers the rest a few days later, so a split keeps Carrefour's shelf stocked instead of asking them to cut the order.",
+  "confidence": 0.86
+ }
+}

@@ -7,9 +7,10 @@ import { OrderDetailBody, OrderPill, OrdersTable } from "./order-parts";
 
 const STEP: Record<ReceiveResult["step"], string> = {
   confirm: "Checks passed. A person confirms before the ORDRSP goes out.",
+  auto_confirmed: "A clean order: every check passed, so Grok confirmed it and the ORDRSP went out.",
   price_fix: "The price does not match the contract. A person sends the mail, then types a manual EDI or leaves the order Pending.",
   manual_edi: "The EDI cannot be read safely. A person types a manual EDI or leaves the order Pending.",
-  qty_choice: "Stock short. Choose split (ORDRSP for available qty) or mail (Pending, no ORDRSP) in Actions → Pending.",
+  qty_choice: "Stock short. Choose split (ORDRSP for available qty) or mail (Pending, no ORDRSP) in Sign-off.",
   stock_short: "Not enough stock and no split is possible. A person decides.",
 };
 

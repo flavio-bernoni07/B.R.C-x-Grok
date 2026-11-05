@@ -1,0 +1,15 @@
+Da: amministrazione.fornitori@coopitalia.it
+A: credit.note@risoscotti.it
+Oggetto: Ordine {{order}} - merce mancante alla consegna del {{deliver_date_it}}
+
+Buongiorno,
+
+alla consegna del {{deliver_date_it}} presso il CeDi Coop Nord (DDT {{ddt}}) abbiamo ricevuto
+{{received_it}} confezioni di {{product}} invece delle {{shipped_it}} della bolla.
+Manca un cartone da {{qty}} pezzi: la riserva e' scritta sul DDT firmato allo scarico.
+
+La fattura {{invoice}} addebita tutte le {{shipped_it}} confezioni a {{price_it}} euro.
+Chiediamo una nota di credito di {{amount_it}} euro ({{qty}} x {{price_it}}).
+
+Cordiali saluti,
+Coop Italia - Amministrazione fornitori

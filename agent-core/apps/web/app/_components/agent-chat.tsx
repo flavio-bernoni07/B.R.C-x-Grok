@@ -13,6 +13,7 @@ import {
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import {
   Conversation,
   ConversationContent,
@@ -28,9 +29,12 @@ import {
   PromptInputTextarea,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
+import { PageHeader } from "@/components/kit";
+import { ChipRail } from "@/components/kit/chip-rail";
 import { Button } from "@/components/ui/button";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "@/lib/utils";
+import { VOICE_ASK_EVENT } from "@/lib/voice-ask";
 import { AgentMessage } from "./agent-message";
 import { WEB_CHAT_AGENT } from "@/app/eve-agent";
 
@@ -45,16 +49,16 @@ export function AgentChat({
   sessionless = false,
   intro,
   initialPrompt,
-  heroComposer = false,
+  suggestions,
 }: {
   readonly sessionId?: string;
   readonly sessionless?: boolean;
   /** First message of the thread, shown before anything is asked; the conversation continues below it. */
-  readonly intro?: (ask: AskAgent, hero: { composer: ReactNode | null }) => ReactNode;
+  readonly intro?: (ask: AskAgent) => ReactNode;
   /** Sent once when the chat opens, e.g. an "Ask Grok" link from another page. */
   readonly initialPrompt?: string;
-  /** Home: the input sits at the top of the intro until the first question is asked. */
-  readonly heroComposer?: boolean;
+  /** Example questions on one line just above the input, until the first message. */
+  readonly suggestions?: string[];
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
@@ -94,6 +98,7 @@ export function AgentChat({
   const isResuming = agent.status === "resuming";
   const isEmpty = agent.messages.length === 0;
   const lastMessage = agent.messages.at(-1);
+  const lastUserId = [...agent.messages].reverse().find((m) => m.role === "user")?.id;
   const isPendingAssistantShell =
     lastMessage?.role === "assistant" && lastMessage.parts.length === 0;
   const now = activity(agent.view);
@@ -112,7 +117,6 @@ export function AgentChat({
   const hasConversationContent =
     intro !== undefined || sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isResuming || hasConversationContent;
-  const heroActive = heroComposer && intro !== undefined && agent.messages.length === 0 && !isResuming;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
   // A session that ended outside eve never settles its requests, so they stay open, yet it
   // accepts no answer. Once the server says so, stop offering them.
@@ -144,6 +148,19 @@ export function AgentChat({
       ...(clientContext ? { clientContext } : {}),
     });
   };
+
+  const voiceGate = useRef({ status: agent.status, send: sendText });
+  voiceGate.current = { status: agent.status, send: sendText };
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim() ?? "";
+      if (!text || voiceGate.current.status === "resuming") return;
+      event.preventDefault();
+      void voiceGate.current.send(text);
+    };
+    window.addEventListener(VOICE_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(VOICE_ASK_EVENT, onAsk);
+  }, []);
 
   const sentInitial = useRef(false);
   useEffect(() => {
@@ -185,11 +202,17 @@ export function AgentChat({
   };
 
   const composer = (
-    <PromptInput onSubmit={handleSubmit}>
+    // The same white one-line box as the Ask Grok input under an order. The app has no dark theme, so
+    // the input group's dark-mode tint (on when the Mac is in dark mode) is turned off too.
+    <PromptInput
+      className="rounded-[18px] border-0 bg-white dark:bg-white shadow-[inset_0_0_0_1px_rgb(32_49_25/0.1),0_10px_30px_-20px_rgb(32_49_25/0.35)] backdrop-blur-none"
+      onSubmit={handleSubmit}
+    >
       <PromptInputTextarea
+        className="min-h-[52px] py-3.5 pr-12 pl-4 text-[15px] md:text-[15px] placeholder:text-ink-68"
         disabled={isResuming}
         onChange={(event) => setHasInputText(event.currentTarget.value.trim().length > 0)}
-        placeholder="Ask about orders, stock, shipments, invoices, or what needs attention..."
+        placeholder="Ask Grok about an order, a truck, stock or a claim…"
       />
       <ComposerAction
         hasInputText={hasInputText}
@@ -200,37 +223,44 @@ export function AgentChat({
     </PromptInput>
   );
 
+  // Home, before anyone has asked: the chips and the box sit under the desk, in the column,
+  // so they cannot cover the cards. A started thread goes back to the overlay.
+  const homeDock = showConversationLayout && !!intro && isEmpty;
+
   return (
     <main
       className={cn(
         "relative flex h-full flex-col overflow-hidden bg-hh-seasalt text-ink",
       )}
     >
-      {showConversationLayout && !heroActive ? (
+      {homeDock ? (
+        <div className="shrink-0 px-9 pt-8">
+          <div className="mx-auto w-full max-w-[1280px]">
+            <PageHeader title="Home" />
+          </div>
+        </div>
+      ) : showConversationLayout && (!intro || !isEmpty) ? (
         <ChatHeader canStartNewChat={activeSessionId !== undefined} />
       ) : null}
 
-      {heroActive ? (
-        <div className="h-full overflow-y-auto">
-          <div className="mx-auto w-full max-w-[860px] px-4 pt-10 pb-10 sm:px-6">{intro?.((text, ctx) => void sendText(text, ctx), { composer })}</div>
-        </div>
-      ) : showConversationLayout ? (
+      {showConversationLayout ? (
         <Conversation
           className="min-h-0 flex-1"
-          initial={sessionId === undefined ? undefined : false}
+          // Home opens at the top (the desk); a reopened chat restores its own scroll.
+          initial={(intro && isEmpty) || sessionId !== undefined ? false : undefined}
           resize={activeSessionId === undefined ? "smooth" : "instant"}
           scrollRestorationKey={
-            isEmpty || activeSessionId === undefined
-              ? undefined
-              : `eve:web-chat-scroll:${activeSessionId}`
+            // Only a chat reopened from its link restores its scroll; a chat started here keeps the
+            // new question at the top (AnchorQuestion) instead of jumping to the end.
+            isEmpty || sessionId === undefined ? undefined : `eve:web-chat-scroll:${sessionId}`
           }
         >
-          <ConversationTopFade className="top-14 from-hh-seasalt" />
-          <ConversationContent className="mx-auto w-full max-w-[860px] gap-6 px-4 pt-16 pb-36 sm:px-6">
+          {!intro || !isEmpty ? <ConversationTopFade className="top-14 from-hh-seasalt" /> : null}
+          <ConversationContent className={cn("mx-auto w-full max-w-[980px] gap-6 px-4 sm:px-6", homeDock ? "min-h-full py-6" : "pt-12 pb-60")}>
             {intro ? (
-              <Message className="max-w-full" from="assistant">
+              <Message className={cn("max-w-full", homeDock && "my-auto")} from="assistant">
                 <MessageContent className="w-full">
-                  {intro((text, context) => void sendText(text, context), { composer: null })}
+                  {intro((text, context) => void sendText(text, context))}
                 </MessageContent>
               </Message>
             ) : null}
@@ -238,36 +268,45 @@ export function AgentChat({
               showPendingThinking &&
               isPendingAssistantShell &&
               message.id === lastMessage.id ? null : (
-                <AgentMessage
-                  canRespond={canRespond}
-                  key={message.id}
-                  message={message}
-                  questionsFor={questionsFor}
-                  view={agent.view}
-                  onAnswers={async (answers) => {
-                    setCancellationError(undefined);
-                    await agent.respond(answers).catch((cause: unknown) => {
-                      setCancellationError(
-                        cause instanceof Error ? cause.message : "Unable to submit the answer.",
-                      );
-                    });
-                  }}
-                />
+                <div key={message.id} data-msg-id={message.id} className="hh-rise">
+                  <AgentMessage
+                    canRespond={canRespond}
+                    message={message}
+                    questionsFor={questionsFor}
+                    view={agent.view}
+                    onAnswers={async (answers) => {
+                      setCancellationError(undefined);
+                      await agent.respond(answers).catch((cause: unknown) => {
+                        setCancellationError(
+                          cause instanceof Error ? cause.message : "Unable to submit the answer.",
+                        );
+                      });
+                    }}
+                  />
+                </div>
               ),
             )}
-            {showPendingThinking ? <PendingActivity activity={now} /> : null}
+            {showPendingThinking ? (
+              <div className="hh-rise">
+                <PendingActivity activity={now} />
+              </div>
+            ) : null}
             {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
+            {hasSubmittedMessage.current ? <div aria-hidden className="h-[55vh] shrink-0" /> : null}
           </ConversationContent>
-          <ConversationScrollButton />
+          <AnchorQuestion messageId={lastUserId} enabled={hasSubmittedMessage.current} />
+          {isEmpty ? null : <ConversationScrollButton />}
         </Conversation>
       ) : null}
 
-      {heroActive ? null : <div
+      <div
         className={cn(
-          "mx-auto w-full px-4 sm:px-6",
-          showConversationLayout
-            ? "absolute bottom-0 left-1/2 z-20 max-w-[860px] -translate-x-1/2 bg-gradient-to-t from-hh-seasalt via-hh-seasalt to-transparent pt-4 pb-5"
-            : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]",
+          "mx-auto w-full",
+          homeDock
+            ? "max-w-[980px] shrink-0 px-4 pt-3 pb-6 sm:px-6"
+            : showConversationLayout
+              ? "absolute bottom-0 left-1/2 z-20 max-w-[980px] -translate-x-1/2 bg-gradient-to-t from-hh-seasalt from-70% to-transparent px-4 pt-14 pb-5 sm:px-6"
+              : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 px-4 pb-[10vh]",
         )}
       >
         {showConversationLayout ? null : (
@@ -275,10 +314,62 @@ export function AgentChat({
             <h1 className="font-medium text-5xl tracking-tighter">{AGENT_NAME}</h1>
           </div>
         )}
+        {suggestions?.length && isEmpty ? <ChipRail items={suggestions} onPick={(t) => void sendText(t)} className="mb-3 w-full" /> : null}
         <div className="w-full">{composer}</div>
-      </div>}
+      </div>
     </main>
   );
+}
+
+/**
+ * After a question is sent, keep it at the top of the thread and let the answer grow below it,
+ * instead of following the end of the thread.
+ */
+function AnchorQuestion({ messageId, enabled }: { readonly messageId?: string; readonly enabled: boolean }) {
+  const { scrollRef, stopScroll } = useStickToBottomContext();
+  useEffect(() => {
+    if (!enabled || !messageId) return;
+    const box = scrollRef.current;
+    if (!box) return;
+    let held = true;
+    const topOf = () => {
+      const el = box.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(messageId)}"]`);
+      return el ? Math.max(el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 72, 0) : null;
+    };
+    const first = requestAnimationFrame(() => {
+      const top = topOf();
+      if (top == null) return;
+      stopScroll();
+      box.scrollTo({ top, behavior: "smooth" });
+    });
+    // While the answer grows, keep the question where it is, until the person scrolls.
+    const hold = () => {
+      if (!held) return;
+      const top = topOf();
+      if (top == null) return;
+      stopScroll();
+      if (Math.abs(box.scrollTop - top) > 4) box.scrollTop = top;
+    };
+    const release = () => {
+      held = false;
+    };
+    const content = box.firstElementChild;
+    const ro = new ResizeObserver(() => requestAnimationFrame(hold));
+    if (content) ro.observe(content);
+    box.addEventListener("wheel", release, { passive: true });
+    box.addEventListener("touchmove", release, { passive: true });
+    box.addEventListener("keydown", release);
+    const stop = setTimeout(release, 90_000);
+    return () => {
+      cancelAnimationFrame(first);
+      ro.disconnect();
+      clearTimeout(stop);
+      box.removeEventListener("wheel", release);
+      box.removeEventListener("touchmove", release);
+      box.removeEventListener("keydown", release);
+    };
+  }, [messageId, enabled, scrollRef, stopScroll]);
+  return null;
 }
 
 function ComposerAction({
@@ -333,8 +424,8 @@ function ErrorMessage({ message }: { readonly message: string }) {
 function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) {
   return (
     <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
-      <div className="relative mx-auto flex h-full w-full max-w-[860px] items-center justify-between bg-hh-seasalt px-6">
-        <span className="font-bold text-[22px] tracking-[-0.035em]">Home</span>
+      <div className="relative mx-auto flex h-full w-full max-w-[980px] items-center justify-between bg-hh-seasalt px-6">
+        <span />
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"

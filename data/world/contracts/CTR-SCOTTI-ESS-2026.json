@@ -1,0 +1,226 @@
+{
+  "_comment": "Demo data: an invented annual supply contract (scripts/build-demo-world.ts). The order row checks ORDERS prices against products[].",
+  "id": "CTR-SCOTTI-ESS-2026",
+  "retailer": {
+    "gln": "BUYER001",
+    "name": "Esselunga"
+  },
+  "buyer_gln": "BUYER001",
+  "buyer_name": "Esselunga (demo)",
+  "supplier_gln": "SUPPLIER001",
+  "supplier_name": "Riso Scotti S.p.A. (demo)",
+  "currency": "EUR",
+  "start": "2026-01-01",
+  "end": "2026-12-31",
+  "billing": "monthly",
+  "payment_terms_days": 60,
+  "payment_terms_source": "D.Lgs. 198/2021, art. 4: 60 days for non-perishable agri-food products",
+  "annual_volume_units": 1839000,
+  "products": [
+    {
+      "gtin": "8000000000000",
+      "item_code": "ARB-1KG",
+      "name": "Riso Scotti Arborio 1 kg",
+      "unit_price": 1.85,
+      "volume_discounts": [
+        { "min_qty": 15000, "unit_price": 1.7 },
+        { "min_qty": 30000, "unit_price": 1.55 }
+      ],
+      "annual_volume_units": 300000
+    },
+    {
+      "gtin": "8000000000001",
+      "item_code": "CAR-1KG",
+      "name": "Riso Scotti Carnaroli 1 kg",
+      "unit_price": 2.4,
+      "volume_discounts": [
+        { "min_qty": 10000, "unit_price": 2.2 }
+      ],
+      "annual_volume_units": 220000
+    },
+    {
+      "gtin": "18000000000003",
+      "item_code": "ARB-1KG-CTN12",
+      "name": "Riso Scotti Arborio 1kg, carton of 12",
+      "unit_price": 15.5,
+      "volume_discounts": [
+        { "min_qty": 400, "unit_price": 15.04 },
+        { "min_qty": 1200, "unit_price": 14.57 }
+      ],
+      "annual_volume_units": 6000
+    },
+    {
+      "gtin": "18000000000010",
+      "item_code": "CAR-1KG-CTN12",
+      "name": "Riso Scotti Carnaroli 1kg, carton of 12",
+      "unit_price": 15.5,
+      "volume_discounts": [
+        { "min_qty": 400, "unit_price": 15.04 },
+        { "min_qty": 1200, "unit_price": 14.57 }
+      ],
+      "annual_volume_units": 5000
+    },
+    {
+      "gtin": "8000000000025",
+      "item_code": "ARB-VAC-1KG",
+      "name": "Riso Scotti Arborio sottovuoto 1 kg",
+      "unit_price": 12.4,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 12.03 },
+        { "min_qty": 14400, "unit_price": 11.66 }
+      ],
+      "annual_volume_units": 8000
+    },
+    {
+      "gtin": "8003660012345",
+      "item_code": "BAS-500G",
+      "name": "Scotti Basmati 500g",
+      "unit_price": 1.85,
+      "volume_discounts": [
+        { "min_qty": 9000, "unit_price": 1.79 },
+        { "min_qty": 27000, "unit_price": 1.74 }
+      ],
+      "annual_volume_units": 90000
+    },
+    {
+      "gtin": "8000000000049",
+      "item_code": "RSP-FUNGHI-210",
+      "name": "Risotto pronto ai funghi 210 g",
+      "unit_price": 2.99,
+      "volume_discounts": [
+        { "min_qty": 12000, "unit_price": 2.9 },
+        { "min_qty": 36000, "unit_price": 2.81 }
+      ],
+      "annual_volume_units": 120000
+    },
+    {
+      "gtin": "8003660012408",
+      "item_code": "RIBE-1KG",
+      "name": "Riso Scotti Ribe 1 kg",
+      "unit_price": 1.79,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 1.74 },
+        { "min_qty": 14400, "unit_price": 1.68 }
+      ],
+      "annual_volume_units": 180000
+    },
+    {
+      "gtin": "8003660012415",
+      "item_code": "PARB-1KG",
+      "name": "Riso Scotti Parboiled 1 kg",
+      "unit_price": 2.19,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 2.12 },
+        { "min_qty": 14400, "unit_price": 2.06 }
+      ],
+      "annual_volume_units": 140000
+    },
+    {
+      "gtin": "8003660012422",
+      "item_code": "INT-1KG",
+      "name": "Riso Scotti Integrale 1 kg",
+      "unit_price": 2.49,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 2.42 },
+        { "min_qty": 14400, "unit_price": 2.34 }
+      ],
+      "annual_volume_units": 70000
+    },
+    {
+      "gtin": "8003660012439",
+      "item_code": "VEN-500G",
+      "name": "Riso Scotti Venere 500 g",
+      "unit_price": 3.29,
+      "volume_discounts": [
+        { "min_qty": 9000, "unit_price": 3.19 },
+        { "min_qty": 27000, "unit_price": 3.09 }
+      ],
+      "annual_volume_units": 50000
+    },
+    {
+      "gtin": "8003660012446",
+      "item_code": "BAS-1KG",
+      "name": "Riso Scotti Basmati 1 kg",
+      "unit_price": 3.19,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 3.09 },
+        { "min_qty": 14400, "unit_price": 3 }
+      ],
+      "annual_volume_units": 80000
+    },
+    {
+      "gtin": "8003660012453",
+      "item_code": "JAS-1KG",
+      "name": "Riso Scotti Thai Jasmine 1 kg",
+      "unit_price": 3.09,
+      "volume_discounts": [
+        { "min_qty": 4800, "unit_price": 3 },
+        { "min_qty": 14400, "unit_price": 2.9 }
+      ],
+      "annual_volume_units": 40000
+    },
+    {
+      "gtin": "8003660012460",
+      "item_code": "SUSHI-500G",
+      "name": "Riso Scotti Riso per Sushi 500 g",
+      "unit_price": 2.69,
+      "volume_discounts": [
+        { "min_qty": 9000, "unit_price": 2.61 },
+        { "min_qty": 27000, "unit_price": 2.53 }
+      ],
+      "annual_volume_units": 60000
+    },
+    {
+      "gtin": "8003660012477",
+      "item_code": "RSP-ZAFF-210",
+      "name": "Risotto pronto allo zafferano 210 g",
+      "unit_price": 2.99,
+      "volume_discounts": [
+        { "min_qty": 12000, "unit_price": 2.9 },
+        { "min_qty": 36000, "unit_price": 2.81 }
+      ],
+      "annual_volume_units": 90000
+    },
+    {
+      "gtin": "8003660012484",
+      "item_code": "RSP-ASP-210",
+      "name": "Risotto pronto agli asparagi 210 g",
+      "unit_price": 2.99,
+      "volume_discounts": [
+        { "min_qty": 12000, "unit_price": 2.9 },
+        { "min_qty": 36000, "unit_price": 2.81 }
+      ],
+      "annual_volume_units": 50000
+    },
+    {
+      "gtin": "8003660012491",
+      "item_code": "GAL-150G",
+      "name": "Riso Scotti Gallette di riso 150 g",
+      "unit_price": 1.49,
+      "volume_discounts": [
+        { "min_qty": 18000, "unit_price": 1.45 },
+        { "min_qty": 54000, "unit_price": 1.4 }
+      ],
+      "annual_volume_units": 220000
+    },
+    {
+      "gtin": "8003660012507",
+      "item_code": "BEV-1L",
+      "name": "Riso Scotti Bevanda di riso 1 L",
+      "unit_price": 1.99,
+      "volume_discounts": [
+        { "min_qty": 3600, "unit_price": 1.93 },
+        { "min_qty": 10800, "unit_price": 1.87 }
+      ],
+      "annual_volume_units": 110000
+    }
+  ],
+  "notes": [
+    "Demo data: an invented contract for the hackathon, not Riso Scotti's real terms.",
+    "Annual agreement, invoiced monthly: every delivery is invoiced when it ships (FatturaPA TD01 + EDI INVOIC) and the month's invoices are paid together.",
+    "Payment 60 days from the invoice date, the legal maximum for non-perishable agri-food products (D.Lgs. 198/2021, art. 4).",
+    "Prices are per consumer unit, ex VAT, delivered to the retailer's distribution centre (DDP).",
+    "Volume tiers apply per ORDERS line.",
+    "Promotions (flyers, temporary prices) only through a signed promo annex; none is in force for Q4 2026."
+  ]
+}

@@ -9,7 +9,6 @@ import { caseAmount, caseNextStep, caseOrderRef, caseProblem, caseRole } from "@
 import type { Signoff } from "@agent/lib/core/erp";
 import type { ImpactSummary } from "@agent/lib/core/impact";
 import type { OverviewSnapshot } from "@agent/lib/core/overview";
-import { actionsCaseHref, deskTabForSignoff } from "@agent/lib/core/actions-desk";
 import type { MarketSnapshot } from "@agent/lib/rice";
 import { type ReactNode, useEffect, useState } from "react";
 import { Panel, Stat, day, eur } from "@/components/kit";
@@ -51,7 +50,7 @@ export function OverviewWidgets({ snapshot, market, waiting }: { readonly snapsh
         />
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Waiting for a person" aside={<a href="/actions" className="underline underline-offset-2">Actions</a>}>
+        <Panel title="Waiting for a person" aside={<a href="/signoff" className="underline underline-offset-2">Sign-off</a>}>
           <SignoffQueue cases={(waiting ?? snapshot.waiting) as Signoff[]} compact />
         </Panel>
         <Panel title="Latest actions" aside={`${c.auditEvents} in the audit log`}>
@@ -157,10 +156,7 @@ function AttentionCard({ c }: { readonly c: Signoff }) {
           </p>
           <p>Next step: {caseNextStep(c)}</p>
         </div>
-        <a
-          href={actionsCaseHref(c.caseId, deskTabForSignoff(c))}
-          className="h-8 shrink-0 rounded-full bg-hh-dark px-4 font-bold text-[13px] leading-8 text-hh-window"
-        >
+        <a href={`/signoff?case=${encodeURIComponent(c.caseId)}`} className="h-8 shrink-0 rounded-full bg-hh-dark px-4 font-bold text-[13px] leading-8 text-hh-window">
           Review action
         </a>
       </div>

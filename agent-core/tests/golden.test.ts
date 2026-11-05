@@ -6,7 +6,7 @@ describe("golden order end to end (demo.py)", () => {
   it("runs every row offline like the Python demo", async () => {
     process.env.BRC_PLAYBOOK = "/tmp/brc-golden-playbook-test.md";
     const erp = freshErp();
-    const r = await runGolden(erp, { decideUnclear: true });
+    const r = await runGolden(erp, { decideUnclear: true, caseStudy: false }) // demo.py's full flow: dispatch, invoice, golden claim;
     expect(r.order).toBe("confirmed");
     expect(r.goldenClaim).toBe("closed");
     expect(r.unclearClaim).toBe("awaiting_person");

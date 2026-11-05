@@ -199,8 +199,7 @@ export function SignoffView({
   return (
     <Page>
       <PageHeader
-        title="Actions"
-        sub="Board shows every order’s stage. After a price/qty mail the case moves to Pending (not Decided). Send-off all releases every ready ORDRSP."
+        title="Sign-off"
       >
         <DeskTabs tab={tab} options={tabOptions} />
       </PageHeader>

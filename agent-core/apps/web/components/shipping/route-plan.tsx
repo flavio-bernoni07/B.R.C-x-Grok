@@ -2,7 +2,7 @@
 
 /**
  * The logistics agent's plan (agent/lib/shipping/routes.ts): which orders share a truck, the stop order,
- * and what it saves against one truck per order. The same card shows in chat (shipping_plan_routes)
+ * and what it saves against the planner's way (orders grouped by warehouse, one truck each). The same card shows in chat (shipping_plan_routes)
  * and on the Shipping page. Code planned it, Grok wrote the briefing, the transport planner approves.
  */
 import type { Signoff } from "@agent/lib/core/erp";
@@ -97,7 +97,7 @@ export function RoutePlanBody({ plan, briefing }: { readonly plan: DispatchPlan;
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Stat label="Trucks" value={p.trucks} hint={`instead of ${b.trucks}, one per order`} />
+        <Stat label="Trucks" value={p.trucks} hint={`instead of ${b.trucks}, one per warehouse`} />
         <Stat label="Km" value={qty(p.km)} hint={`instead of ${qty(b.km)}, ${s.km_pct}% less`} />
         <Stat label="Diesel" value={eur(p.fuel_eur)} hint={`instead of ${eur(b.fuel_eur)}, ${eur(s.fuel_eur)} saved`} />
         <Stat label="Driver days" value={p.driver_days} hint={`instead of ${b.driver_days}`} />
@@ -150,7 +150,7 @@ export function RoutePlanBody({ plan, briefing }: { readonly plan: DispatchPlan;
             </ul>
           </div>
           <div>
-            <div className="text-ink-68">Today: one truck per order</div>
+            <div className="text-ink-68">Today: orders grouped by warehouse, one truck each</div>
             <ul className="list-disc pl-5 tabular-nums">
               {b.trips.map((t) => (
                 <li key={t.order_ref}>

@@ -2,12 +2,13 @@
 
 import { useSearchParams } from "next/navigation";
 import { AgentChat } from "@/app/_components/agent-chat";
-import { OverviewIntro } from "@/components/core/overview";
+import { HomeIntro, useHomeSuggestions } from "@/components/home/home-intro";
 
-/** Home: one thread. The title, example questions and the state of things are its first message; the conversation continues below. */
+/** Home: one thread. The desk is its first message; the chips ask about what the desk shows; answers continue below. */
 export function OverviewChat(props: { readonly sessionId?: string; readonly sessionless?: boolean }) {
   const ask = useSearchParams().get("ask") ?? undefined;
-  return <AgentChat {...props} heroComposer initialPrompt={ask} intro={(send, hero) => <OverviewIntro onAsk={send} composer={hero.composer} />} />;
+  const suggestions = useHomeSuggestions();
+  return <AgentChat {...props} initialPrompt={ask} intro={() => <HomeIntro />} suggestions={suggestions} />;
 }
 
 /** Link target for "Ask Grok" buttons on the other pages. */

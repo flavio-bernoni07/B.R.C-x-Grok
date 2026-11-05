@@ -1,6 +1,5 @@
 /** Sidebar search: orders, retailers, invoices, claims and trucks, matched on their ids and names. */
 import type { Erp } from "./erp";
-import { actionsCaseHref, deskTabForSignoff } from "./actions-desk";
 
 export type SearchHit = { label: string; sub: string; href: string };
 
@@ -22,13 +21,13 @@ export function search(erp: Erp, q: string, limit = 8): SearchHit[] {
   for (const c of erp.claims()) {
     if (!has(c.claimId, c.orderRef, c.invoiceRef)) continue;
     const so = pendingBySubject.get(c.claimId);
-    const href = so ? actionsCaseHref(so.caseId, deskTabForSignoff(so)) : c.orderRef ? orderHref(c.orderRef) : "/actions";
+    const href = so ? `/signoff?case=${encodeURIComponent(so.caseId)}` : c.orderRef ? orderHref(c.orderRef) : "/signoff";
     hits.push({ label: c.claimId, sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""} · ${c.status.replace(/_/g, " ")}`, href });
   }
   try {
     for (const t of erp.sqlite.prepare("select truck_id, data from si_trucks").all() as { truck_id: string; data: string }[]) {
       const d = JSON.parse(t.data) as { plate?: string; destination?: string };
-      if (has(t.truck_id, d.plate)) hits.push({ label: t.truck_id, sub: `Truck${d.plate ? ` · ${d.plate}` : ""}${d.destination ? ` · ${d.destination}` : ""}`, href: "/operations?tab=warehouse" });
+      if (has(t.truck_id, d.plate)) hits.push({ label: t.truck_id, sub: `Truck${d.plate ? ` · ${d.plate}` : ""}${d.destination ? ` · ${d.destination}` : ""}`, href: "/shipping" });
     }
   } catch {
     /* no shipping tables yet */

@@ -8,9 +8,9 @@ import { useState } from "react";
 import { AuditList } from "@/components/core/audit";
 import { SignoffCard } from "@/components/core/signoff";
 import { type Column, DataTable, day, eur, Facts, Panel, Pill, qty, Segmented, SourceTag } from "@/components/kit";
-import { claimTypeLabel, DOC_LABEL, decisionLabel, outcomePill, sourceKindLabel } from "./format";
+import { claimTypeLabel, confidencePct, DOC_LABEL, decisionLabel, outcomePill, sourceKindLabel } from "./format";
 
-const pct = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
+const pct = (v: number | null | undefined) => (v == null ? "–" : confidencePct(v));
 
 export function ExtractionFacts({ extraction }: { readonly extraction: ClaimExtraction }) {
   const e = extraction;
@@ -38,7 +38,7 @@ export function VerdictPoints({ verdict }: { readonly verdict: StoredVerdict }) 
           Grok: {decisionLabel(verdict.decision)}
           {verdict.amount != null ? ` ${eur(verdict.amount)}` : ""}
         </Pill>
-        <span className="text-ink-68">confidence {pct(verdict.confidence)}</span>
+        <span className="text-ink-68">{pct(verdict.confidence)}</span>
       </div>
       {verdict.summary ? <p className="text-[13px] text-ink-78">{verdict.summary}</p> : null}
       <ol className="divide-y divide-[var(--color-hairline)]">

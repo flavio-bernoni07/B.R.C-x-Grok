@@ -12,7 +12,7 @@
  *
  * Python's `make_history` (seeded random) is not ported: the CSV is the shared fixture.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { Erp } from "../core/erp";
 import { batches, committedQty } from "../core/stock";
 import { dataPath } from "../paths";
@@ -52,8 +52,7 @@ export function monday(iso: string): string {
 
 let cached: History | null = null;
 
-export function loadHistory(path = dataPath("world", "order_history.csv")): History {
-  if (cached && path === dataPath("world", "order_history.csv")) return cached;
+function readHistory(path: string): History {
   const [head, ...lines] = readFileSync(path, "utf8").trim().split(/\r?\n/);
   const cols = head.split(",");
   const at = (name: string) => cols.indexOf(name);
@@ -62,8 +61,29 @@ export function loadHistory(path = dataPath("world", "order_history.csv")): Hist
     const f = line.split(",");
     (out[f[at("gtin")]] ??= []).push({ week_start: f[at("week_start")], qty: Number(f[at("qty")]), promo: f[at("promo")] === "1" });
   }
-  cached = out;
   return out;
+}
+
+/** The history the Python reference also reads (data/world/order_history.csv): the score is checked against it. */
+export function loadHistory(path = dataPath("world", "order_history.csv")): History {
+  const isDefault = path === dataPath("world", "order_history.csv");
+  if (cached && isDefault) return cached;
+  const out = readHistory(path);
+  if (isDefault) cached = out;
+  return out;
+}
+
+let cachedAll: History | null = null;
+
+/**
+ * The history the forecast uses: the reference file plus the products added in the TypeScript app
+ * (data/world/order_history_more.csv, demo data), kept apart so the Python reference stays unchanged.
+ */
+export function loadAllHistory(): History {
+  if (cachedAll) return cachedAll;
+  const more = dataPath("world", "order_history_more.csv");
+  cachedAll = { ...loadHistory(), ...(existsSync(more) ? readHistory(more) : {}) };
+  return cachedAll;
 }
 
 function uplift(past: Week[]): number {
@@ -122,7 +142,7 @@ export function score(history?: History | null, testWeeks = 12): { rows: ScoreRo
 }
 
 export function forecast(gtin: string, start: string, weeks = 8, promoWeeks?: Set<string> | null): { week: string; qty: number }[] {
-  const series = loadHistory()[gtin];
+  const series = loadAllHistory()[gtin];
   if (!series) return [];
   const m = monday(start);
   const past = series.filter((p) => p.week_start < m);

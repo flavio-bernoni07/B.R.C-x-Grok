@@ -1,5 +1,5 @@
 {
-  "_comment": "One product list for every row. gtin is what the EDI carries (Order); item_code is what Dispute's catalog and the contract excerpt use. Demo codes, not real GS1 numbers.",
+  "_comment": "One product list for every row. gtin is what the EDI carries (Order); item_code is what Dispute's catalog and the contract excerpt use. Demo codes, not real GS1 numbers. The 11 products with 800366001240x-50x GTINs were added for the demo (Riso Scotti's real range, invented codes with valid EAN-13 check digits; list prices and pallet sizes are demo figures).",
   "products": [
     {"gtin": "8000000000000", "item_code": "ARB-1KG", "name": "Riso Scotti Arborio 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 1.85, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
     {"gtin": "8000000000001", "item_code": "CAR-1KG", "name": "Riso Scotti Carnaroli 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 2.40, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
@@ -7,6 +7,17 @@
     {"gtin": "18000000000010", "item_code": "CAR-1KG-CTN12", "name": "Riso Scotti Carnaroli 1kg, carton of 12", "uom": "CTN", "units_per_case": 12, "list_price": 15.50, "vat_rate": 4.0, "units_per_pallet": 80, "unit_weight_kg": 12.3},
     {"gtin": "8000000000025", "item_code": "ARB-VAC-1KG", "name": "Riso Scotti Arborio sottovuoto 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 12.40, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
     {"gtin": "8003660012345", "item_code": "BAS-500G", "name": "Scotti Basmati 500g", "uom": "EA", "units_per_case": 1, "list_price": 1.85, "vat_rate": 4.0, "units_per_pallet": 1800, "unit_weight_kg": 0.5},
-    {"gtin": "8000000000049", "item_code": "RSP-FUNGHI-210", "name": "Risotto pronto ai funghi 210 g", "uom": "EA", "units_per_case": 1, "list_price": 2.99, "vat_rate": 10.0, "units_per_pallet": 2400, "unit_weight_kg": 0.21}
+    {"gtin": "8000000000049", "item_code": "RSP-FUNGHI-210", "name": "Risotto pronto ai funghi 210 g", "uom": "EA", "units_per_case": 1, "list_price": 2.99, "vat_rate": 10.0, "units_per_pallet": 2400, "unit_weight_kg": 0.21},
+    {"gtin": "8003660012408", "item_code": "RIBE-1KG", "name": "Riso Scotti Ribe 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 1.79, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
+    {"gtin": "8003660012415", "item_code": "PARB-1KG", "name": "Riso Scotti Parboiled 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 2.19, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
+    {"gtin": "8003660012422", "item_code": "INT-1KG", "name": "Riso Scotti Integrale 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 2.49, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
+    {"gtin": "8003660012439", "item_code": "VEN-500G", "name": "Riso Scotti Venere 500 g", "uom": "EA", "units_per_case": 1, "list_price": 3.29, "vat_rate": 4.0, "units_per_pallet": 1800, "unit_weight_kg": 0.5},
+    {"gtin": "8003660012446", "item_code": "BAS-1KG", "name": "Riso Scotti Basmati 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 3.19, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
+    {"gtin": "8003660012453", "item_code": "JAS-1KG", "name": "Riso Scotti Thai Jasmine 1 kg", "uom": "EA", "units_per_case": 1, "list_price": 3.09, "vat_rate": 4.0, "units_per_pallet": 960, "unit_weight_kg": 1.0},
+    {"gtin": "8003660012460", "item_code": "SUSHI-500G", "name": "Riso Scotti Riso per Sushi 500 g", "uom": "EA", "units_per_case": 1, "list_price": 2.69, "vat_rate": 4.0, "units_per_pallet": 1800, "unit_weight_kg": 0.5},
+    {"gtin": "8003660012477", "item_code": "RSP-ZAFF-210", "name": "Risotto pronto allo zafferano 210 g", "uom": "EA", "units_per_case": 1, "list_price": 2.99, "vat_rate": 10.0, "units_per_pallet": 2400, "unit_weight_kg": 0.21},
+    {"gtin": "8003660012484", "item_code": "RSP-ASP-210", "name": "Risotto pronto agli asparagi 210 g", "uom": "EA", "units_per_case": 1, "list_price": 2.99, "vat_rate": 10.0, "units_per_pallet": 2400, "unit_weight_kg": 0.21},
+    {"gtin": "8003660012491", "item_code": "GAL-150G", "name": "Riso Scotti Gallette di riso 150 g", "uom": "EA", "units_per_case": 1, "list_price": 1.49, "vat_rate": 10.0, "units_per_pallet": 3600, "unit_weight_kg": 0.15},
+    {"gtin": "8003660012507", "item_code": "BEV-1L", "name": "Riso Scotti Bevanda di riso 1 L", "uom": "EA", "units_per_case": 1, "list_price": 1.99, "vat_rate": 22.0, "units_per_pallet": 720, "unit_weight_kg": 1.05}
   ]
 }

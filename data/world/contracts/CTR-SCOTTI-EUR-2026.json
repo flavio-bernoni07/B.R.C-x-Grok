@@ -1,0 +1,193 @@
+{
+  "_comment": "Demo data: an invented annual supply contract (scripts/build-demo-world.ts). The order row checks ORDERS prices against products[].",
+  "id": "CTR-SCOTTI-EUR-2026",
+  "retailer": {
+    "gln": "8000000000162",
+    "name": "Eurospin"
+  },
+  "buyer_gln": "8000000000162",
+  "buyer_name": "Eurospin (demo)",
+  "supplier_gln": "SUPPLIER001",
+  "supplier_name": "Riso Scotti S.p.A. (demo)",
+  "currency": "EUR",
+  "start": "2026-01-01",
+  "end": "2026-12-31",
+  "billing": "monthly",
+  "payment_terms_days": 60,
+  "payment_terms_source": "D.Lgs. 198/2021, art. 4: 60 days for non-perishable agri-food products",
+  "annual_volume_units": 1456000,
+  "products": [
+    {
+      "gtin": "8000000000000",
+      "item_code": "ARB-1KG",
+      "name": "Riso Scotti Arborio 1 kg",
+      "unit_price": 1.85,
+      "volume_discounts": [
+        { "min_qty": 15000, "unit_price": 1.7 },
+        { "min_qty": 30000, "unit_price": 1.55 }
+      ],
+      "annual_volume_units": 240000
+    },
+    {
+      "gtin": "8000000000001",
+      "item_code": "CAR-1KG",
+      "name": "Riso Scotti Carnaroli 1 kg",
+      "unit_price": 2.4,
+      "volume_discounts": [
+        { "min_qty": 10000, "unit_price": 2.2 }
+      ],
+      "annual_volume_units": 176000
+    },
+    {
+      "gtin": "8003660012345",
+      "item_code": "BAS-500G",
+      "name": "Scotti Basmati 500g",
+      "unit_price": 1.76,
+      "volume_discounts": [
+        { "min_qty": 5400, "unit_price": 1.69 },
+        { "min_qty": 18000, "unit_price": 1.62 }
+      ],
+      "annual_volume_units": 72000
+    },
+    {
+      "gtin": "8000000000049",
+      "item_code": "RSP-FUNGHI-210",
+      "name": "Risotto pronto ai funghi 210 g",
+      "unit_price": 2.84,
+      "volume_discounts": [
+        { "min_qty": 7200, "unit_price": 2.73 },
+        { "min_qty": 24000, "unit_price": 2.61 }
+      ],
+      "annual_volume_units": 96000
+    },
+    {
+      "gtin": "8003660012408",
+      "item_code": "RIBE-1KG",
+      "name": "Riso Scotti Ribe 1 kg",
+      "unit_price": 1.7,
+      "volume_discounts": [
+        { "min_qty": 2880, "unit_price": 1.63 },
+        { "min_qty": 9600, "unit_price": 1.56 }
+      ],
+      "annual_volume_units": 144000
+    },
+    {
+      "gtin": "8003660012415",
+      "item_code": "PARB-1KG",
+      "name": "Riso Scotti Parboiled 1 kg",
+      "unit_price": 2.08,
+      "volume_discounts": [
+        { "min_qty": 2880, "unit_price": 2 },
+        { "min_qty": 9600, "unit_price": 1.91 }
+      ],
+      "annual_volume_units": 112000
+    },
+    {
+      "gtin": "8003660012422",
+      "item_code": "INT-1KG",
+      "name": "Riso Scotti Integrale 1 kg",
+      "unit_price": 2.37,
+      "volume_discounts": [
+        { "min_qty": 2880, "unit_price": 2.28 },
+        { "min_qty": 9600, "unit_price": 2.18 }
+      ],
+      "annual_volume_units": 56000
+    },
+    {
+      "gtin": "8003660012439",
+      "item_code": "VEN-500G",
+      "name": "Riso Scotti Venere 500 g",
+      "unit_price": 3.13,
+      "volume_discounts": [
+        { "min_qty": 5400, "unit_price": 3 },
+        { "min_qty": 18000, "unit_price": 2.88 }
+      ],
+      "annual_volume_units": 40000
+    },
+    {
+      "gtin": "8003660012446",
+      "item_code": "BAS-1KG",
+      "name": "Riso Scotti Basmati 1 kg",
+      "unit_price": 3.03,
+      "volume_discounts": [
+        { "min_qty": 2880, "unit_price": 2.91 },
+        { "min_qty": 9600, "unit_price": 2.79 }
+      ],
+      "annual_volume_units": 64000
+    },
+    {
+      "gtin": "8003660012453",
+      "item_code": "JAS-1KG",
+      "name": "Riso Scotti Thai Jasmine 1 kg",
+      "unit_price": 2.94,
+      "volume_discounts": [
+        { "min_qty": 2880, "unit_price": 2.82 },
+        { "min_qty": 9600, "unit_price": 2.7 }
+      ],
+      "annual_volume_units": 32000
+    },
+    {
+      "gtin": "8003660012460",
+      "item_code": "SUSHI-500G",
+      "name": "Riso Scotti Riso per Sushi 500 g",
+      "unit_price": 2.56,
+      "volume_discounts": [
+        { "min_qty": 5400, "unit_price": 2.46 },
+        { "min_qty": 18000, "unit_price": 2.36 }
+      ],
+      "annual_volume_units": 48000
+    },
+    {
+      "gtin": "8003660012477",
+      "item_code": "RSP-ZAFF-210",
+      "name": "Risotto pronto allo zafferano 210 g",
+      "unit_price": 2.84,
+      "volume_discounts": [
+        { "min_qty": 7200, "unit_price": 2.73 },
+        { "min_qty": 24000, "unit_price": 2.61 }
+      ],
+      "annual_volume_units": 72000
+    },
+    {
+      "gtin": "8003660012484",
+      "item_code": "RSP-ASP-210",
+      "name": "Risotto pronto agli asparagi 210 g",
+      "unit_price": 2.84,
+      "volume_discounts": [
+        { "min_qty": 7200, "unit_price": 2.73 },
+        { "min_qty": 24000, "unit_price": 2.61 }
+      ],
+      "annual_volume_units": 40000
+    },
+    {
+      "gtin": "8003660012491",
+      "item_code": "GAL-150G",
+      "name": "Riso Scotti Gallette di riso 150 g",
+      "unit_price": 1.42,
+      "volume_discounts": [
+        { "min_qty": 10800, "unit_price": 1.36 },
+        { "min_qty": 36000, "unit_price": 1.31 }
+      ],
+      "annual_volume_units": 176000
+    },
+    {
+      "gtin": "8003660012507",
+      "item_code": "BEV-1L",
+      "name": "Riso Scotti Bevanda di riso 1 L",
+      "unit_price": 1.89,
+      "volume_discounts": [
+        { "min_qty": 2160, "unit_price": 1.81 },
+        { "min_qty": 7200, "unit_price": 1.74 }
+      ],
+      "annual_volume_units": 88000
+    }
+  ],
+  "notes": [
+    "Demo data: an invented contract for the hackathon, not Riso Scotti's real terms.",
+    "Annual agreement, invoiced monthly: every delivery is invoiced when it ships (FatturaPA TD01 + EDI INVOIC) and the month's invoices are paid together.",
+    "Payment 60 days from the invoice date, the legal maximum for non-perishable agri-food products (D.Lgs. 198/2021, art. 4).",
+    "Prices are per consumer unit, ex VAT, delivered to the retailer's distribution centre (DDP).",
+    "Branded range only; cartons and the vacuum pack are not listed.",
+    "No promo annex in 2026: the price list below is the only price."
+  ]
+}

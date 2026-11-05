@@ -1,0 +1,15 @@
+Da: amministrazione.passiva@eurospin.it
+A: dispute@risoscotti.it
+Oggetto: Differenza prezzo fattura {{invoice}} - ordine {{order}}
+
+Buongiorno,
+
+sulla fattura {{invoice}} il {{product}} e' addebitato a {{price_it}} euro, ma per il mese di
+ottobre ci aspettavamo il prezzo promozionale di {{claimed_price_it}} euro, come per la
+promozione dell'anno scorso.
+
+Differenza: ({{price_it}} - {{claimed_price_it}}) x {{qty}} pezzi = {{amount_it}} euro.
+Chiediamo una nota di credito di {{amount_it}} euro.
+
+Saluti,
+Eurospin Italia - Amministrazione passiva

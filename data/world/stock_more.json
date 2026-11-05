@@ -1,0 +1,120 @@
+{
+ "_comment": "Starting stock of the products added in the TypeScript app (demo data: levels are invented so some products are short and some plentiful). Loaded as production events after the golden demo (agent/lib/demo/more-stock.ts), so the golden order's event ids stay those of the Python reference.",
+ "events": [
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-RB-0402",
+   "gtin": "8003660012408",
+   "qty": 18000,
+   "note": "Ribe 1 kg, line 3"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-PB-0215",
+   "gtin": "8003660012415",
+   "qty": 4000,
+   "note": "Parboiled 1 kg, line 4"
+  },
+  {
+   "kind": "batch_planned",
+   "batch": "LOT-PB-0216",
+   "gtin": "8003660012415",
+   "qty": 8000,
+   "available_from": "2026-11-12",
+   "note": "Parboiled 1 kg, next run"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-IN-0120",
+   "gtin": "8003660012422",
+   "qty": 2500,
+   "note": "Integrale 1 kg, line 4"
+  },
+  {
+   "kind": "quality_hold",
+   "batch": "LOT-IN-0120",
+   "qty": 500,
+   "note": "lab sample: moisture 14.8%, above the 14.5% spec; retest booked"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-VN-0077",
+   "gtin": "8003660012439",
+   "qty": 9000,
+   "note": "Venere 500 g, line 5"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-B1-0310",
+   "gtin": "8003660012446",
+   "qty": 7000,
+   "note": "Basmati 1 kg, line 5"
+  },
+  {
+   "kind": "batch_planned",
+   "batch": "LOT-B1-0311",
+   "gtin": "8003660012446",
+   "qty": 6000,
+   "available_from": "2026-11-16",
+   "note": "Basmati 1 kg, next run"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-JS-0140",
+   "gtin": "8003660012453",
+   "qty": 1200,
+   "note": "Thai Jasmine 1 kg, line 5"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-SU-0051",
+   "gtin": "8003660012460",
+   "qty": 5400,
+   "note": "Riso per Sushi 500 g, line 5"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-RZ-0033",
+   "gtin": "8003660012477",
+   "qty": 9600,
+   "note": "Risotto pronto allo zafferano, ready-meals line"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-RA-0012",
+   "gtin": "8003660012484",
+   "qty": 1800,
+   "note": "Risotto pronto agli asparagi, ready-meals line"
+  },
+  {
+   "kind": "batch_planned",
+   "batch": "LOT-RA-0013",
+   "gtin": "8003660012484",
+   "qty": 4800,
+   "available_from": "2026-11-20",
+   "note": "Risotto pronto agli asparagi, next run"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-GL-0230",
+   "gtin": "8003660012491",
+   "qty": 21600,
+   "note": "Gallette di riso 150 g, puffing line"
+  },
+  {
+   "kind": "batch_finished",
+   "batch": "LOT-BV-0088",
+   "gtin": "8003660012507",
+   "qty": 7200,
+   "note": "Bevanda di riso 1 L, drinks line"
+  },
+  {
+   "kind": "batch_planned",
+   "batch": "LOT-BV-0089",
+   "gtin": "8003660012507",
+   "qty": 7200,
+   "available_from": "2026-11-10",
+   "note": "Bevanda di riso 1 L, next run"
+  }
+ ]
+}

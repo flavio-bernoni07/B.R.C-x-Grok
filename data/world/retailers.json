@@ -1,11 +1,18 @@
 {
-  "_comment": "Demo retailers. BUYER001 is the GLN the Order fixtures already use for Esselunga. VAT ids and SdI codes are placeholders.",
+  "_comment": "Demo retailers. BUYER001 is the GLN the Order fixtures already use for Esselunga. VAT ids, SdI codes, GLNs and street addresses are placeholders; the last seven (Iper to Unes) were added for the demo and have no road distances in logistics.json, so the route planner cannot plan them yet.",
   "retailers": [
     {"gln": "BUYER001", "name": "Esselunga", "vat_id": "IT00000000001", "address": "Via Giambologna 1", "cap": "20096", "comune": "Pioltello", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Melzo"},
     {"gln": "8000000000100", "name": "Carrefour Italia", "vat_id": "IT00000000002", "address": "Via Caldera 21", "cap": "20153", "comune": "Milano", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Carrefour Nord"},
     {"gln": "8000000000117", "name": "Conad Ancona", "vat_id": "IT00000000003", "address": "Via Flaminia 2", "cap": "60126", "comune": "Ancona", "provincia": "AN", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Ancona"},
     {"gln": "8000000000124", "name": "Coop Italia", "vat_id": "IT00000000004", "address": "Via del Lavoro 6", "cap": "40033", "comune": "Casalecchio di Reno", "provincia": "BO", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Coop Nord"},
-    {"gln": "8000000000131", "name": "Auchan", "vat_id": "IT00000000005", "address": "Strada 8 Palazzo N", "cap": "20089", "comune": "Rozzano", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Auchan"}
+    {"gln": "8000000000131", "name": "Auchan", "vat_id": "IT00000000005", "address": "Strada 8 Palazzo N", "cap": "20089", "comune": "Rozzano", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Auchan"},
+    {"gln": "8000000000148", "name": "Iper", "vat_id": "IT00000000006", "address": "Via Giuseppe Ungaretti 1", "cap": "20017", "comune": "Rho", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Iper Arese"},
+    {"gln": "8000000000155", "name": "Lidl Italia", "vat_id": "IT00000000007", "address": "Via Augusto Ruberti 1", "cap": "37040", "comune": "Arcole", "provincia": "VR", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Lidl Biandrate"},
+    {"gln": "8000000000162", "name": "Eurospin", "vat_id": "IT00000000008", "address": "Via Campalto 3", "cap": "37036", "comune": "San Martino Buon Albergo", "provincia": "VR", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Eurospin Calcinato"},
+    {"gln": "8000000000179", "name": "Bennet", "vat_id": "IT00000000009", "address": "Via Enrico Fermi 7", "cap": "22070", "comune": "Montano Lucino", "provincia": "CO", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Bennet Turate"},
+    {"gln": "8000000000186", "name": "Pam Panorama", "vat_id": "IT00000000010", "address": "Via del Commercio 27", "cap": "30038", "comune": "Spinea", "provincia": "VE", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Pam Spinea"},
+    {"gln": "8000000000193", "name": "Despar", "vat_id": "IT00000000011", "address": "Via Galvani 9", "cap": "35035", "comune": "Mestrino", "provincia": "PD", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Despar Mestrino"},
+    {"gln": "8000000000209", "name": "Unes", "vat_id": "IT00000000012", "address": "Via Sallustio 2", "cap": "20055", "comune": "Vimodrone", "provincia": "MI", "sdi_code": "XXXXXXX", "delivery_point": "CeDi Unes Vimodrone"}
   ],
   "supplier": {"gln": "SUPPLIER001", "name": "Riso Scotti S.p.A."}
 }

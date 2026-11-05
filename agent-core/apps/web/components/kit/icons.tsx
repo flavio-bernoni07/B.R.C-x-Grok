@@ -1,5 +1,5 @@
 /** Sidebar icons and the B.R.C leaf tile, drawn exactly as in HeyHandy/videos/brc-banner (one line weight, round joins). */
-import type { SVGProps } from "react";
+import { useId, type SVGProps } from "react";
 
 const base = { viewBox: "0 0 28 28", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinejoin: "round" as const, strokeLinecap: "round" as const };
 type P = SVGProps<SVGSVGElement>;
@@ -54,28 +54,56 @@ export const StockIcon = (p: P) => (
   </svg>
 );
 
+/**
+ * The B.R.C x Grok mark: a grain of rice with its groove, laid on the diagonal (the app icon in
+ * ~/Developer/brc-mac-app/icon.svg). Honeydew on a Dark Green tile.
+ */
+export function BrandMark({ className, fill = "#eef3e8" }: { readonly className?: string; readonly fill?: string }) {
+  return (
+    <svg viewBox="0 0 28 28" className={className} aria-hidden>
+      <ellipse cx="14" cy="14" rx="6.2" ry="11" transform="rotate(32 14 14)" fill={fill} />
+      <path d="M9.5 21.5C12 16 15.5 10.5 19 6.5" stroke="#203119" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
 export function BrandTile({ size = 26 }: { readonly size?: number }) {
   return (
     <span className="relative inline-block shrink-0 rounded-[7px] bg-hh-dark" style={{ width: size, height: size }}>
-      <svg viewBox="0 0 28 28" className="absolute" style={{ left: size * 0.2, top: size * 0.2, width: size * 0.6, height: size * 0.6 }}>
-        <ellipse cx="14" cy="14" rx="6.2" ry="11" transform="rotate(32 14 14)" fill="#eef3e8" />
-        <path d="M9.5 21.5C12 16 15.5 10.5 19 6.5" stroke="#203119" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-      </svg>
+      <span className="absolute" style={{ left: size * 0.2, top: size * 0.2, width: size * 0.6, height: size * 0.6 }}>
+        <BrandMark className="size-full" />
+      </span>
     </span>
   );
 }
 
-/** xAI / Grokbot mark (black sphere with specular pills). Shown next to cases Grokbot touched. */
-export function GrokbotIcon({ size = 16, title = "Grokbot" }: { readonly size?: number; readonly title?: string }) {
+/**
+ * The Grok bot (the hackathon's mark, pavia.grokbot.it/icon.svg): a white face with two slanted
+ * eyes, drawn as a glossy sphere on a black disc. Shown wherever Grok acted or suggests something.
+ */
+export function GrokMark({ size = 16, className, title = "Handled by Grok" }: { readonly size?: number; readonly className?: string; readonly title?: string }) {
+  // One gradient id per mark. A shared id makes every face after the first paint as an empty disc.
+  const face = `grokbot-face-${useId().replace(/:/g, "")}`;
   return (
-    <img
-      src="/assets/grokbot.png"
-      alt=""
-      title={title}
-      width={size}
-      height={size}
-      className="inline-block shrink-0 rounded-full align-middle"
-      style={{ width: size, height: size }}
-    />
+    <svg viewBox="0 0 100 100" width={size} height={size} className={`shrink-0 ${className ?? ""}`} role="img" aria-label={title}>
+      <title>{title}</title>
+      <defs>
+        <radialGradient id={face} cx="34%" cy="28%" r="78%">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.5" stopColor="#f1f3f5" />
+          <stop offset="1" stopColor="#aab1ba" />
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="50" r="50" fill="#0a0a0a" />
+      <circle cx="50" cy="50" r="40" fill={`url(#${face})`} />
+      <ellipse cx="34" cy="28" rx="11" ry="5.5" transform="rotate(-32 34 28)" fill="#fff" opacity="0.85" />
+      <ellipse cx="41" cy="48" rx="5.6" ry="10" transform="rotate(-12 41 48)" fill="#0a0a0a" />
+      <ellipse cx="60" cy="45" rx="5.6" ry="10" transform="rotate(-12 60 45)" fill="#0a0a0a" />
+    </svg>
   );
+}
+
+/** Same mark, the name the order desk already uses. */
+export function GrokbotIcon({ size = 16, title = "Grokbot" }: { readonly size?: number; readonly title?: string }) {
+  return <GrokMark size={size} title={title} />;
 }

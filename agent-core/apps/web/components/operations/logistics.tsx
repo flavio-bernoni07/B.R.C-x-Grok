@@ -6,7 +6,7 @@ import { eur, Panel, Pill, qty, Stat } from "@/components/kit";
 
 const km = (v: number) => `${qty(v)} km`;
 
-/** The Logistics agent's plan: trucks, stops with km, and what it saves against one truck per order. */
+/** The Logistics agent's plan: trucks, stops with km, and what it saves against the planner's way (orders grouped by warehouse). */
 export function LogisticsPlanCard({ plan, toolbar }: { readonly plan: LogisticsPlan; readonly toolbar?: ReactNode }) {
   return (
     <Panel

@@ -28,7 +28,11 @@
 }
 
 @theme inline {
-  /* HeyHandy brand palette (HeyHandy/brand/tokens.ts) */
+  /*
+   * HeyHandy brand palette (HeyHandy/brand/tokens.ts) with HeyHandy's colour method (brand/UI.md):
+   * one ink (Dark Green), one accent (Flex Green), quiet tints, and three states for a pill:
+   * Live (Flex Green), Quiet (Honeydew), Strong (Dark Green). Something a person must act on is Strong.
+   */
   --color-hh-dark: #203119;
   --color-hh-honeydew: #ebf1e4;
   --color-hh-flex: #bfff80;
@@ -37,24 +41,26 @@
   --color-hh-seasalt: #f9f9f9;
   --color-hh-opal: #9fc6bf;
   --color-hh-asparagus: #559646;
+  /* Flex Green deep enough to read as a number on white (KPI "Saved", "Make this week"). */
+  --color-hh-lime: #6fb514;
   /* UI kit tints, only inside the app window (HeyHandy/brand/UI.md) */
   --color-hh-window: #eef3e8;
   --color-hh-sidebar: #e3ebdb;
   --color-hh-selection: #fbfdf9;
-  /* Client-screen status states (UI.md: only for status) */
-  --color-st-attention: #fbe2a4;
-  --color-st-attention-ink: #6d4a08;
+  /* States follow the method: no amber, no red fills */
+  --color-st-attention: #e3ebdb;
+  --color-st-attention-ink: #203119;
   --color-st-ok: #d9f5bf;
   --color-st-ok-ink: #2c6a1d;
   --color-st-wait: #e4e9de;
   --color-st-wait-ink: #5f6a5b;
+  /* A small mark beside a wrong answer only (UI.md), never a fill. Waiting on a person is yellow, not this red. */
   --color-st-wrong: #d2473b;
-  /* Soft status fills (same recipe as ok/attention: tint bg + darker ink) */
+  /* Waiting on a person is yellow. Rejected stays a soft red. */
+  --color-st-pending: #f6e3a1;
+  --color-st-pending-ink: #8a6400;
   --color-st-reject: #f4c7c2;
   --color-st-reject-ink: #b4332a;
-  /* Pending: clearly light pastel red, lighter wash than Rejected */
-  --color-st-pending: #ffddd8;
-  --color-st-pending-ink: #d2473b;
   /* Dark Green at the kit's ink levels */
   --color-ink: #203119;
   --color-ink-78: rgb(32 49 25 / 0.78);
@@ -215,3 +221,166 @@ textarea {
   --shimmer-image: none;
   --shimmer-text-fill: currentColor;
 }
+
+/* UI.md "Rise": up out of a soft blur on the long ease-out. Messages and panels arrive this way. */
+@keyframes hh-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.hh-rise {
+  animation: hh-rise 0.7s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh-rise {
+    animation: none;
+  }
+}
+
+/* The question chips (kit/chip-rail.tsx): two copies of the row slide left by one copy, in a loop. */
+@keyframes hh-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.hh-marquee {
+  animation: hh-marquee 30s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh-marquee {
+    animation: none;
+  }
+}
+
+/* Voice control: a 32 px circle, the same size as the send button. */
+.voice-dock {
+  position: fixed;
+  z-index: 80;
+  right: 36px;
+  bottom: 34px;
+  width: 32px;
+  height: 32px;
+}
+
+.voice-orb {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.voice-orb:focus-visible {
+  outline: 2px solid #203119;
+  outline-offset: 3px;
+}
+
+.voice-orb-face {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: #203119;
+  box-shadow: 0 1px 2px rgb(32 49 25 / 0.22);
+}
+
+.voice-orb-spin,
+.voice-orb-glow {
+  position: absolute;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #ff6ad5,
+    #c06bff,
+    #6a8cff,
+    #3ecbff,
+    #5ee0a0,
+    #e7f56a,
+    #ffb020,
+    #ff6a3d,
+    #ff6ad5
+  );
+  animation: voice-intelligence 2.6s linear infinite;
+  pointer-events: none;
+}
+
+.voice-orb-spin {
+  z-index: 1;
+  inset: -3px;
+}
+
+.voice-orb-glow {
+  z-index: 0;
+  inset: -8px;
+  filter: blur(7px);
+  opacity: 0.9;
+}
+
+.voice-orb-wave {
+  display: flex;
+  height: 14px;
+  align-items: center;
+  gap: 2px;
+}
+
+.voice-orb-bar {
+  width: 2px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  transform-origin: center;
+}
+
+.voice-orb-note {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 3;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #203119;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+@keyframes voice-intelligence {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb-spin,
+  .voice-orb-glow {
+    animation: none;
+  }
+}
+
+/* voice circle */
+

@@ -42,7 +42,7 @@ export function ForecastView() {
 
   return (
     <Page className="max-w-[860px]">
-      <PageHeader title="Paddy prices" sub="Buy now or wait: a statistical baseline from public prices, read beside the news by Grok. A person signs every purchase." />
+      <PageHeader title="Paddy prices" />
       {error ? <p className="text-destructive text-sm">Could not load prices: {error}</p> : null}
 
       <p className="text-[15px] leading-relaxed">

@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { ShippingPage } from "@/components/shipping/shipping-page";
 
 export default function Page() {
-  redirect("/operations?tab=warehouse");
+  return (
+    <Suspense>
+      <ShippingPage />
+    </Suspense>
+  );
 }

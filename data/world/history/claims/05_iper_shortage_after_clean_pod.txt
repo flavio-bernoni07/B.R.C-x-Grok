@@ -1,0 +1,14 @@
+Da: inventario.cedi@iper.it
+A: credit.note@risoscotti.it
+Oggetto: Ammanco {{product}} - ordine {{order}}
+
+Buongiorno,
+
+all'inventario di fine mese del CeDi Iper Arese mancano {{qty}} confezioni di {{product}}
+della consegna del {{deliver_date_it}} (DDT {{ddt}}, fattura {{invoice}}). Il verbale di
+ricevimento interno RCV-IPR-10233 riporta il conteggio.
+
+Vi chiediamo una nota di credito di {{amount_it}} euro ({{qty}} x {{price_it}}).
+
+Cordiali saluti,
+Iper - Inventario CeDi

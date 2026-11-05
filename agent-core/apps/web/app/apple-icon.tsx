@@ -7,14 +7,15 @@ export const size = {
 
 export const contentType = "image/png";
 
+/** The B.R.C x Grok leaf tile (components/kit/icons.tsx BrandTile, ~/Developer/brc-mac-app/icon.svg). */
 export default function AppleIcon() {
   return new ImageResponse(
     <svg fill="none" viewBox="0 0 102 102" xmlns="http://www.w3.org/2000/svg">
-      <path d="M0 0h102v102H0z" fill="#000" />
-      <path
-        d="M49.28 66.94 75.03 34.96h-6.89L47.91 60.11l-5.49 6.83h6.86ZM0 34.96h42.4v5.11H0zm0 13.32h27.66v5.11H0zm0 13.54h27.66v5.11H0zm69.63-26.86H102v5.11H69.63zm4.71 13.32H102v5.11H74.34zm0 13.54H102v5.11H74.34z"
-        fill="#fff"
-      />
+      <rect width="102" height="102" rx="23" fill="#203119" />
+      <g transform="translate(51 51) scale(2.19) translate(-14 -14)">
+        <ellipse cx="14" cy="14" rx="6.2" ry="11" transform="rotate(32 14 14)" fill="#eef3e8" />
+        <path d="M9.5 21.5C12 16 15.5 10.5 19 6.5" stroke="#203119" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      </g>
     </svg>,
     size,
   );

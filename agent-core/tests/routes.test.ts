@@ -41,9 +41,9 @@ describe("logistics agent", () => {
     expect(melzo[0].orders.sort()).toEqual(["ESS-DSP-001", "ESS-DSP-002"]);
   });
 
-  it("uses fewer trucks and fewer km than one truck per order, within every limit", () => {
+  it("uses fewer trucks and fewer km than one truck per warehouse, within every limit", () => {
     const plan = planRoutes(erp, { shipDate: DISPATCH_DAY });
-    expect(plan.baseline.trucks).toBe(6);
+    expect(plan.baseline.trucks).toBe(5); // orders grouped by warehouse: Esselunga's two share a truck
     expect(plan.plan.trucks).toBeLessThan(plan.baseline.trucks);
     expect(plan.plan.km).toBeLessThan(plan.baseline.km);
     expect(plan.saving.fuel_eur).toBeGreaterThan(0);
@@ -103,7 +103,7 @@ describe("dispatch plan sign-off", () => {
     const erp = await dispatchDay();
     const r = await proposeDispatchPlan(erp, { shipDate: DISPATCH_DAY });
     expect(r.briefing.by).toBe("grok (recorded)");
-    expect(r.briefing.summary).toContain("2 trucks instead of 6");
+    expect(r.briefing.summary).toContain("2 trucks instead of 5");
   });
 
   it("rejects a Grok briefing with a figure that is not in the plan, and falls back to code", async () => {

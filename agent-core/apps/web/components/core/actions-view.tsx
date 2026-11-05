@@ -21,9 +21,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { claimTypeLabel, decisionLabel, sourceKindLabel } from "@/components/dispute/format";
 import { actionLabel } from "@/components/shipping/format";
-import { DataTable, Facts, PageHeader, Panel, Pill, type PillTone, Segmented, SourceTag, day, eur, qty } from "@/components/kit";
+import { DataTable, Facts, PageHeader, Panel, Pill, type PillTone, Segmented, SourceTag, day, eur, personFor, qty } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { Page } from "@/components/shell/app-shell";
+import { SectionChat } from "@/components/shell/section-chat";
 import { AuditList } from "./audit";
 import { signoffUsedGrokbot } from "./signoff";
 
@@ -332,7 +333,7 @@ function TruckForOrder({ orderRef }: { readonly orderRef: string }) {
           ...(base
             ? ([
                 [
-                  "Whole day, one truck per order",
+                  "By hand: one truck per warehouse",
                   `${qty(pick(base, "km", "distance_km"))} km, ${eur(pick(base, "eur", "fuel_eur", "fuelEur"))}, ${qty(pick(base, "co2_kg", "co2Kg"))} kg CO2`,
                 ],
               ] as [ReactNode, ReactNode][])
@@ -415,15 +416,23 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
   const [busy, setBusy] = useState(false);
   const takesEdi = c.row === "order" && (c.kind === "price_fix" || c.kind === "manual_edi");
 
+  const [missing, setMissing] = useState(false);
   useEffect(() => {
     try {
-      setBy(localStorage.getItem("brc:signer") ?? "");
+      const who = personFor(caseRole(c));
+      setBy(localStorage.getItem("brc:signer") || (who ? `${who.name}, ${who.role.toLowerCase()}` : ""));
     } catch {
       /* private mode */
     }
-  }, []);
+  }, [c]);
 
   const post = async (kind: "approve" | "reject" | "clarify") => {
+    // The buttons are always live: a missing name or reason is asked for, not hidden behind a grey button.
+    if (!by.trim() || !reason.trim()) {
+      setMissing(true);
+      return;
+    }
+    setMissing(false);
     setBusy(true);
     try {
       localStorage.setItem("brc:signer", by);
@@ -448,7 +457,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
     if (kind === "clarify") setReason("");
   };
 
-  const ready = !busy && by.trim() && reason.trim();
+  const ready = !busy;
   return (
     <div className="space-y-2 rounded-[12px] bg-hh-honeydew p-3">
       <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
@@ -462,8 +471,12 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
           className="h-9 rounded-lg border bg-hh-seasalt px-3 text-[13px] outline-none focus:border-hh-asparagus"
           placeholder="One line on why (the Playbook learns from it)"
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(e) => {
+            setReason(e.target.value);
+            setMissing(false);
+          }}
         />
+        {missing ? <p className="text-[12px] font-bold text-st-wrong sm:col-span-2">Write your name and one line on why, then choose again.</p> : null}
       </div>
       {takesEdi ? (
         <textarea
@@ -499,7 +512,7 @@ function Decision({ c, onDone }: { readonly c: Signoff; readonly onDone: (o: Out
   );
 }
 
-function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonly onChanged: () => void }) {
+export function CaseDetail({ signoff, onChanged, hideDecision }: { readonly signoff: Signoff; readonly onChanged: () => void; /** The Sign-off card already has the buttons. */ readonly hideDecision?: boolean }) {
   const [c, setC] = useState(signoff);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [outcome, setOutcome] = useState<Outcome>();
@@ -589,6 +602,7 @@ function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonl
 
       {isConfirm ? <ReadyToShip c={c} /> : null}
 
+      {hideDecision ? null : (
       <Panel title="Decision">
         <div className="space-y-3 text-[13px]">
           {c.status === "pending" ? <DecisionConsequences c={c} /> : null}
@@ -619,6 +633,7 @@ function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonl
           ) : null}
         </div>
       </Panel>
+      )}
 
       <Panel title="Audit history" aside={c.subjectRef ?? undefined}>
         <AuditList entries={audit} max={20} />
@@ -628,7 +643,7 @@ function CaseDetail({ signoff, onChanged }: { readonly signoff: Signoff; readonl
 }
 
 /** The Actions inbox. */
-export function ActionsView({ policy }: { readonly policy: string }) {
+export function ActionsView(_props: { readonly policy: string }) {
   const params = useSearchParams();
   const router = useRouter();
   const [cases, setCases] = useState<Signoff[]>([]);
@@ -654,10 +669,7 @@ export function ActionsView({ policy }: { readonly policy: string }) {
 
   return (
     <Page>
-      <PageHeader
-        title="Actions"
-        sub={`When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject and write why: that line trains the Playbook. ${policy}.`}
-      >
+      <PageHeader title="Sign-off">
         <Segmented
           value={filter}
           onChange={setFilter}
@@ -668,13 +680,13 @@ export function ActionsView({ policy }: { readonly policy: string }) {
           ]}
         />
       </PageHeader>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Panel>
+      <div className="grid gap-10 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="min-w-0">
           <DataTable
             rows={rows}
             rowKey={(c) => c.caseId}
             selectedKey={current?.caseId}
-            onRowClick={(c) => router.replace(`/actions?case=${encodeURIComponent(c.caseId)}`, { scroll: false })}
+            onRowClick={(c) => router.replace(`/signoff?case=${encodeURIComponent(c.caseId)}`, { scroll: false })}
             empty={filter === "pending" ? "Nothing needs a person right now." : "No decisions yet."}
             columns={[
               {
@@ -707,9 +719,14 @@ export function ActionsView({ policy }: { readonly policy: string }) {
               { key: "status", header: "Status", cell: (c) => <AutonomyPill c={c} /> },
             ]}
           />
-        </Panel>
+        </div>
         {current ? <CaseDetail key={current.caseId} signoff={current} onChanged={load} /> : null}
       </div>
+      <SectionChat
+        placeholder="Ask Grok about a case before you decide…"
+        context={{ page: "signoff", case: current?.caseId ?? "" }}
+        suggestions={["What should I check before deciding?", "What did people decide on similar cases?"]}
+      />
     </Page>
   );
 }

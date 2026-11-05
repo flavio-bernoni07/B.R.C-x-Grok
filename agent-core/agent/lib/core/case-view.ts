@@ -9,10 +9,11 @@ type P = Record<string, unknown>;
 const obj = (v: unknown): P | undefined => (v && typeof v === "object" && !Array.isArray(v) ? (v as P) : undefined);
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
-export const ROLE: Record<string, string> = { order: "Order desk", shipping: "Warehouse lead", dispute: "Credit desk" };
+export const ROLE: Record<string, string> = { order: "Order desk", shipping: "Warehouse lead", dispute: "Credit desk", purchasing: "Purchasing" };
 
-export function caseRole(c: Pick<Signoff, "row" | "reasons">): string {
-  const fromReason = (c.reasons ?? []).map((r) => /role (\w+)/.exec(r)?.[1]).find(Boolean);
+export function caseRole(c: Pick<Signoff, "row" | "reasons"> & { proposal?: unknown }): string {
+  const named = obj(c.proposal)?.role;
+  const fromReason = typeof named === "string" ? named : (c.reasons ?? []).map((r) => /role (\w+)/.exec(r)?.[1]).find(Boolean);
   return fromReason ? fromReason.replace(/_/g, " ").replace(/^./, (s) => s.toUpperCase()) : ROLE[c.row] ?? c.row;
 }
 

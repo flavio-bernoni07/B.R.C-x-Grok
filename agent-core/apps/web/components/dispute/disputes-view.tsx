@@ -8,11 +8,11 @@
 import type { ClaimDetail, ClaimRow } from "@agent/lib/dispute/views";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageHeader, Panel, Stat } from "@/components/kit";
+import { Drawer, Kpi, PageHeader } from "@/components/kit";
 import { Page } from "@/components/shell/app-shell";
-import { askHref } from "@/components/shell/overview-chat";
-import { ClaimDetailBody } from "./claim-detail";
+import { ClaimPanel } from "./claim-panel";
 import { ClaimsTable } from "./claims-table";
+import { SectionChat } from "@/components/shell/section-chat";
 
 type ListResponse = { claims: ClaimRow[]; samples: { name: string; text: string }[] };
 
@@ -21,6 +21,7 @@ export function DisputesView() {
   const claimFromUrl = searchParams.get("claim") ?? undefined;
   const [list, setList] = useState<ListResponse>();
   const [selected, setSelected] = useState<string | undefined>(claimFromUrl);
+  const [open, setOpen] = useState(!!claimFromUrl);
   const [detail, setDetail] = useState<ClaimDetail>();
   const [text, setText] = useState("");
   const [source, setSource] = useState("");
@@ -54,6 +55,16 @@ export function DisputesView() {
     if (selected) loadDetail(selected);
   }, [selected, loadDetail]);
 
+  // A decision made in the claim panel writes through the same API and asks the page to reload.
+  useEffect(() => {
+    const onChange = () => {
+      loadList();
+      if (selected) loadDetail(selected);
+    };
+    window.addEventListener("brc:changed", onChange);
+    return () => window.removeEventListener("brc:changed", onChange);
+  }, [loadList, loadDetail, selected]);
+
   const submit = async () => {
     if (!text.trim()) return;
     setBusy(true);
@@ -86,43 +97,29 @@ export function DisputesView() {
 
   return (
     <Page>
-      <PageHeader
-        title="Disputes"
-        sub="Grok reads each claim and proposes a verdict with a source for every point. Code checks every euro and writes the credit note or the reply. A person decides only when something is unclear."
-      >
-        <a href={askHref("Which disputes wait for a person, and why?")} className="rounded-full bg-hh-dark px-4 py-1.5 font-bold text-[13px] text-hh-window">
-          Ask Grok
-        </a>
-      </PageHeader>
+      <PageHeader title="Disputes" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Claims" value={claims.length} />
-        <Stat label="Need a person" value={waiting} />
-        <Stat label="Credit notes" value={credits.length} hint={credits.length ? `€${credited.toLocaleString("en-GB", { minimumFractionDigits: 2 })} credited` : undefined} />
-        <Stat label="Replies sent" value={replies} />
+        <Kpi label="Claims" value={claims.length} />
+        <Kpi label="Need a person" value={waiting} />
+        <Kpi label="Credited" value={`€${Math.round(credited).toLocaleString("en-GB")}`} />
+        <Kpi label="Replies sent" value={replies} />
       </div>
 
-      <Panel title="Claims" aside="click a claim to see its sources">
-        {list ? (
-          <ClaimsTable rows={claims} selected={selected} onSelect={(r) => setSelected(r.claim_id)} />
-        ) : (
-          <div className="h-40 animate-pulse rounded-[10px] bg-hh-honeydew" />
-        )}
-      </Panel>
+      {list ? (
+        <ClaimsTable rows={claims} selected={open ? selected : undefined} onSelect={(r) => {
+          setSelected(r.claim_id);
+          setOpen(true);
+        }} />
+      ) : (
+        <div className="h-40 animate-pulse rounded-[16px] bg-hh-honeydew" />
+      )}
 
-      {detail && detail.claim_id === selected ? (
-        <Panel title={`Claim ${detail.claim_id}`} aside={detail.signoff_case ? `sign-off ${detail.signoff_case.caseId}` : undefined}>
-          <ClaimDetailBody
-            detail={detail}
-            onDecided={() => {
-              loadList();
-              loadDetail(detail.claim_id);
-            }}
-          />
-        </Panel>
-      ) : null}
-
-      <Panel title="New claim" aside="paste the retailer's email or remittance text">
+      <details className="group">
+        <summary className="cursor-pointer list-none text-[14px] text-ink-68 hover:text-ink">
+          Paste a new claim <span className="inline-block transition-transform group-open:rotate-90">›</span>
+        </summary>
+        <div className="mt-4">
         <div className="space-y-3">
           {list?.samples.length ? (
             <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-68">
@@ -161,7 +158,16 @@ export function DisputesView() {
             {error ? <span className="text-[13px] text-st-attention-ink">{error}</span> : null}
           </div>
         </div>
-      </Panel>
+        </div>
+      </details>
+      <SectionChat
+        placeholder="Ask Grok about the claims…"
+        context={{ page: "disputes" }}
+        suggestions={["Which claims need a person, and why?", "Which claims did Grok settle on its own?"]}
+      />
+      <Drawer open={open && !!detail && detail.claim_id === selected} onClose={() => setOpen(false)}>
+        {detail ? <ClaimPanel detail={detail} /> : null}
+      </Drawer>
     </Page>
   );
 }

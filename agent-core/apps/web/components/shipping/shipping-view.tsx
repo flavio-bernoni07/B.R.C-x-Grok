@@ -86,11 +86,6 @@ export function ShippingView({ embedded = false }: { readonly embedded?: boolean
     <Wrap>
       <PageHeader
         title={embedded ? "Shipments and invoices" : "Shipping"}
-        sub={
-          rows
-            ? `${rows.length} orders in shipping, ${flagged} with a cause to follow up, ${threewayMissed} where threeway gives a different answer. The invoice bills what shipped; code names every cause; an employee approves every exception resolution.`
-            : "Loading shipments…"
-        }
       />
       <RoutePlanPanel onChanged={loadList} />
       {bench ? (

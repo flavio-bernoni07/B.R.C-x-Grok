@@ -1,0 +1,10 @@
+{
+  "_comment": "ESS scenario ORDERS for Order simulation (wave-*). Files live under data/orders/edi/.",
+  "orders": [
+    { "id": "wave-1", "label": "Clean Esselunga ORDERS", "file": "ordine_ess_001.edi" },
+    { "id": "wave-2", "label": "Messy date / thousands qty", "file": "ordine_ess_messy.edi" },
+    { "id": "wave-3", "label": "Qty short vs stock", "file": "ordine_ess_short.edi" },
+    { "id": "wave-4", "label": "Price mismatch", "file": "ordine_ess_bad_price.edi" },
+    { "id": "wave-5", "label": "Volume discount OK", "file": "ordine_ess_discount_ok.edi" }
+  ]
+}

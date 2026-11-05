@@ -15,6 +15,10 @@
 - [python-a38](https://github.com/Truelite/python-a38) builds, validates and parses FatturaPA XML, and parses the official samples on fatturapa.gov.it.
 - The invoice is made from what was shipped, not from what was ordered.
 
+## Routes
+
+How today's trucks and the planned route are built, and the 6 Nov figures: [routes.md](routes.md).
+
 ## What I decided
 
 - `shipping/` covers trucks, picking, pallet scans, dispatch, the DDT and DESADV, the invoice (INVOIC 380 + FatturaPA TD01) and the line-by-line reconcile. The rules are the 4 Nov shipping row in [DECISIONS.md](../DECISIONS.md). A scan on the wrong truck, a held batch or a bad quantity stays off the shipment.

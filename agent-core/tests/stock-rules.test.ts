@@ -35,14 +35,14 @@ function approved(erp: Erp, ref: string, qty: number) {
 }
 
 describe("stock rules", () => {
-  it("receiving an order deducts nothing", () => {
+  it("an order waiting for send-off reserves available to promise, not physical stock", () => {
     const erp = freshErp();
     const before = car(erp);
     received(erp, "R-1", 1920);
     const after = car(erp);
     expect(after.physical).toBe(before.physical);
-    expect(after.atp).toBe(before.atp);
-    expect(after.reserved).toBe(0);
+    expect(after.reserved).toBe(1920);
+    expect(after.atp).toBe(before.atp - 1920);
   });
 
   it("an approved order lowers available to promise, not physical stock", () => {

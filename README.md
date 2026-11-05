@@ -81,7 +81,15 @@ Production enters only as events, so a batch on hold can never be promised or sh
 | Trucks and driver days for the 6 Nov orders | 6 trucks, 7 days | 2 trucks, 3 days | same plan |
 | Cases that need a person | 80% in week 1 | 16% by week 4 | `python -m agent.replay`, invented history |
 
-We wrote the reconciliation cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. The 6 Nov orders are invented; the roads, fuel use and diesel price are real and listed in `data/world/logistics.json`.
+We wrote the reconciliation cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. The 6 Nov orders are invented; the roads, fuel use and diesel price are real and listed in `data/world/logistics.json`. How today's one-truck-per-order trips and the planned route are built, and the 7-order day now on the Shipping screen: [docs/routes.md](docs/routes.md).
+
+## Install the app
+
+Node 24 and pnpm. From the repository root:
+
+```bash
+cd agent-core && pnpm install
+```
 
 ## Run it
 
@@ -92,8 +100,8 @@ cd agent-core
 pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
-pnpm dev:web                  # http://localhost:3000, then Operations > Warehouse & Shipping > "Plan the trucks with Grok"
-pnpm test                     # the app's tests (127)
+pnpm dev:web                  # http://localhost:3000, then Shipping > "Send to the transport planner"
+pnpm test                     # the app's tests (147)
 ```
 
 The Python rows are the reference the app is ported from:
