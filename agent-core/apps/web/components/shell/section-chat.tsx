@@ -70,35 +70,29 @@ export function SectionChat({
       )}
     >
       {hasThread ? (
-        <div className="relative mb-3 min-h-0 flex-1">
-          <div
-            ref={listRef}
-            className="h-full space-y-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
-          >
-            {agent.messages.map((m) =>
-              m.role === "assistant" && m.parts.length === 0 ? null : (
-                <div key={m.id} className="hh-rise">
-                  <AgentMessage
-                    message={m}
-                    view={agent.view}
-                    canRespond={canRespond}
-                    questionsFor={questionsFor}
-                    onAnswers={async (answers) => {
-                      await agent.respond(answers).catch(() => {});
-                    }}
-                  />
-                </div>
-              ),
-            )}
-            {thinking ? (
-              <p className="hh-rise shimmer w-fit text-[14px] text-ink-68">Grok is looking at the records…</p>
-            ) : null}
-            <div ref={endRef} />
-          </div>
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-9 bg-gradient-to-b from-hh-seasalt from-30% to-transparent backdrop-blur-[2px]"
-          />
+        <div
+          ref={listRef}
+          className="mb-3 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+        >
+          {agent.messages.map((m) =>
+            m.role === "assistant" && m.parts.length === 0 ? null : (
+              <div key={m.id} className="hh-rise">
+                <AgentMessage
+                  message={m}
+                  view={agent.view}
+                  canRespond={canRespond}
+                  questionsFor={questionsFor}
+                  onAnswers={async (answers) => {
+                    await agent.respond(answers).catch(() => {});
+                  }}
+                />
+              </div>
+            ),
+          )}
+          {thinking ? (
+            <p className="hh-rise shimmer w-fit text-[14px] text-ink-68">Grok is looking at the records…</p>
+          ) : null}
+          <div ref={endRef} />
         </div>
       ) : suggestions.length ? (
         <div className="mb-3">

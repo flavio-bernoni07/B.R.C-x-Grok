@@ -169,12 +169,9 @@ export function Page({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className={cn("mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-8", className)}>{children}</div>
         </div>
-        <div className="relative z-10 mx-auto flex w-full max-w-[980px] min-h-0 max-h-[min(55%,560px)] shrink-0 flex-col overflow-hidden px-4 pt-0 pb-6 sm:px-6">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-14 h-14 bg-gradient-to-b from-transparent from-0% via-hh-seasalt/55 via-45% to-hh-seasalt to-100% backdrop-blur-[3px]"
-          />
-          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden pt-3">{ask}</div>
+        <div className="relative z-10 mx-auto flex w-full max-w-[980px] min-h-0 max-h-[min(55%,560px)] shrink-0 flex-col overflow-hidden bg-gradient-to-t from-hh-seasalt from-[75%] to-transparent px-4 pt-12 pb-6 sm:px-6">
+          {/* Dock fill fades to clear at the top so the page shows through; message bubbles stay opaque. */}
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">{ask}</div>
         </div>
       </div>
     );
