@@ -202,7 +202,13 @@ export function SignoffView({
   }, [tab, sendoff, price, quantity, disputes, pendingHold, other, decided]);
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
-  const currentIsPortal = current?.kind === "customer_dispute";
+  const currentIsPortal =
+    current?.kind === "customer_dispute" ||
+    (current?.kind === "verdict" &&
+      (() => {
+        const ch = (current.proposal as { channel?: string } | null)?.channel;
+        return ch === "phone" || ch === "customer_chat";
+      })());
 
   const emptyCopy =
     tab === "sendoff"

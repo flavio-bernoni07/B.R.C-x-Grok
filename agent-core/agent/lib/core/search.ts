@@ -23,7 +23,13 @@ export function search(erp: Erp, q: string, limit = 8): SearchHit[] {
     const so = pendingBySubject.get(c.claimId);
     // Redesign: claims open on Disputes; pending sign-off still reachable from there.
     const href = `/disputes?claim=${encodeURIComponent(c.claimId)}`;
-    const via = so?.kind === "customer_dispute" ? " · phone/chat" : "";
+    const via =
+      so?.kind === "customer_dispute" ||
+      (so?.kind === "verdict" &&
+        ((so.proposal as { channel?: string } | null)?.channel === "phone" ||
+          (so.proposal as { channel?: string } | null)?.channel === "customer_chat"))
+        ? " · phone/chat"
+        : "";
     hits.push({
       label: c.claimId,
       sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""}${via} · ${c.status.replace(/_/g, " ")}`,

@@ -101,18 +101,7 @@ function rowOf(erp: Erp, claimId: string, store: MiniErpStore): ClaimRow | null 
           needs_sign_off: verdict.needs_sign_off,
           sign_off_reasons: verdict.sign_off_reasons ?? [],
         }
-      : channel
-        ? {
-            // Phone/chat intake waits for a person; no Grok verdict email path yet.
-            decision: "review",
-            amount: extraction?.amount ?? null,
-            confidence: extraction?.confidence ?? 0.7,
-            lowest_confidence: extraction?.confidence ?? 0.7,
-            sources: 0,
-            needs_sign_off: true,
-            sign_off_reasons: [`Customer-reported via ${channel === "phone" ? "phone" : "chat"}`],
-          }
-        : null,
+      : null,
     outcome: outcome
       ? { kind: outcome.kind, credit_note_number: outcome.credit_note_number, approved_by: outcome.approved_by, amount: outcome.amount }
       : null,

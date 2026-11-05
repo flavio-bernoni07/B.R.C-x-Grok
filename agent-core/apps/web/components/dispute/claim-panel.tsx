@@ -18,7 +18,14 @@ export function ClaimPanel({ detail }: { readonly detail: ClaimDetail }) {
   const v = detail.verdict;
   const g = detail.grok;
   const by = detail.outcome?.approved_by;
-  const portalCase = detail.signoff_case?.kind === "customer_dispute" ? detail.signoff_case : null;
+  // Phone/chat handoffs use the normal verdict sign-off; legacy customer_dispute stays supported.
+  const portalCase =
+    detail.signoff_case &&
+    detail.signoff_case.status === "pending" &&
+    (detail.signoff_case.kind === "customer_dispute" ||
+      (detail.signoff_case.kind === "verdict" && (detail.channel === "phone" || detail.channel === "customer_chat")))
+      ? detail.signoff_case
+      : null;
   const docs = [
     ...(detail.email ? [{ id: detail.email.doc_id, kind: "Claim email", label: detail.email.source }] : []),
     ...detail.documents.map((d) => ({ id: d.doc_id, kind: d.kind, label: d.key })),

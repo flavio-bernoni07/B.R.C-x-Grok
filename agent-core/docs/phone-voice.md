@@ -99,6 +99,8 @@ curl -s -X POST http://localhost:3000/api/telephony/simulate \
 
 Then open **Disputes** — you should see Phone-channel cases.
 
+Clear claims (e.g. Esselunga shortage on `ORD-3001` where DESADV/invoice match) settle alone with no Sign-off. Ambiguous ones (e.g. damage on `ORD-3003`) open a normal verdict case for a person.
+
 ## Smoke-check Voice key
 
 ```bash

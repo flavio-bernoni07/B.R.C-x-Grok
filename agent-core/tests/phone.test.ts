@@ -143,14 +143,14 @@ describe("phone dispute tools", () => {
     expect(out.ok).toBe(true);
     expect(out.submitted).toBe(true);
     expect(String(out.dispute_id)).toMatch(/^DSP-/);
-    expect(String(out.case_id)).toMatch(/^SO-/);
+    // Clear shortage vs matching docs → auto reject reply, no person.
+    expect(out.case_id == null || out.case_id === null).toBe(true);
 
     const rec = claimToPortalRecord(erp, String(out.dispute_id))!;
     expect(rec.channel).toBe("phone");
     expect(rec.claimed_quantity).toBe(1100);
-
-    const inbox = listEmployeePortalDisputes(erp);
-    expect(inbox.some((r) => r.dispute_id === out.dispute_id && r.channel === "phone")).toBe(true);
+    expect(rec.status).toBe("CLOSED");
+    expect(erp.claim(String(out.dispute_id))?.verdict).toMatchObject({ decision: "reject" });
   });
 
   it("simulatePhoneDispute end-to-end", async () => {
@@ -192,6 +192,11 @@ describe("phone dispute tools", () => {
       caller: "+14155550101",
     });
     expect(good.ok).toBe(true);
-    expect((good.submit as { dispute_id?: string }).dispute_id).toMatch(/^DSP-/);
+    const submit = good.submit as { dispute_id?: string; status?: string; case_id?: string | null };
+    expect(submit.dispute_id).toMatch(/^DSP-/);
+    // Damage without photos → handed to a person.
+    expect(submit.status).toBe("ACTION_REQUIRED");
+    expect(String(submit.case_id)).toMatch(/^SO-/);
+    expect(listEmployeePortalDisputes(erp).some((r) => r.dispute_id === submit.dispute_id && r.channel === "phone")).toBe(true);
   });
 });

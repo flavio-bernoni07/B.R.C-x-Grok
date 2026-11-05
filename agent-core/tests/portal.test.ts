@@ -7,7 +7,6 @@ import { seedPortalDemoOrders } from "../agent/lib/demo/portal_orders";
 import {
   claimToPortalRecord,
   CUSTOMER_CONV_KIND,
-  decideCustomerDispute,
   DEMO_RETAILER_GLN,
   employeeDisputeWorkspace,
   handleCustomerMessage,
@@ -40,15 +39,18 @@ describe("customer dispute portal", () => {
     });
     expect(done.submitted).toBe(true);
     expect(done.dispute_id).toMatch(/^DSP-/);
-    expect(done.status).toBe("ACTION_REQUIRED");
-    expect(done.case_id).toMatch(/^SO-/);
+    // Clear shortage vs matching DESADV/invoice → settled without a person.
+    expect(done.status).toBe("CLOSED");
+    expect(done.case_id).toBeNull();
     expect(done.reply).toContain(done.dispute_id!);
+    expect(done.reply.toLowerCase()).toMatch(/reject/);
 
     const rec = claimToPortalRecord(erp, done.dispute_id!)!;
     expect(rec.claimed_quantity).toBe(1100);
     expect(rec.verified_quantities?.claimed_is_verified).toBe(false);
     expect(rec.supporting_internal_records).toMatchObject({ dispatched_qty: 1200, invoiced_qty: 1200 });
     expect(rec.reconciliation?.invoice_matches_dispatch).toBe(true);
+    expect(erp.claim(done.dispute_id!)?.verdict).toMatchObject({ decision: "reject" });
   });
 
   it("3. customer reports an incorrect invoice on ORD-3002", async () => {
@@ -159,18 +161,22 @@ describe("customer dispute portal", () => {
     expect(erp.documents({ kind: "FatturaPA TD04" })).toHaveLength(0);
   });
 
-  it("11+12. internal notification and Actions disputes inbox", async () => {
+  it("11+12. damage claim hands off to Sign-off; notification fires", async () => {
     const erp = erpWithPortal();
-    const session = simulatedSession(erp);
+    const session = simulatedSession(erp, "8000000000100");
     const a = await handleCustomerMessage(erp, session, {
-      message: "ORD-3001 shortage — received only 1100.",
+      message: "ORD-3003 — 60 Arborio packs crushed on arrival at our warehouse.",
     });
+    expect(a.submitted).toBe(true);
+    expect(a.status).toBe("ACTION_REQUIRED");
+    expect(a.case_id).toMatch(/^SO-/);
     expect(erp.notifications().some((n) => n.subjectRef === a.dispute_id)).toBe(true);
     const inbox = listEmployeePortalDisputes(erp);
     expect(inbox.some((r) => r.dispute_id === a.dispute_id && r.signoff_status === "pending")).toBe(true);
     const ws = employeeDisputeWorkspace(erp, a.case_id!);
-    expect(ws.customer_reported.claimed_quantity).toBe(1100);
-    expect(ws.our_records).toMatchObject({ dispatched_qty: 1200 });
+    expect(ws.customer_reported.category).toBe("damage");
+    expect(ws.case.kind).toBe("verdict");
+    expect(ws.next_action.requires_approval).toBe(true);
   });
 
   it("13. customer can retrieve its actual status", async () => {
@@ -184,7 +190,7 @@ describe("customer dispute portal", () => {
       conversationId: a.conversation_id,
     });
     expect(st.reply).toContain(a.dispute_id!);
-    expect(st.reply).toContain("ACTION_REQUIRED");
+    expect(st.reply).toContain("CLOSED");
     expect(listCustomerDisputes(erp, session).map((d) => d.dispute_id)).toContain(a.dispute_id);
   });
 
@@ -211,21 +217,23 @@ describe("customer dispute portal", () => {
     expect(Number(rec.supporting_internal_records.dispatched_qty)).toBe(1200);
   });
 
-  it("employee decide updates portal status without issuing TD04", async () => {
+  it("employee can approve an ambiguous phone/chat verdict (normal dispute path)", async () => {
     const erp = erpWithPortal();
-    const session = simulatedSession(erp);
+    const session = simulatedSession(erp, "8000000000100");
     const a = await handleCustomerMessage(erp, session, {
-      message: "ORD-3001 received only 1100.",
+      message: "ORD-3003 — 60 Arborio packs crushed on arrival.",
     });
-    const out = decideCustomerDispute(erp, a.case_id!, {
-      approve: true,
-      by: "Sara",
-      reason: "Need receiving notes from warehouse",
-      edits: { resolution: "investigate" },
+    expect(a.status).toBe("ACTION_REQUIRED");
+    expect(a.case_id).toMatch(/^SO-/);
+    const { approveVerdict } = await import("../agent/lib/dispute/service");
+    const out = approveVerdict(erp, a.case_id!, {
+      by: "Sara, credit desk",
+      reason: "Reject: no photo evidence of damage at gate-in",
     });
-    expect(out.status).toBe("INVESTIGATING");
-    expect(claimToPortalRecord(erp, a.dispute_id!)!.status).toBe("INVESTIGATING");
-    expect(erp.documents({ kind: "FatturaPA TD04" })).toHaveLength(0);
+    expect(out.status).toBe("closed");
+    expect(out.claim_id).toBe(a.dispute_id);
+    const rec = claimToPortalRecord(erp, a.dispute_id!)!;
+    expect(["CLOSED", "RESOLVED"]).toContain(rec.status);
   });
 
   it("simulated session is clearly labeled", () => {
@@ -263,8 +271,8 @@ describe("customer dispute portal", () => {
     });
     expect(result.submitted).toBe(true);
     expect(result.dispute_id).toMatch(/^DSP-/);
-    expect(result.status).toBe("ACTION_REQUIRED");
-    expect(listEmployeePortalDisputes(erp).some((r) => r.dispute_id === result.dispute_id)).toBe(true);
+    expect(result.status).toBe("CLOSED");
     expect(erp.notifications().some((n) => n.subjectRef === result.dispute_id)).toBe(true);
+    expect(erp.claim(result.dispute_id!)?.verdict).toMatchObject({ decision: "reject" });
   });
 });

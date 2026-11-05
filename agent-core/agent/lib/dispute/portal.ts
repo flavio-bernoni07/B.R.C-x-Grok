@@ -1,18 +1,18 @@
 /**
- * Customer-facing dispute chat adapter.
+ * Customer-facing dispute chat / phone adapter.
  *
- * Reuses the shared Mini ERP claims + sign-off queue and the existing Grok client / threeway
- * pull. It never issues a credit note or admits liability: customers register claims; employees
- * decide on Disputes / Sign-off. Auth is a clearly labeled simulated retailer session for the hackathon.
+ * Registers a DSP-… claim from the retailer, then runs the same dispute pipeline as email claims
+ * (facts → verdict → outcome). A person is asked only when the verdict is ambiguous
+ * (`needs_sign_off`). Auth is a clearly labeled simulated retailer session for the hackathon.
  */
 import { createHash } from "node:crypto";
 import type { Erp } from "../core/erp";
 import { nowIso } from "../core/erp";
-import { decide, requestSignoff } from "../core/signoff";
+import { decide } from "../core/signoff";
 import { type Caller, chatJson, hasKey, type Message } from "../grok/client";
 import { ClaimType, type ClaimExtraction, parseExtraction } from "./claim_reader";
 import { type DisputeFacts, pullFacts } from "./pull_facts";
-import { disputeStore } from "./service";
+import { applyVerdictToClaim, disputeStore } from "./service";
 
 export const PORTAL_STATUSES = [
   "CUSTOMER_REPORTED",
@@ -478,10 +478,101 @@ function replyUnauthorized(lang: "en" | "it"): string {
     : "I can't authorize refunds, credit notes or invoice changes from this chat. I can register your report so Riso Scotti's team can review it against the documents.";
 }
 
-function replySubmitted(lang: "en" | "it", disputeId: string, status: PortalStatus): string {
-  return lang === "it"
-    ? `Grazie. Ho registrato la sua segnalazione. Il riferimento è ${disputeId}. Stato attuale: ${status}. Il team interno è stato avvisato su Disputes. Può chiedere lo stato in qualsiasi momento qui.`
-    : `Thank you. I've recorded your report. Your dispute reference is ${disputeId}. Current status: ${status}. Our internal team has been notified on Disputes. You can ask for its status here anytime.`;
+function replySubmitted(
+  lang: "en" | "it",
+  disputeId: string,
+  status: PortalStatus,
+  opts: { decision?: string | null; handedOff?: boolean } = {},
+): string {
+  const decision = opts.decision ? String(opts.decision).replace(/_/g, " ") : null;
+  if (lang === "it") {
+    if (opts.handedOff) {
+      return `Grazie. Ho registrato la segnalazione ${disputeId}. I documenti non bastano per chiuderla in automatico: un collega di Riso Scotti la esaminerà. Può chiedere lo stato qui in qualsiasi momento.`;
+    }
+    if (decision) {
+      return `Grazie. Ho registrato la segnalazione ${disputeId}. In base ai nostri documenti la proposta è: ${decision}. Stato: ${status}. Può chiedere lo stato qui in qualsiasi momento.`;
+    }
+    return `Grazie. Ho registrato la sua segnalazione. Il riferimento è ${disputeId}. Stato attuale: ${status}.`;
+  }
+  if (opts.handedOff) {
+    return `Thank you. I've registered dispute ${disputeId}. Our documents aren't enough to settle it automatically — a Riso Scotti colleague will review it. You can ask for its status here anytime.`;
+  }
+  if (decision) {
+    return `Thank you. I've registered dispute ${disputeId}. Based on our records the proposed outcome is: ${decision}. Status: ${status}. You can ask for its status here anytime.`;
+  }
+  return `Thank you. I've recorded your report. Your dispute reference is ${disputeId}. Current status: ${status}.`;
+}
+
+/**
+ * Offline / no-key verdict for phone/chat intake: code checks first.
+ * Clear document matches settle without a person; ambiguous cases mark needs_sign_off.
+ */
+export function offlinePortalVerdictCaller(extraction: ClaimExtraction, facts: DisputeFacts): Caller {
+  return () => {
+    const ordered = facts.order?.lines?.[0]?.quantity ?? null;
+    const shipped = facts.desadv?.lines?.[0]?.quantity ?? null;
+    const invoiced = facts.invoice?.lines?.[0]?.quantity ?? null;
+    const claimedQty = extraction.quantity;
+    const claimedAmt = extraction.amount;
+    const invoiceTotal = typeof facts.invoice?.total === "number" ? facts.invoice.total : null;
+    const points: { text: string; amount: number | null; source: { kind: string; ref: string; detail: string } }[] = [];
+
+    if (facts.desadv) {
+      points.push({
+        text: `DESADV shows ${shipped ?? "—"} units shipped`,
+        amount: null,
+        source: { kind: "desadv", ref: String(facts.desadv.desadv_ref ?? "DESADV"), detail: "" },
+      });
+    }
+    if (facts.invoice) {
+      points.push({
+        text: `Invoice ${facts.invoice.invoice_ref ?? ""} shows ${invoiced ?? "—"} units`,
+        amount: invoiceTotal,
+        source: { kind: "invoice", ref: String(facts.invoice.invoice_ref ?? "INVOICE"), detail: "" },
+      });
+    }
+
+    // Shortage: docs agree on a higher qty than claimed, no retailer receipt → clear reject reply.
+    if (
+      extraction.claim_type === ClaimType.SHORTAGE &&
+      claimedQty != null &&
+      shipped != null &&
+      invoiced != null &&
+      shipped === invoiced &&
+      claimedQty < shipped
+    ) {
+      return {
+        decision: "reject",
+        amount: null,
+        confidence: 0.82,
+        needs_sign_off: false,
+        summary: `Customer claims ${claimedQty} received; DESADV and invoice both show ${shipped}. No retailer receipt supports the short quantity.`,
+        points,
+      };
+    }
+
+    // Pricing: invoice total differs from claimed amount with order found → hand off (needs contract check).
+    if (extraction.claim_type === ClaimType.PRICING && (claimedAmt != null || invoiceTotal != null)) {
+      return {
+        decision: "reject",
+        amount: null,
+        confidence: 0.55,
+        needs_sign_off: true,
+        summary: "Invoice price dispute needs a contract check before any credit.",
+        points,
+      };
+    }
+
+    // Damage / late / other without strong docs → person.
+    return {
+      decision: "reject",
+      amount: null,
+      confidence: 0.45,
+      needs_sign_off: true,
+      summary: `Customer ${extraction.claim_type} claim needs a person — evidence is incomplete (ordered ${ordered ?? "—"}, shipped ${shipped ?? "—"}).`,
+      points,
+    };
+  };
 }
 
 function grokAnalysis(intake: PortalIntake, evidence: ReturnType<typeof evidenceSnapshot>): Record<string, unknown> {
@@ -728,185 +819,131 @@ export async function handleCustomerMessage(
     );
   }
 
-  // Persist the dispute (create or update). Failures must not claim success.
+  // Persist the claim, then run the normal dispute pipeline (person only if ambiguous).
   try {
-    const result = erp.tx(() => {
-      const extraction: ClaimExtraction = parseExtraction({
-        order_ref: intake.order_ref,
-        invoice_ref: intake.invoice_ref,
-        product: intake.product,
-        quantity: intake.claimed_quantity,
-        amount: intake.claimed_amount,
-        claim_type: intake.category,
-        confidence: 0.7,
-        raw_notes: "customer chat intake — claimed values, not verified",
-      });
-      const facts = pullFacts(extraction, { store: disputeStore(erp, false) });
-      const evidence = evidenceSnapshot(erp, intake.order_ref!, facts);
-      const analysis = grokAnalysis(intake, evidence);
-      const assigned = ROLE_BY_CATEGORY[intake.category] ?? "credit desk";
-      const idem = opts.idempotencyKey || hashKey([session.retailer_id, intake.order_ref!, intake.category, String(intake.claimed_quantity), String(intake.claimed_amount)]);
+    const extraction: ClaimExtraction = parseExtraction({
+      order_ref: intake.order_ref,
+      invoice_ref: intake.invoice_ref,
+      product: intake.product,
+      quantity: intake.claimed_quantity,
+      amount: intake.claimed_amount,
+      claim_type: intake.category,
+      confidence: 0.7,
+      raw_notes: `customer ${channelLabel} intake — claimed values, not verified`,
+    });
+    const facts = pullFacts(extraction, { store: disputeStore(erp, false) });
+    const evidence = evidenceSnapshot(erp, intake.order_ref!, facts);
+    const analysis = grokAnalysis(intake, evidence);
+    const assigned = ROLE_BY_CATEGORY[intake.category] ?? "credit desk";
+    const idem =
+      opts.idempotencyKey ||
+      hashKey([session.retailer_id, intake.order_ref!, intake.category, String(intake.claimed_quantity), String(intake.claimed_amount)]);
 
+    const seeded = erp.tx(() => {
       let disputeId = findOpenPortalClaim(erp, session.retailer_id, intake.order_ref!, intake.category) || state!.claim_id || null;
-      let caseId: string | null = null;
       const updatedAt = nowIso();
+      const portalBase = {
+        retailer_id: session.retailer_id,
+        shipment_id: evidence.ddt_refs[0] ?? null,
+        category: intake.category,
+        customer_description: intake.customer_description,
+        claimed_quantity: intake.claimed_quantity,
+        claimed_amount: intake.claimed_amount,
+        customer_evidence_refs: [] as string[],
+        supporting_internal_records: evidence,
+        conversation_id: conversationId,
+        assigned_role: assigned,
+        updated_at: updatedAt,
+        case_id: null as string | null,
+        verified_quantities: {
+          ordered: evidence.ordered_qty,
+          dispatched: evidence.dispatched_qty,
+          invoiced: evidence.invoiced_qty,
+          claimed_received: intake.claimed_quantity,
+          claimed_is_verified: false,
+        },
+        reconciliation: {
+          note: "Customer claim is separate from verified documents until the verdict pipeline runs.",
+          threeway_summary: evidence.threeway_summary,
+          invoice_matches_dispatch:
+            evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
+        },
+        analysis,
+        channel,
+        idempotency_key: idem,
+      };
 
       if (disputeId && erp.claim(disputeId)) {
-        const existing = erp.claim(disputeId)!;
-        const prevPortal = portalMeta(existing);
-        caseId = (prevPortal.case_id as string) ?? null;
-        const portal = {
-          ...prevPortal,
-          status: "ACTION_REQUIRED" as PortalStatus,
-          retailer_id: session.retailer_id,
-          shipment_id: evidence.ddt_refs[0] ?? null,
-          category: intake.category,
-          customer_description: intake.customer_description,
-          claimed_quantity: intake.claimed_quantity,
-          claimed_amount: intake.claimed_amount,
-          customer_evidence_refs: [],
-          supporting_internal_records: evidence,
-          conversation_id: conversationId,
-          assigned_role: assigned,
-          updated_at: updatedAt,
-          case_id: caseId,
-          verified_quantities: {
-            ordered: evidence.ordered_qty,
-            dispatched: evidence.dispatched_qty,
-            invoiced: evidence.invoiced_qty,
-            claimed_received: intake.claimed_quantity,
-            claimed_is_verified: false,
-          },
-          reconciliation: {
-            note: "Customer claim is separate from verified documents.",
-            threeway_summary: evidence.threeway_summary,
-            invoice_matches_dispatch:
-              evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
-          },
-          analysis,
-          channel,
-        };
+        const prevPortal = portalMeta(erp.claim(disputeId)!);
+        const portal = { ...prevPortal, ...portalBase, status: "CUSTOMER_REPORTED" as PortalStatus };
         erp.setClaim(disputeId, {
           orderRef: intake.order_ref,
           invoiceRef: intake.invoice_ref ?? evidence.invoice_refs[0] ?? null,
-          status: "action_required",
+          status: "received",
           extraction: { ...extraction, portal } as unknown as Record<string, unknown>,
         });
-        if (caseId && erp.signoff(caseId)?.status === "pending") {
-          const so = erp.signoff(caseId)!;
-          erp.updateSignoff(caseId, {
-            title: `Customer dispute ${disputeId} on ${intake.order_ref}: ${intake.category}`,
-            proposal: { ...(so.proposal ?? {}), portal: true, intake, evidence, analysis, claim_id: disputeId, channel },
-            reasons: [
-              `Customer-reported claim via ${channelLabel} — not verified evidence`,
-              `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
-            ],
-          });
-        }
         erp.log("retailer", "dispute.customer_updated", disputeId, { detail: { conversation_id: conversationId } });
-      } else {
-        const docId = erp.addDocument("customer claim", intake.order_ref, intake.customer_description, {
-          path: `customer/${conversationId}`,
-        });
-        disputeId = erp.nextId("dispute", "DSP-");
-        const portal = {
-          status: "CUSTOMER_REPORTED" as PortalStatus,
-          retailer_id: session.retailer_id,
-          shipment_id: evidence.ddt_refs[0] ?? null,
-          category: intake.category,
-          customer_description: intake.customer_description,
-          claimed_quantity: intake.claimed_quantity,
-          claimed_amount: intake.claimed_amount,
-          customer_evidence_refs: [] as string[],
-          supporting_internal_records: evidence,
-          conversation_id: conversationId,
-          assigned_role: assigned,
-          updated_at: updatedAt,
-          case_id: null as string | null,
-          verified_quantities: {
-            ordered: evidence.ordered_qty,
-            dispatched: evidence.dispatched_qty,
-            invoiced: evidence.invoiced_qty,
-            claimed_received: intake.claimed_quantity,
-            claimed_is_verified: false,
-          },
-          reconciliation: {
-            note: "Customer claim is separate from verified documents.",
-            threeway_summary: evidence.threeway_summary,
-            invoice_matches_dispatch:
-              evidence.dispatched_qty != null && evidence.invoiced_qty != null && evidence.dispatched_qty === evidence.invoiced_qty,
-          },
-          analysis,
-          channel,
-          idempotency_key: idem,
-        };
-        erp.saveClaim({ claimId: disputeId, sourceDoc: docId, status: "customer_reported" });
-        erp.setClaim(disputeId, {
-          orderRef: intake.order_ref,
-          invoiceRef: intake.invoice_ref ?? evidence.invoice_refs[0] ?? null,
-          extraction: { ...extraction, portal } as unknown as Record<string, unknown>,
-        });
-        caseId = requestSignoff(erp, {
-          row: "dispute",
-          kind: "customer_dispute",
-          subjectRef: disputeId,
-          title: `Customer dispute ${disputeId} on ${intake.order_ref}: ${intake.category}`,
-          proposal: {
-            portal: true,
-            intake,
-            evidence,
-            analysis,
-            claim_id: disputeId,
-            channel,
-            summary: intake.customer_description,
-            recommended_action: analysis.recommended_action,
-            assigned_role: assigned,
-          },
-          reasons: [
-            `Customer-reported claim via ${channelLabel} — not verified evidence`,
-            `Claimed qty ${intake.claimed_quantity ?? "—"} vs dispatched ${evidence.dispatched_qty ?? "—"}`,
-          ],
-        });
-        portal.status = "ACTION_REQUIRED";
-        portal.case_id = caseId;
-        erp.setClaim(disputeId, {
-          status: "action_required",
-          extraction: { ...extraction, portal } as unknown as Record<string, unknown>,
-        });
-        erp.saveNotification({
-          notificationId: erp.nextId("notif", "NTF-"),
-          kind: "customer_dispute",
-          subjectRef: disputeId,
-          title: `${session.retailer_name}: ${intake.category} on ${intake.order_ref}`,
-          body: intake.customer_description,
-          assignedRole: assigned,
-          createdAt: updatedAt,
-        });
-        erp.log("retailer", "dispute.customer_created", disputeId, {
-          sourceDoc: docId,
-          detail: { conversation_id: conversationId, case_id: caseId },
-        });
+        const linked: ConversationState = { ...state!, claim_id: disputeId, idempotency_key: idem, updated_at: updatedAt };
+        saveConversation(erp, linked);
+        return { disputeId, portal, linked };
       }
 
-      // Persist claim link on the conversation document (outside nested claim writes is fine).
-      const linked: ConversationState = {
-        ...state!,
-        claim_id: disputeId!,
-        idempotency_key: idem,
-        updated_at: updatedAt,
-      };
+      const docId = erp.addDocument("customer claim", intake.order_ref, intake.customer_description, {
+        path: `customer/${conversationId}`,
+      });
+      disputeId = erp.nextId("dispute", "DSP-");
+      const portal = { ...portalBase, status: "CUSTOMER_REPORTED" as PortalStatus };
+      erp.saveClaim({ claimId: disputeId, sourceDoc: docId, status: "received" });
+      erp.setClaim(disputeId, {
+        orderRef: intake.order_ref,
+        invoiceRef: intake.invoice_ref ?? evidence.invoice_refs[0] ?? null,
+        extraction: { ...extraction, portal } as unknown as Record<string, unknown>,
+      });
+      erp.saveNotification({
+        notificationId: erp.nextId("notif", "NTF-"),
+        kind: "customer_dispute",
+        subjectRef: disputeId,
+        title: `${session.retailer_name}: ${intake.category} on ${intake.order_ref}`,
+        body: intake.customer_description,
+        assignedRole: assigned,
+        createdAt: updatedAt,
+      });
+      erp.log("retailer", "dispute.customer_created", disputeId, {
+        sourceDoc: docId,
+        detail: { conversation_id: conversationId },
+      });
+      const linked: ConversationState = { ...state!, claim_id: disputeId, idempotency_key: idem, updated_at: updatedAt };
       saveConversation(erp, linked);
-      return { disputeId: disputeId!, caseId, status: "ACTION_REQUIRED" as PortalStatus, linked };
+      return { disputeId, portal, linked };
     });
 
-    state = result.linked;
-    return replyAndReturn(replySubmitted(intake.language, result.disputeId, result.status), {
-      dispute_id: result.disputeId,
-      status: result.status,
-      case_id: result.caseId,
-      grok_mode: mode,
-      submitted: true,
+    state = seeded.linked;
+
+    const verdictCaller = hasKey() ? null : offlinePortalVerdictCaller(extraction, facts);
+    const pipeline = await applyVerdictToClaim(erp, seeded.disputeId, extraction, {
+      includeFixtures: false,
+      verdictCaller,
+      portal: seeded.portal as unknown as Record<string, unknown>,
     });
+
+    const handedOff = pipeline.status === "awaiting_person";
+    const portalStatus: PortalStatus = handedOff
+      ? "ACTION_REQUIRED"
+      : pipeline.status === "closed" && pipeline.outcome.kind === "credit_note"
+        ? "RESOLVED"
+        : "CLOSED";
+    const decision = typeof pipeline.verdict.decision === "string" ? pipeline.verdict.decision : null;
+
+    return replyAndReturn(
+      replySubmitted(intake.language, seeded.disputeId, portalStatus, { decision, handedOff }),
+      {
+        dispute_id: seeded.disputeId,
+        status: portalStatus,
+        case_id: handedOff ? pipeline.case_id : null,
+        grok_mode: mode,
+        submitted: true,
+      },
+    );
   } catch (err) {
     return replyAndReturn(
       intake.language === "it"
@@ -930,11 +967,17 @@ export function listCustomerDisputes(erp: Erp, session: SimulatedRetailerSession
     .filter((r): r is PortalClaimRecord => Boolean(r && r.retailer_id === session.retailer_id && r.conversation_id));
 }
 
-/** Employee inbox rows for customer-portal disputes. */
+/** Employee inbox: phone/chat claims that still need a person (ambiguous verdict). */
 export function listEmployeePortalDisputes(erp: Erp) {
   return erp
     .signoffs({ row: "dispute" })
-    .filter((s) => s.kind === "customer_dispute")
+    .filter((s) => {
+      if (s.status !== "pending") return false;
+      if (s.kind === "customer_dispute") return true;
+      if (s.kind !== "verdict" || !s.subjectRef) return false;
+      const rec = claimToPortalRecord(erp, s.subjectRef);
+      return Boolean(rec?.conversation_id || rec?.channel);
+    })
     .map((s) => {
       const rec = s.subjectRef ? claimToPortalRecord(erp, s.subjectRef) : null;
       const retailer = rec ? erp.retailer(rec.retailer_id) : null;
@@ -972,7 +1015,26 @@ export function employeeDisputeWorkspace(erp: Erp, caseId: string) {
   const claimId = so.subjectRef!;
   const rec = claimToPortalRecord(erp, claimId);
   const proposal = (so.proposal ?? {}) as Record<string, unknown>;
+  const verdict = (proposal.verdict ?? null) as Record<string, unknown> | null;
+  const analysis = (proposal.analysis as Record<string, unknown> | undefined) ?? null;
   const conv = rec?.conversation_id ? loadConversation(erp, rec.conversation_id) : null;
+  const matches =
+    (analysis?.supported_facts as string[] | undefined) ??
+    (Array.isArray(verdict?.points)
+      ? (verdict!.points as { text?: string; source?: { ref?: string } }[])
+          .filter((p) => p.source?.ref && p.source.ref !== "unspecified")
+          .map((p) => p.text ?? "")
+          .filter(Boolean)
+      : []);
+  const mismatches =
+    (analysis?.missing_evidence as string[] | undefined) ??
+    (Array.isArray(so.reasons) ? so.reasons : []) ??
+    [];
+  const recommended =
+    (analysis?.recommended_action as string | undefined) ??
+    (typeof verdict?.decision === "string"
+      ? `${verdict.decision}${verdict.amount != null ? ` (${verdict.amount})` : ""} — ${String(verdict.summary ?? "")}`.trim()
+      : proposal.recommended_action);
   return {
     case: so,
     dispute: rec,
@@ -981,16 +1043,19 @@ export function employeeDisputeWorkspace(erp: Erp, caseId: string) {
       claimed_quantity: rec?.claimed_quantity ?? null,
       claimed_amount: rec?.claimed_amount ?? null,
       category: rec?.category ?? null,
-      channel: rec?.channel ?? "customer_chat",
+      channel: rec?.channel ?? (proposal.channel === "phone" ? "phone" : "customer_chat"),
     },
     our_records: rec?.supporting_internal_records ?? proposal.evidence ?? null,
-    matches: (proposal.analysis as { supported_facts?: string[] } | undefined)?.supported_facts ?? [],
-    mismatches: (proposal.analysis as { missing_evidence?: string[] } | undefined)?.missing_evidence ?? [],
-    grok_analysis: proposal.analysis ?? rec?.reconciliation ?? null,
+    matches,
+    mismatches,
+    grok_analysis: analysis ?? (verdict ? { verdict, reconciliation: rec?.reconciliation } : rec?.reconciliation) ?? null,
+    verdict,
     next_action: {
       assigned_role: rec?.assigned_role ?? "credit desk",
-      recommended: (proposal.analysis as { recommended_action?: string } | undefined)?.recommended_action ?? proposal.recommended_action,
+      recommended,
       requires_approval: true,
+      /** Normal dispute path: approve emits TD04/evidence reply; legacy customer_dispute never issues money. */
+      path: so.kind === "verdict" ? "verdict" : "customer_dispute",
     },
     conversation: (conv?.messages ?? []).map((m) => ({ role: m.role, content: m.content, at: m.at })),
   };

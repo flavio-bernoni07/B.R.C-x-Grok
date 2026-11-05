@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Panel, Pill, day } from "@/components/kit";
 
 type Workspace = {
-  case: { caseId: string; status: string; title?: string | null };
+  case: { caseId: string; status: string; title?: string | null; kind?: string };
   dispute: {
     dispute_id: string;
     order_id: string | null;
@@ -26,7 +26,13 @@ type Workspace = {
   matches: string[];
   mismatches: string[];
   grok_analysis: Record<string, unknown> | null;
-  next_action: { assigned_role: string; recommended?: unknown; requires_approval: boolean };
+  verdict?: { decision?: string; summary?: string; amount?: number | null; confidence?: number } | null;
+  next_action: {
+    assigned_role: string;
+    recommended?: unknown;
+    requires_approval: boolean;
+    path?: "verdict" | "customer_dispute";
+  };
   conversation: { role: string; content: string; at: string }[];
 };
 
@@ -58,7 +64,8 @@ export function DisputeWorkspace({
   if (!data) return <p className="text-[13px] text-ink-68">Loading dispute…</p>;
 
   const records = data.our_records ?? {};
-  const decide = async (approve: boolean, resolution: string) => {
+  const verdictPath = data.next_action.path === "verdict" || data.case.kind === "verdict";
+  const decide = async (approve: boolean, resolution?: string) => {
     if (!by.trim() || !reason.trim()) {
       setErr("Enter your name and one line on why.");
       return;
@@ -73,7 +80,12 @@ export function DisputeWorkspace({
     const res = await fetch(`/api/signoffs/${encodeURIComponent(caseId)}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approve, by: by.trim(), reason: reason.trim(), edits: { resolution } }),
+      body: JSON.stringify({
+        approve,
+        by: by.trim(),
+        reason: reason.trim(),
+        edits: resolution ? { resolution } : null,
+      }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -137,6 +149,13 @@ export function DisputeWorkspace({
       </Panel>
 
       <Panel title="Grok's analysis">
+        {data.verdict?.decision ? (
+          <p className="mb-2 text-[14px] text-ink-78">
+            Proposes <b>{data.verdict.decision}</b>
+            {data.verdict.amount != null ? ` · ${data.verdict.amount}` : ""}
+            {data.verdict.summary ? <span className="mt-1 block text-[13px] text-ink-68">{data.verdict.summary}</span> : null}
+          </p>
+        ) : null}
         <pre className="whitespace-pre-wrap text-[12.5px] text-ink-78 leading-relaxed">
           {JSON.stringify(data.grok_analysis ?? {}, null, 2)}
         </pre>
@@ -163,34 +182,59 @@ export function DisputeWorkspace({
                 onChange={(e) => setReason(e.target.value)}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide(true, "investigate")}
-                className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
-              >
-                Investigate
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide(true, "await_customer")}
-                className="h-9 rounded-full border border-[rgb(32_49_25/0.2)] bg-hh-honeydew px-4 font-bold text-[13px] disabled:opacity-40"
-              >
-                Ask customer for evidence
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide(false, "close_no_liability")}
-                className="h-9 rounded-full border border-st-wrong/40 px-4 font-bold text-[13px] text-st-wrong disabled:opacity-40"
-              >
-                Close without credit
-              </button>
-            </div>
+            {verdictPath ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void decide(true)}
+                  className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+                >
+                  Approve Grok&apos;s proposal
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void decide(false)}
+                  className="h-9 rounded-full border border-st-wrong/40 px-4 font-bold text-[13px] text-st-wrong disabled:opacity-40"
+                >
+                  Reject &amp; reopen
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void decide(true, "investigate")}
+                  className="h-9 rounded-full bg-hh-dark px-4 font-bold text-[13px] text-hh-window disabled:opacity-40"
+                >
+                  Investigate
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void decide(true, "await_customer")}
+                  className="h-9 rounded-full border border-[rgb(32_49_25/0.2)] bg-hh-honeydew px-4 font-bold text-[13px] disabled:opacity-40"
+                >
+                  Ask customer for evidence
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void decide(false, "close_no_liability")}
+                  className="h-9 rounded-full border border-st-wrong/40 px-4 font-bold text-[13px] text-st-wrong disabled:opacity-40"
+                >
+                  Close without credit
+                </button>
+              </div>
+            )}
             {err ? <p className="text-[12.5px] text-st-wrong">{err}</p> : null}
-            <p className="text-[11.5px] text-ink-50">No credit note or refund is issued from these buttons.</p>
+            <p className="text-[11.5px] text-ink-50">
+              {verdictPath
+                ? "Approve runs the normal dispute outcome (credit note or evidence reply). Reject reopens the claim."
+                : "No credit note or refund is issued from these buttons."}
+            </p>
           </div>
         ) : (
           <p className="mt-2 text-[13px] text-ink-68">Already decided.</p>

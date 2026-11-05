@@ -71,6 +71,13 @@ export function caseNextStep(c: Pick<Signoff, "row" | "kind" | "proposal">): str
     const channel = p.channel === "phone" ? "phone" : "chat";
     return `Review the ${channel} claim (no money issued automatically)`;
   }
+  if (c.kind === "verdict" && (p.channel === "phone" || p.channel === "customer_chat")) {
+    const d = obj(p.verdict)?.decision;
+    const channel = p.channel === "phone" ? "phone" : "chat";
+    return typeof d === "string"
+      ? `${d.charAt(0).toUpperCase()}${d.slice(1).replace(/_/g, " ")} the ${channel} claim`
+      : `Decide the ${channel} claim`;
+  }
   const d = obj(p.verdict)?.decision;
   return typeof d === "string" ? `${d.charAt(0).toUpperCase()}${d.slice(1).replace(/_/g, " ")} the claim` : "Decide the claim";
 }

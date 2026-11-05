@@ -32,9 +32,17 @@ function isErrorCase(c: Signoff): boolean {
   return c.status === "pending" && !isSendOff(c);
 }
 
+/** Phone/chat intake that opened a normal verdict case (or legacy customer_dispute). */
+function isPortalChannelCase(c: Signoff): boolean {
+  if (c.kind === "customer_dispute") return true;
+  if (c.kind !== "verdict") return false;
+  const ch = obj(c.proposal)?.channel;
+  return ch === "phone" || ch === "customer_chat";
+}
+
 /** What kind of decision this is, in two words (open panel + On it — same as before). */
 function kindLabel(c: Signoff): string {
-  if (c.kind === "customer_dispute") {
+  if (isPortalChannelCase(c)) {
     const channel = obj(c.proposal)?.channel;
     return channel === "phone" ? "Phone claim" : "Chat claim";
   }
@@ -105,6 +113,16 @@ function whatHappened(c: Signoff): { what: string | null; why: string | null } {
     return {
       what: `Retailer reported ${type} via ${channel}${qty}${msg ? `: ${firstSentence(msg)}` : "."}`,
       why: (c.reasons ?? [])[0] ?? "Customer-reported — not verified evidence",
+    };
+  }
+  if (c.row === "dispute" && isPortalChannelCase(c)) {
+    const v = obj(p.verdict) ?? {};
+    const claim = obj(v.claim) ?? {};
+    const channel = p.channel === "phone" ? "phone" : "chat";
+    const type = String(claim.claim_type ?? "a claim").replace(/_/g, " ");
+    return {
+      what: `Retailer reported ${type} via ${channel}${typeof claim.raw_notes === "string" && claim.raw_notes.trim() ? `: ${firstSentence(claim.raw_notes)}` : "."}`,
+      why: typeof v.summary === "string" ? firstSentence(v.summary) : (c.reasons ?? [])[0] ?? null,
     };
   }
   if (c.row === "dispute") {
@@ -284,7 +302,7 @@ function CasePanel({ c, onDecided }: { readonly c: Signoff; readonly onDecided: 
   const pending = c.status === "pending";
   const check = pending && needsHumanCheck(c);
   const story = whatHappened(c);
-  const portal = c.kind === "customer_dispute";
+  const portal = isPortalChannelCase(c);
   return (
     <div className="space-y-5 p-8 pr-16">
       <div className="flex items-start justify-between gap-4">

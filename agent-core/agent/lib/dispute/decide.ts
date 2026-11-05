@@ -4,8 +4,8 @@
  * case is added to the Playbook's past cases. Reject: nothing is sent, the claim is reopened and
  * the overturn is added to the Playbook (dispute/service.py approve_verdict / reject_verdict).
  *
- * Customer-portal cases (`kind: customer_dispute`) never auto-issue money: they update the portal
- * status only (investigate / await customer / close).
+ * Legacy portal cases (`kind: customer_dispute`) never auto-issue money: they update portal status
+ * only. New phone/chat intake uses `kind: verdict` and the normal approve/reject outcome path.
  */
 import type { Erp } from "../core/erp";
 import { decideCustomerDispute } from "./portal";
