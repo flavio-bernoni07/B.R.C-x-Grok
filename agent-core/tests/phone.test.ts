@@ -73,6 +73,8 @@ describe("phone dispute tools", () => {
     const erp = freshErp();
     seedPortalDemoOrders(erp);
     expect(resolveRetailerGln(erp, "Esselunga")).toBe("BUYER001");
+    expect(resolveRetailerGln(erp, "S lunga")).toBe("BUYER001");
+    expect(resolveRetailerGln(erp, "calling from Selunga")).toBe("BUYER001");
     expect(resolveRetailerGln(erp, "carrefour italia")).toBe("8000000000100");
     expect(resolveRetailerGln(erp, "")).toBeNull();
     expect(resolvePhoneSession(erp, "+39333", {}).ok).toBe(false);

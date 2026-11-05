@@ -30,8 +30,12 @@ export function demoOpenToAnyCaller(): boolean {
   return true;
 }
 
-/** Known demo aliases → GLN. Longer aliases first. */
+/** Known demo aliases → GLN. Longer aliases first. Includes STT mangling of Italian names. */
 const RETAILER_ALIASES: { match: RegExp; gln: string }[] = [
+  // Esselunga — speech often drops syllables ("S lunga", "essel lunga", "a Selunga")
+  { match: /\bes+e?\s*lunga\b/i, gln: "BUYER001" },
+  { match: /\bs[\s.'-]*lunga\b/i, gln: "BUYER001" },
+  { match: /\bselunga\b/i, gln: "BUYER001" },
   { match: /\besselunga\b/i, gln: "BUYER001" },
   { match: /\bcarrefour\b/i, gln: "8000000000100" },
   { match: /\bconad\b/i, gln: "8000000000117" },
