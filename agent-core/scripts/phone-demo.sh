@@ -227,10 +227,11 @@ smoke_simulate() {
   bold "Smoke-testing simulate → Disputes…"
   local res status
   # First hit can be slow (Next compile + optional Grok). Give it time; show progress.
+  local body='{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Phone demo rehearsal - received only 1100 of 1200 Carnaroli","language":"en"}'
   status="$(curl -sS -o /tmp/brc-phone-simulate.json -w '%{http_code}' --connect-timeout 5 --max-time 120 \
     -X POST "$URL/api/telephony/simulate" \
     -H 'content-type: application/json' \
-    -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Phone demo rehearsal — received only 1100 of 1200 Carnaroli","language":"en"}" || true)"
+    -d "$body" || true)"
   res="$(cat /tmp/brc-phone-simulate.json 2>/dev/null || true)"
   if [ "$status" != "200" ] || ! printf '%s' "$res" | grep -q '"ok":true'; then
     red "Simulate failed (HTTP $status): $res"

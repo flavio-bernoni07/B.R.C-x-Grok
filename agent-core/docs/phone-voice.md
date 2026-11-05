@@ -26,6 +26,8 @@ Then in [console.x.ai](https://console.x.ai) → **Voice Agents**:
 
 Leave the `phone:demo` process running; each new quick-tunnel host needs a Builder tool URL update.
 
+Filmed take: [`phone-film-script.md`](phone-film-script.md).
+
 ## Env (in `agent-core/.env.local`)
 
 ```bash
