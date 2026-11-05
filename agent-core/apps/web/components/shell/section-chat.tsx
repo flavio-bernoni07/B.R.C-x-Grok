@@ -50,9 +50,9 @@ export function SectionChat({
   const thinking = busy && (last?.role !== "assistant" || last.parts.length === 0);
 
   return (
-    <section className={cn("space-y-4 border-hairline border-t pt-6", className)}>
+    <section className={cn("border-hairline border-t pt-6", className)}>
       {count ? (
-        <div className="space-y-5">
+        <div className="mb-4 space-y-5">
           {agent.messages.map((m) =>
             m.role === "assistant" && m.parts.length === 0 ? null : (
               <div key={m.id} className="hh-rise">
@@ -69,9 +69,12 @@ export function SectionChat({
             ),
           )}
           {thinking ? <p className="hh-rise shimmer w-fit text-[14px] text-ink-68">Grok is looking at the records…</p> : null}
+          <div ref={endRef} />
         </div>
       ) : suggestions.length ? (
-        <ChipRail items={suggestions} onPick={send} />
+        <div className="mb-3">
+          <ChipRail items={suggestions} onPick={send} />
+        </div>
       ) : null}
       <form
         onSubmit={(e) => {
@@ -102,7 +105,6 @@ export function SectionChat({
           <ArrowUpIcon className="size-4" />
         </button>
       </form>
-      <div ref={endRef} />
     </section>
   );
 }
