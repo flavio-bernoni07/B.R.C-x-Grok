@@ -150,6 +150,8 @@ export const announceChange = () => window.dispatchEvent(new Event("brc:changed"
 /**
  * A scrolling page inside the content sheet.
  * Pass `ask` (usually SectionChat) to dock the Grok bar at the bottom of the sheet, like Home.
+ * The dock is capped so a long reply cannot swallow the page: content keeps its own scroll,
+ * the thread scrolls inside the dock, and a blur fades the page into the chat.
  */
 export function Page({
   children,
@@ -167,7 +169,13 @@ export function Page({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className={cn("mx-auto w-full max-w-[1280px] space-y-8 px-9 pt-8 pb-8", className)}>{children}</div>
         </div>
-        <div className="mx-auto w-full max-w-[980px] shrink-0 px-4 pt-3 pb-6 sm:px-6">{ask}</div>
+        <div className="relative z-10 mx-auto flex w-full max-w-[980px] min-h-0 max-h-[min(55%,560px)] shrink-0 flex-col overflow-hidden px-4 pt-0 pb-6 sm:px-6">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-14 h-14 bg-gradient-to-b from-transparent from-0% via-hh-seasalt/55 via-45% to-hh-seasalt to-100% backdrop-blur-[3px]"
+          />
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden pt-3">{ask}</div>
+        </div>
       </div>
     );
   }
