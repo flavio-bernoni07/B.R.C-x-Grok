@@ -83,13 +83,11 @@ Production enters only as events, so a batch on hold can never be promised or sh
 
 We wrote the reconciliation cases ourselves to cover threeway's blind spots, so the jury's test set is the real test. The 6 Nov orders are invented; the roads, fuel use and diesel price are real and listed in `data/world/logistics.json`. How today's one-truck-per-order trips and the planned route are built, and the 7-order day now on the Shipping screen: [docs/routes.md](docs/routes.md).
 
-## Install the app
+## Open the dashboard
 
-Node 24 and pnpm. This downloads the Mac app, installs it in `/Applications`, and opens it. It also downloads this repo when the Mac does not already have it.
+https://url-draw-tour-disks.trycloudflare.com
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/flavio-bernoni07/B.R.C-x-Grok/main/scripts/get-dashboard.sh | bash
-```
+That link is the dashboard. It stays up while the Mac that hosts it is on. There is no account and no install.
 
 ## Run it
 
