@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -16,6 +17,28 @@ from dispute.service import approve_verdict, handle_claim, offline_callers, reje
 
 ROOT = Path(__file__).resolve().parents[1]
 DISPUTES = ROOT / "data" / "disputes"
+
+
+def _claim_type_from_verdict_messages(messages: list[dict[str, str]]) -> str:
+    text = messages[-1]["content"] if messages else ""
+    match = re.search(r'"claim_type"\s*:\s*"(\w+)"', text)
+    return match.group(1) if match else "other"
+
+
+def _multi_issue_callers(*, pricing_verdict_name: str):
+    extraction = json.loads((DISPUTES / "extractions" / "07_shortage_and_pricing.json").read_text())
+    shortage = json.loads((DISPUTES / "verdicts" / "07_shortage_issue.json").read_text())
+    pricing = json.loads((DISPUTES / pricing_verdict_name).read_text())
+
+    def read_c(_text: str) -> dict:
+        return dict(extraction)
+
+    def verdict_c(messages: list[dict[str, str]]) -> dict:
+        claim_type = _claim_type_from_verdict_messages(messages)
+        payload = pricing if claim_type == "pricing" else shortage
+        return json.loads(json.dumps(payload))
+
+    return read_c, verdict_c
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +73,68 @@ def test_unclear_claim_waits_then_approval_writes_reply_and_playbook(tmp_path: P
     assert erp.documents(ref=res["claim_id"], kind="claim reply")
 
 
+def test_multi_issue_both_clear_emits_one_combined_credit(tmp_path: Path) -> None:
+    erp = fresh_erp()
+    read_c, verdict_c = _multi_issue_callers(
+        pricing_verdict_name="verdicts/07_pricing_issue.json"
+    )
+    res = handle_claim(
+        erp,
+        (DISPUTES / "claims" / "07_shortage_and_pricing.txt").read_text(),
+        out_dir=tmp_path,
+        read_caller=read_c,
+        verdict_caller=verdict_c,
+        received_on=date(2026, 11, 4),
+    )
+    assert res["status"] == "closed"
+    assert res["verdict"]["decision"] == "accept"
+    assert res["verdict"]["amount"] == pytest.approx(202.8)
+    assert len(res["verdict"]["issue_verdicts"]) == 2
+    assert all(iv["settled"] for iv in res["verdict"]["issue_verdicts"])
+    assert res["outcome"]["kind"] == "credit_note"
+    assert res["outcome"]["amount"] == pytest.approx(202.8)
+    assert list(tmp_path.glob("*_TD04.xml"))
+    assert not list(tmp_path.glob("*_reject_reply.txt"))
+
+
+def test_multi_issue_mixed_waits_then_approval_combines_credit(tmp_path: Path) -> None:
+    erp = fresh_erp()
+    playbook = tmp_path / "playbook.md"
+    shutil.copy(DISPUTES / "playbook.md", playbook)
+    read_c, verdict_c = _multi_issue_callers(
+        pricing_verdict_name="verdicts/07_pricing_ambiguous.json"
+    )
+    res = handle_claim(
+        erp,
+        (DISPUTES / "claims" / "07_shortage_and_pricing.txt").read_text(),
+        out_dir=tmp_path,
+        read_caller=read_c,
+        verdict_caller=verdict_c,
+        received_on=date(2026, 11, 4),
+    )
+    assert res["status"] == "awaiting_person"
+    assert not list(tmp_path.glob("*_TD04.xml"))
+    issue_rows = {iv["issue"]["claim_type"]: iv for iv in res["verdict"]["issue_verdicts"]}
+    assert issue_rows["shortage"]["settled"] is True
+    assert issue_rows["pricing"]["settled"] is False
+    assert any("pricing" in r for r in res["verdict"]["sign_off_reasons"])
+
+    done = approve_verdict(
+        erp,
+        res["case_id"],
+        by="Sara",
+        reason="Autumn promo applies to Arborio on this PO",
+        playbook_path=playbook,
+        issue_date=date(2026, 11, 7),
+    )
+    assert done["outcome"]["kind"] == "credit_note"
+    assert done["outcome"]["amount"] == pytest.approx(202.8)
+    assert done["verdict"]["decision"] == "accept"
+    assert all(iv["settled"] for iv in done["verdict"]["issue_verdicts"])
+    assert done["learned_rule_id"]
+    assert list(tmp_path.glob("*_TD04.xml"))
+
+
 def test_overturned_verdict_reopens_the_claim(tmp_path: Path) -> None:
     erp = fresh_erp()
     playbook = tmp_path / "playbook.md"
@@ -82,9 +167,13 @@ def test_golden_order_runs_through_every_row(tmp_path: Path) -> None:
     assert result["unclear_claim"] == "awaiting_person"
     assert result["learned_claim"] == "closed"
     assert result.get("learned_rule_id")
+    assert result["multi_issue_claim"] == "closed"
+    assert result["multi_issue_amount"] == pytest.approx(202.8)
     assert result["pending_signoffs"] == 0
     assert list(tmp_path.glob("ESS-GOLD-001_TD04.xml"))
-    assert "credit notes issued: 1" in result["digest"]
+    assert len(list(tmp_path.glob("*_TD04.xml"))) >= 2
+    # Golden shortage credit + combined multi-issue credit (flyer remittance is reject, not a credit).
+    assert "credit notes issued: 2" in result["digest"]
     assert result["planning"]["lot"] == "awaiting_person" and result["planning"]["suggestion"]["qty"] > 0
     assert (ROOT / "data" / "disputes" / "playbook.md").read_text().count("No past cases yet") == 1
 

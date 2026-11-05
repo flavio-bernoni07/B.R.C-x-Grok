@@ -82,6 +82,8 @@ Rules:
   prices × qty already shown in the facts. If you cannot tie an amount to those numbers, use null.
 - Every point MUST have a source. Prefer concrete document ids from facts.
 - Dispute ends in credit note or evidence reply later — you only decide.
+- The caller may invoke you once per issue inside a multi-issue claim; decide only for the
+  claim_type / amount in the claim object you are given.
 """.strip()
 
 

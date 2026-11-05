@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -39,19 +39,27 @@ EXTRACTION_SCHEMA_HINT = """
 Return a single JSON object only (no markdown), with these keys:
   order_ref: string or null — purchase order / ORDERS reference as written or normalized if clear
   invoice_ref: string or null — invoice / FatturaPA / INVOIC number
-  product: string or null — product name or SKU mentioned
-  quantity: number or null — disputed quantity (pieces/cartons as stated)
-  amount: number or null — disputed amount in euro (numeric, no currency symbol)
-  claim_type: one of "shortage" | "pricing" | "damage" | "late_delivery" | "other"
   confidence: number from 0 to 1 — how sure you are of the extraction
   raw_notes: short string — typos, missing refs, ambiguity, or other useful notes
+  issues: array of objects (one or more), each with:
+    claim_type: one of "shortage" | "pricing" | "damage" | "late_delivery" | "other"
+    product: string or null — product name or SKU for this issue
+    quantity: number or null — disputed quantity for this issue
+    amount: number or null — disputed euro amount for this issue
+    notes: short string — optional detail for this issue only
+
+Legacy single-issue shape is also accepted (product, quantity, amount, claim_type at the
+top level instead of issues). Prefer issues when the email raises more than one problem.
 
 Rules:
 - Do not invent order_ref or invoice_ref. If missing or unreadable, use null.
 - Prefer null over guessing when a field is absent.
 - claim_type must be exactly one of the allowed values.
+- One issue per distinct problem type (or distinct qty/amount line). If the retailer is
+  unsure which type applies to the same facts (e.g. shortage vs late), use one "other"
+  issue — do not invent duplicate issues for the same ambiguity.
 - Remittance / short-payment texts with price reason codes (PRI, PRI/UNK) or
-  unit-price / promo variance → claim_type "pricing" (not "other").
+  unit-price / promo variance → claim_type "pricing" (not "other") on that issue.
 - Tolerate Italian and English, typos, and remittance/short-payment style texts.
 """.strip()
 
@@ -77,8 +85,32 @@ _PRICING_MARKERS = (
 
 
 @dataclass(frozen=True)
+class ClaimIssue:
+    """One problem raised inside a claim email (shortage, pricing, …)."""
+
+    claim_type: ClaimType
+    product: str | None = None
+    quantity: float | None = None
+    amount: float | None = None
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "claim_type": self.claim_type.value,
+            "product": self.product,
+            "quantity": self.quantity,
+            "amount": self.amount,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
 class ClaimExtraction:
-    """Structured claim fields extracted from retailer email / short payment text."""
+    """Structured claim fields extracted from retailer email / short payment text.
+
+    Top-level product / quantity / amount / claim_type mirror issues[0] so older
+    call sites keep working. Multi-problem emails populate issues with 2+.
+    """
 
     order_ref: str | None
     invoice_ref: str | None
@@ -88,11 +120,61 @@ class ClaimExtraction:
     claim_type: ClaimType
     confidence: float
     raw_notes: str
+    issues: tuple[ClaimIssue, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.issues:
+            return
+        object.__setattr__(
+            self,
+            "issues",
+            (
+                ClaimIssue(
+                    claim_type=self.claim_type,
+                    product=self.product,
+                    quantity=self.quantity,
+                    amount=self.amount,
+                    notes="",
+                ),
+            ),
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["claim_type"] = self.claim_type.value
-        return data
+        return {
+            "order_ref": self.order_ref,
+            "invoice_ref": self.invoice_ref,
+            "product": self.product,
+            "quantity": self.quantity,
+            "amount": self.amount,
+            "claim_type": self.claim_type.value,
+            "confidence": self.confidence,
+            "raw_notes": self.raw_notes,
+            "issues": [issue.to_dict() for issue in self.issues],
+        }
+
+
+def _parse_claim_type(raw: Any) -> ClaimType:
+    if isinstance(raw, ClaimType):
+        return raw
+    claim_str = str(raw or "other").strip().lower().replace(" ", "_").replace("-", "_")
+    if claim_str not in CLAIM_TYPES:
+        claim_str = "other"
+    return ClaimType(claim_str)
+
+
+def scoped_extraction(extraction: ClaimExtraction, issue: ClaimIssue) -> ClaimExtraction:
+    """View of the claim as if it only contained this one issue (verdict / signature)."""
+    return ClaimExtraction(
+        order_ref=extraction.order_ref,
+        invoice_ref=extraction.invoice_ref,
+        product=issue.product,
+        quantity=issue.quantity,
+        amount=issue.amount,
+        claim_type=issue.claim_type,
+        confidence=extraction.confidence,
+        raw_notes=extraction.raw_notes,
+        issues=(issue,),
+    )
 
 
 def _api_key() -> str | None:
@@ -176,16 +258,11 @@ def parse_extraction(
     *,
     claim_text: str = "",
 ) -> ClaimExtraction:
-    """Build a ClaimExtraction from a model JSON object; never invent refs."""
-    claim_raw = payload.get("claim_type", "other")
-    if isinstance(claim_raw, ClaimType):
-        claim_type = claim_raw
-    else:
-        claim_str = str(claim_raw or "other").strip().lower().replace(" ", "_").replace("-", "_")
-        if claim_str not in CLAIM_TYPES:
-            claim_str = "other"
-        claim_type = ClaimType(claim_str)
+    """Build a ClaimExtraction from a model JSON object; never invent refs.
 
+    Accepts either ``issues`` (preferred) or the legacy top-level claim_type /
+    product / quantity / amount shape (synthesized into a one-element issues list).
+    """
     confidence = _null_float(payload.get("confidence"))
     if confidence is None:
         confidence = 0.0
@@ -193,19 +270,61 @@ def parse_extraction(
 
     notes = payload.get("raw_notes")
     raw_notes = notes.strip() if isinstance(notes, str) else (str(notes) if notes else "")
-    claim_type = refine_claim_type(
-        claim_type, raw_notes=raw_notes, claim_text=claim_text
-    )
 
+    parsed_issues: list[ClaimIssue] = []
+    raw_issues = payload.get("issues")
+    if isinstance(raw_issues, list) and raw_issues:
+        for item in raw_issues:
+            if not isinstance(item, dict):
+                continue
+            issue_notes = item.get("notes")
+            issue_notes_s = (
+                issue_notes.strip()
+                if isinstance(issue_notes, str)
+                else (str(issue_notes) if issue_notes else "")
+            )
+            claim_type = refine_claim_type(
+                _parse_claim_type(item.get("claim_type", "other")),
+                raw_notes=issue_notes_s or raw_notes,
+                claim_text=claim_text,
+            )
+            parsed_issues.append(
+                ClaimIssue(
+                    claim_type=claim_type,
+                    product=_null_str(item.get("product")),
+                    quantity=_null_float(item.get("quantity")),
+                    amount=_null_float(item.get("amount")),
+                    notes=issue_notes_s,
+                )
+            )
+
+    if not parsed_issues:
+        claim_type = refine_claim_type(
+            _parse_claim_type(payload.get("claim_type", "other")),
+            raw_notes=raw_notes,
+            claim_text=claim_text,
+        )
+        parsed_issues.append(
+            ClaimIssue(
+                claim_type=claim_type,
+                product=_null_str(payload.get("product")),
+                quantity=_null_float(payload.get("quantity")),
+                amount=_null_float(payload.get("amount")),
+                notes="",
+            )
+        )
+
+    primary = parsed_issues[0]
     return ClaimExtraction(
         order_ref=_null_str(payload.get("order_ref")),
         invoice_ref=_null_str(payload.get("invoice_ref")),
-        product=_null_str(payload.get("product")),
-        quantity=_null_float(payload.get("quantity")),
-        amount=_null_float(payload.get("amount")),
-        claim_type=claim_type,
+        product=primary.product,
+        quantity=primary.quantity,
+        amount=primary.amount,
+        claim_type=primary.claim_type,
         confidence=confidence,
         raw_notes=raw_notes,
+        issues=tuple(parsed_issues),
     )
 
 

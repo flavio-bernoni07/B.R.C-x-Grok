@@ -1,0 +1,18 @@
+{
+  "decision": "accept",
+  "amount": 16.8,
+  "confidence": 0.4,
+  "needs_sign_off": true,
+  "summary": "Promo sheet not clearly linked to this PO; person should confirm autumn promo applies.",
+  "points": [
+    {
+      "text": "Proposed promo gap on 28 CTN if contract applies",
+      "amount": 16.8,
+      "source": {
+        "kind": "contract",
+        "ref": "autumn-promo",
+        "detail": "amount from claim; promo applicability unclear"
+      }
+    }
+  ]
+}

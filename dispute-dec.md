@@ -14,18 +14,19 @@ Solo la riga **Dispute**: Claim email → Read the claim → Pull the facts → 
 
 ```mermaid
 flowchart TD
-  inClaim[Claim_email_or_short_payment] --> reader[Grok_claim_reader]
-  reader -->|ClaimExtraction_JSON| facts[Pull_facts_code]
+  inClaim[Claim_email_or_short_payment] --> reader[Grok_claim_reader_issues]
+  reader -->|ClaimExtraction_JSON| facts[Pull_facts_once]
   facts --> erp[Mini_ERP_lookup]
   erp --> threeway[Baseline_threeway]
   erp --> reconcile[Shipping_reconcile]
   threeway --> factsOut[DisputeFacts]
   reconcile --> factsOut
-  factsOut --> verdict[Grok_verdict_plus_Playbook]
-  verdict -->|accept_partial_reject_plus_sources| gate{needs_sign_off}
-  gate -->|no_auto| outcome[Outcome_code]
-  gate -->|yes_person| signoff[Human_signoff_desk]
-  signoff --> outcome
+  factsOut --> loop[Per_issue_verdict]
+  loop --> gate{Any_issue_ambiguous}
+  gate -->|no_all_auto| combine[Combine_issue_verdicts]
+  gate -->|yes| signoff[One_desk_pack]
+  signoff --> combine
+  combine --> outcome[Outcome_code]
   outcome -->|accept_or_partial| credit[TD04_plus_INVOIC_381]
   outcome -->|reject| reply[Evidence_reply]
   credit --> saved[Saved_in_outcomes_MiniERP]
@@ -42,35 +43,36 @@ flowchart TD
 
 ### 2. Read the claim — `claim_reader.py` (Grok)
 
-- Estrae JSON strutturato: `order_ref`, `invoice_ref`, `product`, `quantity`, `amount`, `claim_type`, `confidence`, `raw_notes`.
-- **Non inventa** ref mancanti → `null`.
+- Estrae JSON strutturato: `order_ref`, `invoice_ref`, `confidence`, `raw_notes`, e **`issues[]`** (`claim_type`, `product`, `quantity`, `amount`, `notes` per problema).
+- Forma legacy (un solo `claim_type` / qty / amount in cima) → sintetizzata in `issues` con un elemento; i campi top-level restano lo specchio di `issues[0]`.
+- **Non inventa** ref mancanti → `null`. Un’ambiguità sullo stesso fatto (shortage vs OTIF) resta **un** issue `other`, non duplicati.
 - Live: `XAI_API_KEY` / `GROK_API_KEY`. Dry-run / extraction JSON a mano per test senza API.
 - Output salvabile sotto `data/disputes/extractions/`.
 
 ### 3. Pull the facts — `pull_facts.py` + `mini_erp.py` (codice)
 
-- Risolve ordine / DESADV / invoice / proofs dal Mini ERP esportato da Shipping e/o dal catalog mock (`data/disputes/erp/catalog.json`).
+- Risolve ordine / DESADV / invoice / proofs dal Mini ERP esportato da Shipping e/o dal catalog mock (`data/disputes/erp/catalog.json`) — **una volta per claim**, non per issue.
 - Esegue **baseline threeway** (vendored `dispute/_threeway_core.py`) **e** `shipping.reconcile.reconcile_documents` (stesso codice del bench).
 - Produce `DisputeFacts`: claim + docs + `threeway` + `reconcile` (status, causes, explanation) + `misses`.
 - Path jury: `handle_claim(..., include_fixtures=False)` / `python -m dispute.service --db …` / `run_dispute_claim.sh --erp-db …`.
 
-### 4. Verdict + sources — `verdict.py` (Grok)
+### 4. Verdict + sources — `verdict.py` (Grok), una volta per issue
 
-- Legge **Playbook** + **contract excerpt** + claim + facts.
-- Decide `accept` | `partial` | `reject` con `points[]` ciascuno con **source** (preferire `reconcile` + cause code quando presente).
+- Per ogni issue: Playbook + contract + claim scoped + facts → `accept` | `partial` | `reject` con `points[]` e **source**.
 - Importi solo da claim / docs / threeway / reconcile eur — codice clampa/droppa euro inventati.
-- `needs_sign_off`: **nessuna soglia in euro**. True se qualcosa è ambiguo: Grok unsure o confidence < **0.55**, un punto senza source, tipo fuori Playbook (`other`), claim letto con confidence < 0.55, documento non trovato, importo non presente nei documenti.
+- `needs_sign_off` per issue: **nessuna soglia in euro**. True se qualcosa è ambiguo (stesse regole di prima).
+- `handle_claim` combina i verdict in un parent: punti concatenati, importo = somma dei credit, decisione `accept` / `reject` / `partial` a seconda degli issue.
 
 ### 5. Sign-off (condizionale) + learning
 
-- Se `needs_sign_off` → persona approva/modifica; caso approvato entra nel Playbook “past cases”.
-- **`approve_verdict` attiva una regola** sul fingerprint (`activate_from_person`) **e salva il perché** come condizioni di applicabilità. Il prossimo claim dello stesso tipo chiude da solo **solo se quel perché vale ancora** sui nuovi fatti; altrimenti la regola si salta e si chiede di nuovo una persona (demo: RS26112 → Sara → RS26113).
+- Issue chiari si auto-chiudono nel pass; i leftover ambigui condividono **un** caso desk (`pending_issues` + `auto_issues` nella proposal). Niente TD04/reply finché il pack non è chiuso (anche se alcuni issue erano chiari).
+- **`approve_verdict`** approva tutto il pack pending, ricombina, emette l’outcome, e **`activate_from_person` una volta per issue type** (così i claim single-type futuri imparano).
 - Desk CLI: `python -m dispute.desk --db data/demo.sqlite list|show|approve|reject`.
-- Finché una persona non approva, niente TD04/reply (`awaiting_sign_off`). Web UI CRM: ancora da fare; il desk usa la stessa coda.
+- Port TypeScript `agent-core`: dopo, non in questo cambiamento.
 
 ### 6. Out — `outcome.py` (codice)
 
-- **accept / partial** → FatturaPA **TD04** (`a38`) + EDI INVOIC hint `BGM+381`.
+- **accept / partial** → FatturaPA **TD04** (`a38`) + EDI INVOIC hint `BGM+381` (un documento per claim, importo combinato).
 - **reject** → reply con evidenze (incluso `reconcile` causes).
 - Mai una nuova invoice di addebito.
 - Output: `data/disputes/outcomes/` + Mini ERP documents.

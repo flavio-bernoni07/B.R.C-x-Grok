@@ -47,6 +47,7 @@ Detail: [dispute-dec.md](dispute-dec.md). Owner: carlojolly. Handoff decisions o
 | Wed 4 Nov | Remittance reason `PRI` / `PRI/UNK` (and short-pay price text) → `claim_type: pricing` | Portal often labels short pays as other; pricing Playbook must apply | dispute |
 | Wed 4 Nov | Dispute ends in **credit note (TD04)** or **evidence reply** — never a new invoice | Retailer claim path; no rebound debit | dispute |
 | Wed 4 Nov | Facts from shared Mini ERP when Shipping exported them; else mock catalog fixtures (`data/disputes/erp/catalog.json`) until live docs cover the claim | Rows must hand off; fixtures keep Dispute demoable alone | dispute (+ core / shipping) |
+| Thu 5 Nov | **Multi-issue claims (Python):** claim reader may return `issues[]`; facts once; each issue gets its own verdict; clear issues auto-settle; ambiguous leftovers share **one** desk sign-off; **one** combined TD04/reply. Agent-core port later | One email can raise shortage and pricing; do not send a half credit then a second note | dispute |
 
 ## Forecast and quality (Flavio)
 

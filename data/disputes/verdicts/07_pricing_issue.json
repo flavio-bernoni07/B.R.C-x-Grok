@@ -1,0 +1,18 @@
+{
+  "decision": "accept",
+  "amount": 16.8,
+  "confidence": 0.9,
+  "needs_sign_off": false,
+  "summary": "Promo unit price €14.90 vs invoice €15.50 on 28 received CTN.",
+  "points": [
+    {
+      "text": "Promo price gap on received quantity",
+      "amount": 16.8,
+      "source": {
+        "kind": "contract",
+        "ref": "autumn-promo",
+        "detail": "28 × (15.50 − 14.90) = 16.80"
+      }
+    }
+  ]
+}

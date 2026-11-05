@@ -1,9 +1,10 @@
 """Dispute row on the shared Mini ERP.
 
     handle_claim()     claim email -> Grok reads it -> facts from the Mini ERP (+ the
-                       Dispute fixtures) -> Grok verdict -> outcome, or a sign-off
-    approve_verdict()  a person signs off an ambiguous verdict; the outcome is written
-                       and the case is added to the Playbook's past cases
+                       Dispute fixtures) -> per-issue Grok verdict -> combined outcome,
+                       or one sign-off pack for ambiguous leftovers
+    approve_verdict()  a person signs off the pending issue pack; the outcome is written
+                       and a learned rule is activated per approved issue type
     reject_verdict()   the person overturns Grok; nothing is sent, the claim is reopened
 
 Grok decides and explains, code writes every document and amount (dispute-dec.md).
@@ -12,7 +13,6 @@ Grok decides and explains, code writes every document and amount (dispute-dec.md
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
@@ -20,11 +20,22 @@ from typing import Any, Callable
 from agent import learning
 from core import signoff
 from core.erp import Erp
-from dispute.claim_reader import ClaimType, parse_extraction, read_claim
+from dispute.claim_reader import (
+    ClaimExtraction,
+    ClaimIssue,
+    parse_extraction,
+    read_claim,
+    scoped_extraction,
+)
 from dispute.mini_erp import MiniErpStore
 from dispute.outcome import emit_outcome
 from dispute.pull_facts import pull_facts
-from dispute.verdict import DEFAULT_PLAYBOOK, collect_known_amounts, decide_verdict, parse_verdict_payload
+from dispute.verdict import (
+    DEFAULT_PLAYBOOK,
+    collect_known_amounts,
+    decide_verdict,
+    parse_verdict_payload,
+)
 from shipping.service import export_for_dispute
 
 OUTCOME_KINDS = {
@@ -63,6 +74,20 @@ def _iso_date(value: str | None) -> date | None:
         return None
 
 
+def _types_from_extraction_dict(data: dict[str, Any] | None) -> set[str]:
+    if not data:
+        return set()
+    issues = data.get("issues")
+    if isinstance(issues, list) and issues:
+        return {
+            str(i.get("claim_type"))
+            for i in issues
+            if isinstance(i, dict) and i.get("claim_type")
+        }
+    claim_type = data.get("claim_type")
+    return {str(claim_type)} if claim_type else set()
+
+
 def claim_checks(erp: Erp, claim_id: str, extraction: Any, facts: dict[str, Any],
                  received_on: date) -> tuple[dict[str, Any], list[str]]:
     """Facts code can settle on its own: the complaint window and duplicate claims.
@@ -84,14 +109,238 @@ def claim_checks(erp: Erp, claim_id: str, extraction: Any, facts: dict[str, Any]
         if days > COMPLAINT_WINDOW_DAYS:
             reasons.append(f"the claim arrived {days} days after delivery; the contract allows "
                            f"{COMPLAINT_WINDOW_DAYS} (§4)")
-    same = [c for c in erp.claims() if c["claim_id"] != claim_id and c["order_ref"] == order_ref
-            and c["status"] not in {"reopened", "received"}
-            and (c["extraction"] or {}).get("claim_type") == extraction.claim_type.value
-            and (c["extraction"] or {}).get("invoice_ref") == extraction.invoice_ref]
+    our_types = {i.claim_type.value for i in extraction.issues}
+    same = []
+    for c in erp.claims():
+        if c["claim_id"] == claim_id or c["order_ref"] != order_ref:
+            continue
+        if c["status"] in {"reopened", "received"}:
+            continue
+        if (c["extraction"] or {}).get("invoice_ref") != extraction.invoice_ref:
+            continue
+        their_types = _types_from_extraction_dict(c.get("extraction") or {})
+        if our_types & their_types:
+            same.append(c)
     checks["earlier_claims_same_order_and_type"] = [c["claim_id"] for c in same]
     for c in same:
         reasons.append(f"claim {c['claim_id']} on the same order, invoice and type is already {c['status']}")
     return checks, reasons
+
+
+def _issue_subject_ref(claim_id: str, issue: ClaimIssue, *, issue_count: int) -> str:
+    """Single-issue claims keep claim_id as subject_ref (learning / desk lookups)."""
+    if issue_count <= 1:
+        return claim_id
+    return f"{claim_id}:{issue.claim_type.value}"
+
+
+def _decide_one_issue(
+    erp: Erp,
+    claim_id: str,
+    full_extraction: ClaimExtraction,
+    issue: ClaimIssue,
+    facts_dict: dict[str, Any],
+    check_reasons: list[str],
+    *,
+    verdict_caller: Callable[[list[dict[str, str]]], dict[str, Any]] | None,
+    issue_count: int,
+) -> dict[str, Any]:
+    """Run rule match / Grok verdict for one issue. Returns a result pack."""
+    scoped = scoped_extraction(full_extraction, issue)
+    scoped_dict = scoped.to_dict()
+    issue_facts = dict(facts_dict)
+    # Prefer issue-scoped claim fields for Playbook / known amounts; keep shared docs.
+    issue_facts["claim"] = {**(facts_dict.get("claim") or {}), **scoped_dict, "issues": [issue.to_dict()]}
+    signature = learning.dispute_signature(scoped_dict, issue_facts)
+    rule = learning.match_rule(erp, signature)
+    precedents: list[dict[str, Any]] = []
+    rule_skipped: dict[str, Any] | None = None
+    if rule:
+        applies, failures = learning.reason_still_applies(rule, issue_facts)
+        if applies:
+            verdict = _verdict_from_rule(rule, scoped, issue_facts)
+            reasons = list(check_reasons)
+            erp.log(
+                "code",
+                "dispute.rule_applied",
+                claim_id,
+                source_doc=rule["rule_id"],
+                detail={
+                    "issue_type": issue.claim_type.value,
+                    "text": rule["text"],
+                    "reason": rule.get("approved_reason"),
+                    "when": (rule.get("action") or {}).get("when"),
+                },
+            )
+        else:
+            rule_skipped = {
+                "rule_id": rule["rule_id"],
+                "reason": rule.get("approved_reason"),
+                "failures": failures,
+            }
+            issue_facts["rule_skipped"] = rule_skipped
+            erp.log(
+                "code",
+                "dispute.rule_skipped",
+                claim_id,
+                source_doc=rule["rule_id"],
+                detail={**rule_skipped, "issue_type": issue.claim_type.value},
+            )
+            rule = None
+    if not rule:
+        precedents = learning.similar(erp, signature)
+        issue_facts["precedents"] = precedents
+        verdict = decide_verdict(scoped, issue_facts, grok_caller=verdict_caller)
+        reasons = verdict.sign_off_reasons + [r for r in check_reasons if r not in verdict.sign_off_reasons]
+        if rule_skipped:
+            for fail in rule_skipped["failures"]:
+                if fail not in reasons:
+                    reasons.append(fail)
+
+    verdict_dict = verdict.to_dict()
+    verdict_dict["claim"] = scoped_dict
+    verdict_dict["sign_off_reasons"] = reasons
+    verdict_dict["needs_sign_off"] = bool(reasons)
+    erp.log(
+        "grok",
+        "dispute.verdict",
+        claim_id,
+        detail={
+            "issue_type": issue.claim_type.value,
+            "decision": verdict.decision.value,
+            "amount": verdict.amount,
+            "sign_off_reasons": reasons,
+        },
+    )
+    subject_ref = _issue_subject_ref(claim_id, issue, issue_count=issue_count)
+    learning.log_case(
+        erp,
+        task="dispute.verdict",
+        subject_ref=subject_ref,
+        signature=signature,
+        proposal={"decision": verdict.decision.value, "amount": verdict.amount,
+                  "issue_type": issue.claim_type.value},
+        confidence=verdict.confidence,
+        asked_person=bool(reasons),
+        why_person=reasons,
+        decided_by=None if reasons else ("rule" if rule else "grok"),
+        decision=None if reasons else verdict.decision.value,
+        rule_id=rule["rule_id"] if rule else None,
+        precedents=[p["case_id"] for p in precedents],
+    )
+    return {
+        "issue": issue.to_dict(),
+        "verdict": verdict_dict,
+        "reasons": reasons,
+        "signature": signature,
+        "rule": rule,
+        "settled": not bool(reasons),
+        "approved_by": (rule.get("approved_by") if rule else None) or None,
+        "subject_ref": subject_ref,
+    }
+
+
+def combine_issue_verdicts(
+    extraction: ClaimExtraction,
+    issue_results: list[dict[str, Any]],
+    checks: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge per-issue verdicts into one parent verdict for outcome / storage."""
+    points: list[dict[str, Any]] = []
+    credit_amounts: list[float] = []
+    decisions: list[str] = []
+    summaries: list[str] = []
+    confidences: list[float] = []
+    amount_notes: list[str] = []
+    known_amounts: list[float] = []
+    pending_reasons: list[str] = []
+    multi = len(issue_results) > 1
+
+    for result in issue_results:
+        issue = result["issue"]
+        issue_type = str(issue.get("claim_type") or "other")
+        verd = result["verdict"]
+        decisions.append(str(verd.get("decision") or "reject"))
+        confidences.append(float(verd.get("confidence") or 0.0))
+        summary = (verd.get("summary") or "").strip()
+        if summary:
+            summaries.append(f"[{issue_type}] {summary}" if multi else summary)
+        for point in verd.get("points") or []:
+            if not isinstance(point, dict):
+                continue
+            text = str(point.get("text") or "").strip()
+            if multi and text and not text.lower().startswith(f"[{issue_type}]"):
+                text = f"[{issue_type}] {text}"
+            points.append({**point, "text": text})
+        decision = verd.get("decision")
+        amount = verd.get("amount")
+        if decision in {"accept", "partial"} and amount is not None:
+            credit_amounts.append(float(amount))
+        amount_notes.extend(str(n) for n in (verd.get("amount_notes") or []))
+        for known in verd.get("known_amounts") or []:
+            try:
+                known_amounts.append(round(abs(float(known)), 2))
+            except (TypeError, ValueError):
+                continue
+        if not result.get("settled"):
+            for reason in result.get("reasons") or []:
+                tagged = f"[{issue_type}] {reason}" if multi else reason
+                if tagged not in pending_reasons:
+                    pending_reasons.append(tagged)
+
+    if decisions and all(d == "accept" for d in decisions):
+        parent_decision = "accept"
+    elif decisions and all(d == "reject" for d in decisions):
+        parent_decision = "reject"
+    else:
+        parent_decision = "partial"
+
+    total: float | None
+    if parent_decision == "reject":
+        total = None
+    elif credit_amounts:
+        total = round(sum(credit_amounts), 2)
+    else:
+        total = None
+
+    if total is not None:
+        known_amounts.append(round(abs(total), 2))
+    for part in credit_amounts:
+        known_amounts.append(round(abs(part), 2))
+
+    return {
+        "decision": parent_decision,
+        "amount": total,
+        "confidence": min(confidences) if confidences else 0.0,
+        "needs_sign_off": bool(pending_reasons),
+        "summary": " ".join(summaries) if summaries else "Multi-issue claim.",
+        "points": points,
+        "playbook_path": next(
+            (r["verdict"].get("playbook_path") for r in issue_results if r["verdict"].get("playbook_path")),
+            str(DEFAULT_PLAYBOOK),
+        ),
+        "contract_path": next(
+            (r["verdict"].get("contract_path") for r in issue_results if r["verdict"].get("contract_path")),
+            None,
+        ),
+        "amount_notes": amount_notes,
+        "known_amounts": sorted(set(known_amounts)),
+        "sign_off_reasons": pending_reasons,
+        "claim": extraction.to_dict(),
+        "checks": checks,
+        "issue_verdicts": [
+            {
+                "issue": r["issue"],
+                "decision": r["verdict"].get("decision"),
+                "amount": r["verdict"].get("amount"),
+                "needs_sign_off": not bool(r.get("settled")),
+                "sign_off_reasons": r.get("reasons") or [],
+                "summary": r["verdict"].get("summary"),
+                "settled": bool(r.get("settled")),
+            }
+            for r in issue_results
+        ],
+    }
 
 
 def handle_claim(
@@ -108,7 +357,11 @@ def handle_claim(
     extraction: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """`extraction`: a claim already structured by code from a document (a REMADV deduction).
-    It is used as given, claim type included, instead of reading the text."""
+    It is used as given, claim type included, instead of reading the text.
+
+    Multi-issue emails: facts are pulled once; each issue gets its own verdict; clear
+    issues auto-settle; ambiguous leftovers share one desk sign-off; one outcome at the end.
+    """
     doc_id = erp.add_document("claim email", None, email_text, path=source_name)
     claim_id = erp.next_id("claim", "CLM-")
     erp.save_claim(claim_id=claim_id, source_doc=doc_id, status="received")
@@ -116,12 +369,15 @@ def handle_claim(
 
     structured = extraction
     if structured is not None:
-        extraction = replace(parse_extraction(structured), claim_type=ClaimType(structured["claim_type"]))
-        erp.log("code", "dispute.claim_from_document", claim_id, source_doc=doc_id, detail=extraction.to_dict())
+        extraction_obj = parse_extraction(structured)
+        erp.log("code", "dispute.claim_from_document", claim_id, source_doc=doc_id,
+                detail=extraction_obj.to_dict())
     else:
-        extraction = read_claim(email_text, grok_caller=read_caller)
-        erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id, detail=extraction.to_dict())
-    facts = pull_facts(extraction, store=_store(erp, include_fixtures))
+        extraction_obj = read_claim(email_text, grok_caller=read_caller)
+        erp.log("grok", "dispute.claim_read", claim_id, source_doc=doc_id,
+                detail=extraction_obj.to_dict())
+
+    facts = pull_facts(extraction_obj, store=_store(erp, include_fixtures))
     erp.log("code", "dispute.facts_pulled", claim_id, detail={
         "misses": [m.to_dict() for m in facts.misses],
         "threeway": facts.threeway.summary if facts.threeway else None,
@@ -129,70 +385,79 @@ def handle_claim(
                       if facts.reconcile else None),
     })
     facts_dict = facts.to_dict()
-    checks, check_reasons = claim_checks(erp, claim_id, extraction, facts_dict, received_on or date.today())
+    # Re-parse so threeway/reconcile pricing upgrades on issues are visible to the loop.
+    extraction_obj = parse_extraction(facts_dict.get("claim") or extraction_obj.to_dict())
+    checks, check_reasons = claim_checks(
+        erp, claim_id, extraction_obj, facts_dict, received_on or date.today()
+    )
     facts_dict["checks"] = checks
-    signature = learning.dispute_signature(extraction.to_dict(), facts_dict)
-    rule = learning.match_rule(erp, signature)
-    precedents: list[dict[str, Any]] = []
-    rule_skipped: dict[str, Any] | None = None
-    if rule:
-        applies, failures = learning.reason_still_applies(rule, facts_dict)
-        if applies:
-            verdict = _verdict_from_rule(rule, extraction, facts_dict)
-            # Fingerprint matches and the person's why still holds on these facts.
-            # Only operational checks remain (late complaint window, duplicate claim).
-            reasons = list(check_reasons)
-            erp.log("code", "dispute.rule_applied", claim_id, source_doc=rule["rule_id"],
-                    detail={"text": rule["text"], "reason": rule.get("approved_reason"),
-                            "when": (rule.get("action") or {}).get("when")})
-        else:
-            # Same kind of case, but Sara's reason does not fit these documents — ask again.
-            rule_skipped = {"rule_id": rule["rule_id"], "reason": rule.get("approved_reason"),
-                            "failures": failures}
-            facts_dict["rule_skipped"] = rule_skipped
-            erp.log("code", "dispute.rule_skipped", claim_id, source_doc=rule["rule_id"],
-                    detail=rule_skipped)
-            rule = None
-    if not rule:
-        precedents = learning.similar(erp, signature)
-        facts_dict["precedents"] = precedents
-        verdict = decide_verdict(extraction, facts_dict, grok_caller=verdict_caller)
-        reasons = verdict.sign_off_reasons + [r for r in check_reasons if r not in verdict.sign_off_reasons]
-        if rule_skipped:
-            for fail in rule_skipped["failures"]:
-                if fail not in reasons:
-                    reasons.append(fail)
-    verdict_dict = verdict.to_dict() | {"claim": extraction.to_dict(), "checks": checks,
-                                        "sign_off_reasons": reasons, "needs_sign_off": bool(reasons)}
-    erp.log("grok", "dispute.verdict", claim_id, detail={"decision": verdict.decision.value, "amount": verdict.amount,
-                                                          "sign_off_reasons": reasons})
-    erp.set_claim(claim_id, order_ref=(facts.order or {}).get("order_ref") or extraction.order_ref,
-                  invoice_ref=(facts.invoice or {}).get("invoice_ref") or extraction.invoice_ref,
-                  extraction=extraction.to_dict(), verdict=verdict_dict)
 
-    learning.log_case(erp, task="dispute.verdict", subject_ref=claim_id, signature=signature,
-                      proposal={"decision": verdict.decision.value, "amount": verdict.amount},
-                      confidence=verdict.confidence, asked_person=bool(reasons), why_person=reasons,
-                      decided_by=None if reasons else ("rule" if rule else "grok"),
-                      decision=None if reasons else verdict.decision.value,
-                      rule_id=rule["rule_id"] if rule else None, precedents=[p["case_id"] for p in precedents])
-    if reasons:
+    issue_count = len(extraction_obj.issues)
+    issue_results = [
+        _decide_one_issue(
+            erp,
+            claim_id,
+            extraction_obj,
+            issue,
+            facts_dict,
+            check_reasons,
+            verdict_caller=verdict_caller,
+            issue_count=issue_count,
+        )
+        for issue in extraction_obj.issues
+    ]
+
+    combined = combine_issue_verdicts(extraction_obj, issue_results, checks)
+    erp.set_claim(
+        claim_id,
+        order_ref=(facts.order or {}).get("order_ref") or extraction_obj.order_ref,
+        invoice_ref=(facts.invoice or {}).get("invoice_ref") or extraction_obj.invoice_ref,
+        extraction=extraction_obj.to_dict(),
+        verdict=combined,
+    )
+
+    pending = [r for r in issue_results if not r["settled"]]
+    n_issues = len(issue_results)
+    if pending:
+        pending_types = ", ".join(r["issue"]["claim_type"] for r in pending)
+        title = (
+            f"Claim {claim_id} on {extraction_obj.order_ref or 'an unknown order'}: "
+            f"{n_issues} issue(s), person needed for {pending_types}"
+        )
         case_id = signoff.request(
-            erp, row="dispute", kind="verdict", subject_ref=claim_id,
-            title=f"Claim {claim_id} on {extraction.order_ref or 'an unknown order'}: Grok proposes {verdict.decision.value}",
-            proposal={"verdict": verdict_dict, "facts": facts_dict, "out_dir": str(out_dir)},
-            reasons=reasons,
+            erp,
+            row="dispute",
+            kind="verdict",
+            subject_ref=claim_id,
+            title=title,
+            proposal={
+                "verdict": combined,
+                "facts": facts_dict,
+                "out_dir": str(out_dir),
+                "pending_issues": pending,
+                "auto_issues": [r for r in issue_results if r["settled"]],
+            },
+            reasons=combined["sign_off_reasons"],
         )
         erp.set_claim(claim_id, status="awaiting_sign_off")
-        return {"status": "awaiting_person", "claim_id": claim_id, "case_id": case_id, "verdict": verdict_dict}
+        return {
+            "status": "awaiting_person",
+            "claim_id": claim_id,
+            "case_id": case_id,
+            "verdict": combined,
+        }
 
-    # A learned rule was already signed by a person: pass them as approved_by so outcome
-    # does not re-block on the same ambiguity the rule settled.
-    approved = (rule.get("approved_by") if rule else None) or None
-    outcome = emit_outcome(verdict_dict, facts=facts_dict, out_dir=out_dir, issue_date=issue_date,
-                           approved_by=approved)
+    approved = next((r.get("approved_by") for r in issue_results if r.get("approved_by")), None)
+    outcome = emit_outcome(
+        combined, facts=facts_dict, out_dir=out_dir, issue_date=issue_date, approved_by=approved
+    )
     _save_outcome(erp, claim_id, outcome)
-    return {"status": "closed", "claim_id": claim_id, "verdict": verdict_dict, "outcome": outcome.to_dict()}
+    return {
+        "status": "closed",
+        "claim_id": claim_id,
+        "verdict": combined,
+        "outcome": outcome.to_dict(),
+    }
 
 
 def _verdict_from_rule(rule: dict[str, Any], extraction: Any, facts: dict[str, Any]):
@@ -225,27 +490,98 @@ def approve_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
         raise ValueError(f"{case_id} is not a dispute sign-off")
     signoff.decide(erp, case_id, approve=True, by=by, reason=reason)
     proposal = case["proposal"]
-    verdict = proposal["verdict"]
     facts = proposal.get("facts") or {}
-    outcome = emit_outcome(verdict, facts=facts, out_dir=proposal["out_dir"],
-                           issue_date=issue_date, approved_by=by)
-    _save_outcome(erp, case["subject_ref"], outcome)
-    claim = verdict.get("claim") or {}
-    learning.record_person_decision(erp, case["subject_ref"], decided_by=by, decision=verdict["decision"],
-                                    reason=reason, overturned=False)
-    agent_case = learning.case_for(erp, case["subject_ref"])
-    signature = (agent_case or {}).get("signature") or learning.dispute_signature(claim, facts)
-    rule_id = learning.activate_from_person(
-        erp, signature, verdict["decision"], by=by, reason=reason,
-        support_case_id=(agent_case or {}).get("case_id"),
-        facts=facts,
+    pending = list(proposal.get("pending_issues") or [])
+    auto = list(proposal.get("auto_issues") or [])
+
+    if pending:
+        # Person approved Grok's proposed decisions for every leftover issue.
+        for item in pending:
+            item["settled"] = True
+            item["approved_by"] = by
+            verd = item.get("verdict") or {}
+            verd["needs_sign_off"] = False
+            verd["sign_off_reasons"] = []
+            item["reasons"] = []
+            item["verdict"] = verd
+        issue_results = auto + pending
+        claim_payload = (proposal.get("verdict") or {}).get("claim") or {}
+        extraction_obj = parse_extraction(claim_payload)
+        checks = (proposal.get("verdict") or {}).get("checks") or facts.get("checks") or {}
+        combined = combine_issue_verdicts(extraction_obj, issue_results, checks)
+    else:
+        # Legacy single-verdict sign-off (no pending_issues pack).
+        combined = proposal["verdict"]
+        pending = [{
+            "issue": {
+                "claim_type": (combined.get("claim") or {}).get("claim_type") or "other",
+            },
+            "verdict": combined,
+            "signature": None,
+            "settled": True,
+        }]
+
+    outcome = emit_outcome(
+        combined, facts=facts, out_dir=proposal["out_dir"], issue_date=issue_date, approved_by=by
     )
-    signoff.record_past_case(playbook_path, when=(issue_date or date.today()).isoformat(),
-                             order_ref=claim.get("order_ref") or "—", case_type=claim.get("claim_type") or "other",
-                             decision=f"{verdict['decision']} (approved)", amount=verdict.get("amount"),
-                             notes=f"{by}: {reason}")
-    return {"status": "closed", "claim_id": case["subject_ref"], "outcome": outcome.to_dict(),
-            "learned_rule_id": rule_id}
+    _save_outcome(erp, case["subject_ref"], outcome)
+    erp.set_claim(case["subject_ref"], verdict=combined)
+
+    claim = combined.get("claim") or {}
+    parent_decision = combined.get("decision")
+    learned_ids: list[str] = []
+    for item in pending:
+        issue = item.get("issue") or {}
+        verd = item.get("verdict") or {}
+        signature = item.get("signature")
+        if not signature:
+            scoped_claim = {
+                **claim,
+                "claim_type": issue.get("claim_type") or claim.get("claim_type") or "other",
+                "product": issue.get("product", claim.get("product")),
+                "quantity": issue.get("quantity", claim.get("quantity")),
+                "amount": issue.get("amount", claim.get("amount")),
+            }
+            signature = learning.dispute_signature(scoped_claim, facts)
+        subject = item.get("subject_ref") or case["subject_ref"]
+        learning.record_person_decision(
+            erp,
+            subject,
+            decided_by=by,
+            decision=verd.get("decision") or parent_decision,
+            reason=reason,
+            overturned=False,
+        )
+        agent_case = learning.case_for(erp, subject) or learning.case_for(erp, case["subject_ref"])
+        rule_id = learning.activate_from_person(
+            erp,
+            signature,
+            verd.get("decision") or parent_decision,
+            by=by,
+            reason=reason,
+            support_case_id=(agent_case or {}).get("case_id"),
+            facts=facts,
+        )
+        if rule_id:
+            learned_ids.append(rule_id)
+        signoff.record_past_case(
+            playbook_path,
+            when=(issue_date or date.today()).isoformat(),
+            order_ref=claim.get("order_ref") or "—",
+            case_type=issue.get("claim_type") or claim.get("claim_type") or "other",
+            decision=f"{verd.get('decision') or parent_decision} (approved)",
+            amount=verd.get("amount", combined.get("amount")),
+            notes=f"{by}: {reason}",
+        )
+
+    return {
+        "status": "closed",
+        "claim_id": case["subject_ref"],
+        "outcome": outcome.to_dict(),
+        "learned_rule_id": learned_ids[0] if learned_ids else None,
+        "learned_rule_ids": learned_ids,
+        "verdict": combined,
+    }
 
 
 def reject_verdict(erp: Erp, case_id: str, *, by: str, reason: str,
@@ -355,6 +691,7 @@ def main(argv: list[str] | None = None) -> int:
         "amount": verd.get("amount"),
         "outcome": (result.get("outcome") or {}).get("kind"),
         "sign_off_reasons": verd.get("sign_off_reasons"),
+        "issue_verdicts": verd.get("issue_verdicts"),
     }
     if result.get("status") == "awaiting_person":
         case = erp.signoff(result["case_id"]) or {}

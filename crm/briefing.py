@@ -49,6 +49,32 @@ def _code_brief(erp: Erp, case: dict[str, Any]) -> dict[str, Any]:
         claim = v.get("claim") or {}
         sources = ", ".join(pt["source"]["ref"] for pt in v.get("points") or [])
         amount = f" €{v['amount']:.2f}" if v.get("amount") is not None else ""
+        issue_rows = v.get("issue_verdicts") or []
+        pending = [iv for iv in issue_rows if not iv.get("settled")]
+        auto = [iv for iv in issue_rows if iv.get("settled")]
+        if len(issue_rows) > 1:
+            bits = []
+            for iv in issue_rows:
+                kind = (iv.get("issue") or {}).get("claim_type") or "?"
+                state = "auto" if iv.get("settled") else "needs you"
+                bits.append(f"{kind} ({state}: {iv.get('decision')})")
+            happened = (
+                f"Multi-issue claim on {claim.get('order_ref') or 'an unknown order'}: "
+                + "; ".join(bits) + "."
+            )
+            pending_types = ", ".join((iv.get("issue") or {}).get("claim_type") or "?" for iv in pending)
+            proposal = (
+                f"Combined {v.get('decision', '?')}{amount} "
+                f"({len(auto)} issue(s) clear, {len(pending)} waiting"
+                + (f": {pending_types}" if pending_types else "")
+                + f"). Sources: {sources or 'none'}."
+            )
+            question = (
+                (case["reasons"] or [f"Confirm the pending issue(s) ({pending_types})?"])[0]
+            )
+            if question and not question.endswith("?"):
+                question = question.rstrip(".") + ": agree with Grok?"
+            return {"what_happened": happened, "proposal": proposal, "question": question, "links": [ref]}
         return {"what_happened": f"{claim.get('claim_type', 'A')} claim on {claim.get('order_ref') or 'an unknown order'}"
                                  f"{' for €' + format(claim['amount'], '.2f') if claim.get('amount') else ''}.",
                 "proposal": f"{v.get('decision', '?').capitalize()}{amount}. Sources: {sources or 'none'}.",

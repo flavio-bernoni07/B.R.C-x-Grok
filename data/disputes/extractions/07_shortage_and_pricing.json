@@ -1,0 +1,22 @@
+{
+  "order_ref": "RS-2026-00481",
+  "invoice_ref": "FT-2026/1187",
+  "confidence": 0.93,
+  "raw_notes": "Two distinct issues: shortage 12 CTN and promo price on received qty",
+  "issues": [
+    {
+      "claim_type": "shortage",
+      "product": "Riso Scotti Arborio 1kg",
+      "quantity": 12,
+      "amount": 186.0,
+      "notes": "12 cartons short vs invoice"
+    },
+    {
+      "claim_type": "pricing",
+      "product": "Riso Scotti Arborio 1kg",
+      "quantity": 28,
+      "amount": 16.8,
+      "notes": "promo 14.90 vs invoice 15.50 on received 28"
+    }
+  ]
+}

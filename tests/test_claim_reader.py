@@ -18,6 +18,7 @@ from dispute.claim_reader import (
     parse_extraction,
     read_claim,
     refine_claim_type,
+    scoped_extraction,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "data" / "disputes" / "claims"
@@ -44,6 +45,75 @@ def test_parse_extraction_maps_fields_and_nulls() -> None:
     assert result.amount == 186.0
     assert result.claim_type is ClaimType.SHORTAGE
     assert result.confidence == 0.91
+    assert len(result.issues) == 1
+    assert result.issues[0].claim_type is ClaimType.SHORTAGE
+    assert result.issues[0].amount == 186.0
+    assert result.to_dict()["issues"][0]["claim_type"] == "shortage"
+
+
+def test_parse_extraction_multi_issues_round_trip() -> None:
+    result = parse_extraction(
+        {
+            "order_ref": "RS-2026-00481",
+            "invoice_ref": "FT-2026/1187",
+            "confidence": 0.9,
+            "raw_notes": "shortage and promo price on same order",
+            "issues": [
+                {
+                    "claim_type": "shortage",
+                    "product": "Arborio 1kg",
+                    "quantity": 12,
+                    "amount": 186.0,
+                    "notes": "12 cartons short",
+                },
+                {
+                    "claim_type": "pricing",
+                    "product": "Arborio 1kg",
+                    "quantity": 28,
+                    "amount": 10.08,
+                    "notes": "promo 1.49 vs list on remaining",
+                },
+            ],
+        }
+    )
+    assert len(result.issues) == 2
+    assert result.claim_type is ClaimType.SHORTAGE
+    assert result.amount == 186.0
+    assert result.issues[1].claim_type is ClaimType.PRICING
+    assert result.issues[1].amount == 10.08
+    scoped = scoped_extraction(result, result.issues[1])
+    assert scoped.claim_type is ClaimType.PRICING
+    assert scoped.amount == 10.08
+    assert len(scoped.issues) == 1
+
+
+def test_parse_extraction_per_issue_pricing_refine() -> None:
+    result = parse_extraction(
+        {
+            "order_ref": "RS2026/771",
+            "invoice_ref": "334",
+            "confidence": 0.6,
+            "raw_notes": "two lines",
+            "issues": [
+                {
+                    "claim_type": "shortage",
+                    "product": "Arborio",
+                    "quantity": 5,
+                    "amount": 77.5,
+                    "notes": "",
+                },
+                {
+                    "claim_type": "other",
+                    "product": "Arborio",
+                    "quantity": 100,
+                    "amount": 70.0,
+                    "notes": "Remittance PRI/UNK; price hold 70",
+                },
+            ],
+        }
+    )
+    assert result.issues[0].claim_type is ClaimType.SHORTAGE
+    assert result.issues[1].claim_type is ClaimType.PRICING
 
 
 def test_parse_extraction_rejects_invented_blank_refs() -> None:
@@ -98,6 +168,7 @@ def test_fixtures_exist_and_load() -> None:
         "03_damage_it.txt",
         "04_short_payment_incomplete.txt",
         "05_ambiguous_otif_or_shortage.txt",
+        "07_shortage_and_pricing.txt",
     ]
     assert FIXTURES.is_dir()
     for name in expected:

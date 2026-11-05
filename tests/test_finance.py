@@ -116,4 +116,5 @@ def test_kpis_after_the_demo(tmp_path: Path) -> None:
     assert k["no_person"]["deductions"] == {"done": 1, "of": 2}
     assert k["fill_rate"] == 0.9
     assert (k["invoiced"], k["collected"], k["open_receivables"]) == (24710.40, 23882.40, 300.0)
-    assert k["deductions_open"] == 300.0 and k["credit_notes"] == 528.0 and k["waiting_for_a_person"] == 0
+    # Golden shortage €528 + multi-issue combined credit €202.80 (shortage+pricing pack).
+    assert k["deductions_open"] == 300.0 and k["credit_notes"] == 730.8 and k["waiting_for_a_person"] == 0
