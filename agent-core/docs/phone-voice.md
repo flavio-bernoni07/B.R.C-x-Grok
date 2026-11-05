@@ -1,6 +1,6 @@
 # Phone disputes via Grok Voice
 
-Inbound calls → xAI Speech-to-Speech → our tools → same Mini ERP dispute path as `/support` chat → **Actions → Disputes**.
+Inbound calls → xAI Speech-to-Speech → our tools → same Mini ERP dispute path as `/support` chat → **Disputes**.
 
 ## Env (in `agent-core/.env.local`)
 
@@ -18,7 +18,7 @@ BRC_PHONE_ALLOWLIST=+39...          # optional; your mobile for demos
 1. **Key** in `.env.local` (`XAI_API_KEY`) — you already did this.
 2. **Step C — tunnel** (public HTTPS) — needed before any webhook.
 3. **Step B — number** — pick Path 1 (easiest for demo) or Path 2 (full SIP).
-4. Or skip the phone and use **simulate** (still creates a real `DSP-…` in Actions).
+4. Or skip the phone and use **simulate** (still creates a real `DSP-…` under Disputes).
 
 ---
 
@@ -65,7 +65,7 @@ xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with 
      - `language` (`en` or `it`)
 5. Find **Phone number** / telephony on the agent (often near Publish / Live). Claim the **free US number**. Note the number.
 6. **Publish / Live** the agent (drafts stay silent).
-7. Call that number → expect a spoken `DSP-…` → open **Actions → Disputes**.
+7. Call that number → expect a spoken `DSP-…` → open **Disputes**.
 
 You do **not** need `XAI_VOICE_WEBHOOK_SECRET` for Path 1.
 
@@ -91,7 +91,7 @@ curl -s -X POST http://localhost:3000/api/telephony/simulate \
   -d '{"order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli","language":"en"}'
 ```
 
-Then open **Actions → Disputes** — you should see a Phone-channel case.
+Then open **Disputes** — you should see a Phone-channel case.
 
 ## Smoke-check Voice key
 

@@ -254,7 +254,7 @@ export function SupportChat() {
                 for the credit desk — never inventing a refund from this chat.
               </p>
             </div>
-            <a href="/actions?tab=disputes" className="rounded-full bg-hh-flex/15 px-3 py-1.5 text-[12px] text-hh-flex underline-offset-2 hover:underline">
+            <a href="/disputes" className="rounded-full bg-hh-flex/15 px-3 py-1.5 text-[12px] text-hh-flex underline-offset-2 hover:underline">
               Employee Actions →
             </a>
           </div>

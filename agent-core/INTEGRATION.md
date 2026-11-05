@@ -1,16 +1,17 @@
 # Integration notes (customer dispute chat + voice)
 
-There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING.md`, `DECISIONS.md` and `dispute-dec.md`. This file documents the **customer dispute chat** and its **voice** MVP.
+There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING.md`, `DECISIONS.md` and `dispute-dec.md`. This file documents the **customer dispute chat** and its **voice** MVP against the redesigned app (Home, Orders, Shipping, Stock, Disputes, Sign-off).
 
 ## What it reuses
 
 | Existing piece | How the chat uses it |
 |---|---|
-| Mini ERP `claims` + `signoffs` | Disputes are `claims` with id `DSP-…`; Actions cases are `signoffs` with `row=dispute`, `kind=customer_dispute` |
+| Mini ERP `claims` + `signoffs` | Disputes are `claims` with id `DSP-…`; employee cases are `signoffs` with `row=dispute`, `kind=customer_dispute` |
 | `pullFacts` / threeway | Read-only evidence for the employee workspace |
 | `chatJson` / Grok client | Intake classification when `XAI_API_KEY` is set; otherwise deterministic offline intake |
 | Retailers master data | Simulated session binds to a retailer GLN (`BUYER001` = Esselunga) |
-| Actions page | **Disputes** tab + dispute workspace |
+| Disputes page (`/disputes`) | Phone/chat claims appear with a channel badge; drawer uses `DisputeWorkspace` |
+| Sign-off (`/signoff`) | Same `customer_dispute` case for a person to decide (no auto money) |
 | `@ai-sdk/xai` | Transcription, speech (TTS), realtime ephemeral client secrets |
 
 ## Surfaces
@@ -18,7 +19,7 @@ There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING
 - Customer UI: `/support` (microphone + text fallback)
 - APIs: `/api/support/session`, `/chat`, `/disputes`, `/voice/token`, `/voice/transcribe`, `/voice/speak`
 - Phone: `/api/telephony/incoming` (xAI SIP webhook), `/api/telephony/simulate` (offline rehearsal)
-- Employee: Actions → Disputes (`/api/actions/disputes`); workspace shows `channel` phone vs chat
+- Employee list: `/disputes` (and `/api/disputes`); workspace API `/api/actions/disputes` still feeds the drawer
 - Notifications table + conversation transcripts as `documents` kind `customer conversation`
 
 **Removed:** `/portal` page and `/api/portal/*`, and `portal_conversations` / `portal_messages` tables.

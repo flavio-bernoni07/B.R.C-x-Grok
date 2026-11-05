@@ -1,6 +1,6 @@
 "use client";
 
-/** Employee workspace for a customer-portal dispute (Actions → Disputes). */
+/** Employee workspace for a customer phone/chat dispute (Disputes + Sign-off). */
 import { useEffect, useState } from "react";
 import { Panel, Pill, day } from "@/components/kit";
 

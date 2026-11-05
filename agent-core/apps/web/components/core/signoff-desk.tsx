@@ -16,6 +16,7 @@ import { announceChange, Page } from "@/components/shell/app-shell";
 import { SectionChat } from "@/components/shell/section-chat";
 import { cn } from "@/lib/utils";
 import { CaseDetail } from "./actions-view";
+import { DisputeWorkspace } from "./dispute-workspace";
 
 type Filter = "sendoff" | "errors" | "decided" | "all";
 type J = Record<string, unknown>;
@@ -33,6 +34,10 @@ function isErrorCase(c: Signoff): boolean {
 
 /** What kind of decision this is, in two words (open panel + On it — same as before). */
 function kindLabel(c: Signoff): string {
+  if (c.kind === "customer_dispute") {
+    const channel = obj(c.proposal)?.channel;
+    return channel === "phone" ? "Phone claim" : "Chat claim";
+  }
   if (c.row === "dispute") return "Claim";
   if (c.row === "purchasing") return "Paddy purchase";
   if (c.kind === "dispatch_plan") return "Truck plan";
@@ -91,6 +96,17 @@ const firstSentence = (s: string) => s.split(/(?<=[.!?])\s+/)[0];
  */
 function whatHappened(c: Signoff): { what: string | null; why: string | null } {
   const p = obj(c.proposal) ?? {};
+  if (c.kind === "customer_dispute") {
+    const intake = obj(p.intake) ?? {};
+    const channel = p.channel === "phone" ? "phone" : "chat";
+    const type = String(intake.category ?? "a shortage").replace(/_/g, " ");
+    const qty = typeof intake.claimed_quantity === "number" ? ` · claimed qty ${intake.claimed_quantity}` : "";
+    const msg = typeof intake.customer_description === "string" ? intake.customer_description.trim() : "";
+    return {
+      what: `Retailer reported ${type} via ${channel}${qty}${msg ? `: ${firstSentence(msg)}` : "."}`,
+      why: (c.reasons ?? [])[0] ?? "Customer-reported — not verified evidence",
+    };
+  }
   if (c.row === "dispute") {
     const v = obj(p.verdict) ?? {};
     const claim = obj(v.claim) ?? obj(obj(p.facts)?.claim) ?? {};
@@ -268,12 +284,13 @@ function CasePanel({ c, onDecided }: { readonly c: Signoff; readonly onDecided: 
   const pending = c.status === "pending";
   const check = pending && needsHumanCheck(c);
   const story = whatHappened(c);
+  const portal = c.kind === "customer_dispute";
   return (
     <div className="space-y-5 p-8 pr-16">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Pill tone="quiet">{kindLabel(c)}</Pill>
+            <Pill tone={portal && obj(c.proposal)?.channel === "phone" ? "live" : "quiet"}>{kindLabel(c)}</Pill>
             <Pill tone={tone}>{label}</Pill>
           </div>
           <h2 className="mt-3 font-bold text-[24px] leading-tight tracking-[-0.03em]">{caseTitle(c)}</h2>
@@ -285,42 +302,48 @@ function CasePanel({ c, onDecided }: { readonly c: Signoff; readonly onDecided: 
       </div>
       {story.what ? <p className="text-[15px] leading-snug">{story.what}</p> : null}
 
-      <div className="flex items-start gap-3 rounded-[12px] bg-hh-honeydew px-4 py-3">
-        <GrokMark size={28} title="Grok's suggestion" />
-        <span className="min-w-0 flex-1 text-[15px] leading-snug">
-          {check ? (
-            <>
-              <b className="text-st-pending-ink">Human check</b>
-              <span className="text-ink-78"> · Grok leans to {caseNextStep(c).toLowerCase()}</span>
-            </>
-          ) : (
-            <>
-              <span className="text-ink-68">Grok suggests </span>
-              <b>{caseNextStep(c)}</b>
-            </>
-          )}
-          {story.why ? <span className="mt-1 block text-[14px] text-ink-68">{story.why}</span> : null}
-        </span>
-        {conf != null ? (
-          <span className={cn("mt-0.5 shrink-0 text-[13px] tabular-nums", conf < 0.55 ? "font-bold text-st-pending-ink" : "text-ink-68")}>{Math.round(conf * 100)}%</span>
-        ) : null}
-      </div>
+      {portal ? (
+        <DisputeWorkspace caseId={c.caseId} onDecided={onDecided} />
+      ) : (
+        <>
+          <div className="flex items-start gap-3 rounded-[12px] bg-hh-honeydew px-4 py-3">
+            <GrokMark size={28} title="Grok's suggestion" />
+            <span className="min-w-0 flex-1 text-[15px] leading-snug">
+              {check ? (
+                <>
+                  <b className="text-st-pending-ink">Human check</b>
+                  <span className="text-ink-78"> · Grok leans to {caseNextStep(c).toLowerCase()}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-ink-68">Grok suggests </span>
+                  <b>{caseNextStep(c)}</b>
+                </>
+              )}
+              {story.why ? <span className="mt-1 block text-[14px] text-ink-68">{story.why}</span> : null}
+            </span>
+            {conf != null ? (
+              <span className={cn("mt-0.5 shrink-0 text-[13px] tabular-nums", conf < 0.55 ? "font-bold text-st-pending-ink" : "text-ink-68")}>{Math.round(conf * 100)}%</span>
+            ) : null}
+          </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {pending ? (
-          <DecideBar c={c} onDecided={onDecided} onCheck={open ? undefined : () => setOpen(true)} />
-        ) : (
-          <p className="text-[14px] text-ink-68">{c.decidedBy ? `${label} by ${c.decidedBy}${c.decisionReason ? `: ${c.decisionReason}` : ""}` : label}</p>
-        )}
-        <button type="button" onClick={() => setOpen((v) => !v)} className="text-[14px] font-bold text-ink-78 hover:text-ink">
-          {open ? "Hide details" : "Details"} <span className={cn("inline-block transition-transform", open && "rotate-90")}>›</span>
-        </button>
-      </div>
-      {open ? (
-        <div className="hh-rise border-hairline border-t pt-5">
-          <CaseDetail signoff={c} onChanged={onDecided} hideDecision={pending} />
-        </div>
-      ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {pending ? (
+              <DecideBar c={c} onDecided={onDecided} onCheck={open ? undefined : () => setOpen(true)} />
+            ) : (
+              <p className="text-[14px] text-ink-68">{c.decidedBy ? `${label} by ${c.decidedBy}${c.decisionReason ? `: ${c.decisionReason}` : ""}` : label}</p>
+            )}
+            <button type="button" onClick={() => setOpen((v) => !v)} className="text-[14px] font-bold text-ink-78 hover:text-ink">
+              {open ? "Hide details" : "Details"} <span className={cn("inline-block transition-transform", open && "rotate-90")}>›</span>
+            </button>
+          </div>
+          {open ? (
+            <div className="hh-rise border-hairline border-t pt-5">
+              <CaseDetail signoff={c} onChanged={onDecided} hideDecision={pending} />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

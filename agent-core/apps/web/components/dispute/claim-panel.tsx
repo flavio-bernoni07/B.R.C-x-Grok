@@ -8,6 +8,7 @@
 import type { ClaimDetail } from "@agent/lib/dispute/views";
 import { DocLink, Kpi, Pill, SourceTag, day, eur } from "@/components/kit";
 import { GrokMark } from "@/components/kit/icons";
+import { DisputeWorkspace } from "@/components/core/dispute-workspace";
 import { SignoffInline } from "@/components/core/signoff-desk";
 import { SectionChat } from "@/components/shell/section-chat";
 import { confidencePct, decisionLabel, outcomePill, retailerSays } from "./format";
@@ -17,6 +18,7 @@ export function ClaimPanel({ detail }: { readonly detail: ClaimDetail }) {
   const v = detail.verdict;
   const g = detail.grok;
   const by = detail.outcome?.approved_by;
+  const portalCase = detail.signoff_case?.kind === "customer_dispute" ? detail.signoff_case : null;
   const docs = [
     ...(detail.email ? [{ id: detail.email.doc_id, kind: "Claim email", label: detail.email.source }] : []),
     ...detail.documents.map((d) => ({ id: d.doc_id, kind: d.kind, label: d.key })),
@@ -27,6 +29,8 @@ export function ClaimPanel({ detail }: { readonly detail: ClaimDetail }) {
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-bold text-[30px] leading-none tracking-[-0.035em]">{detail.claim_id}</h2>
           <Pill tone={p.tone}>{p.label}</Pill>
+          {detail.channel === "phone" ? <Pill tone="live">Phone</Pill> : null}
+          {detail.channel === "customer_chat" ? <Pill tone="quiet">Chat</Pill> : null}
         </div>
         <p className="text-[15px] text-ink-68">
           {[detail.customer, detail.order_ref ? `order ${detail.order_ref}` : null, `received ${day(detail.received_at)}`].filter(Boolean).join(" · ")}
@@ -37,7 +41,12 @@ export function ClaimPanel({ detail }: { readonly detail: ClaimDetail }) {
         </p>
       </header>
 
-      {detail.signoff_case?.status === "pending" ? (
+      {portalCase ? (
+        <DisputeWorkspace
+          caseId={portalCase.caseId}
+          onDecided={() => window.dispatchEvent(new Event("brc:changed"))}
+        />
+      ) : detail.signoff_case?.status === "pending" ? (
         <SignoffInline c={detail.signoff_case} onDecided={() => window.dispatchEvent(new Event("brc:changed"))} />
       ) : v ? (
         <section className="flex items-start gap-3 rounded-[12px] bg-hh-honeydew px-4 py-3">

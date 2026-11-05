@@ -90,7 +90,9 @@ export function DisputesView() {
   };
 
   const claims = list?.claims ?? [];
-  const waiting = claims.filter((c) => c.status === "awaiting_sign_off").length;
+  const waiting = claims.filter((c) =>
+    c.status === "awaiting_sign_off" || c.status === "action_required" || c.status === "customer_reported",
+  ).length;
   const credits = claims.filter((c) => c.outcome?.kind === "credit_note");
   const replies = claims.filter((c) => c.outcome?.kind === "reject_reply").length;
   const credited = credits.reduce((s, c) => s + (c.outcome?.amount ?? 0), 0);

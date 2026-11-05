@@ -69,11 +69,13 @@ function tabForBoardStage(stage: string): DeskTab {
 }
 
 function actionsHref(tab: DeskTab, caseId?: string) {
+  if (tab === "disputes" && !caseId) return "/disputes";
   if (caseId) return actionsCaseHref(caseId, tab);
   const q = new URLSearchParams();
   if (tab !== "board") q.set("tab", tab);
   const s = q.toString();
-  return s ? `/actions?${s}` : "/actions";
+  // Legacy SignoffView; /actions redirects to /signoff on the redesigned shell.
+  return s ? `/signoff?${s}` : "/signoff";
 }
 
 /** Plain <a> tabs — full page load so ?tab= SSR sticks without next/link hydration. */

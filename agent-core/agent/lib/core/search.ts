@@ -21,8 +21,14 @@ export function search(erp: Erp, q: string, limit = 8): SearchHit[] {
   for (const c of erp.claims()) {
     if (!has(c.claimId, c.orderRef, c.invoiceRef)) continue;
     const so = pendingBySubject.get(c.claimId);
-    const href = so ? `/signoff?case=${encodeURIComponent(so.caseId)}` : c.orderRef ? orderHref(c.orderRef) : "/signoff";
-    hits.push({ label: c.claimId, sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""} · ${c.status.replace(/_/g, " ")}`, href });
+    // Redesign: claims open on Disputes; pending sign-off still reachable from there.
+    const href = `/disputes?claim=${encodeURIComponent(c.claimId)}`;
+    const via = so?.kind === "customer_dispute" ? " · phone/chat" : "";
+    hits.push({
+      label: c.claimId,
+      sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""}${via} · ${c.status.replace(/_/g, " ")}`,
+      href,
+    });
   }
   try {
     for (const t of erp.sqlite.prepare("select truck_id, data from si_trucks").all() as { truck_id: string; data: string }[]) {

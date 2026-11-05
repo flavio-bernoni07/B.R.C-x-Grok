@@ -1,9 +1,12 @@
 /**
- * Actions desk deep links and scheda mapping — pure helpers safe for client components.
+ * Sign-off / Disputes deep links — pure helpers safe for client components.
  * Keep Node/fs/sqlite out of this file so SignoffView / SignoffCard can import it.
+ *
+ * After the redesign, `/actions` redirects to `/signoff`. Customer phone/chat claims
+ * live on `/disputes`; their sign-off cases open on `/signoff?case=…`.
  */
 
-/** Actions desk scheda for a case (Board is only when no case is open). */
+/** Legacy desk scheda names kept for SignoffView and search tests. */
 export type DeskTab =
   | "board"
   | "sendoff"
@@ -26,7 +29,7 @@ function isPendingHold(c: { status: string; decidedAt?: string | null }): boolea
   return (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
 }
 
-/** Which Actions tab shows this case’s SignoffCard. */
+/** Which legacy Actions tab showed this case’s SignoffCard. */
 export function deskTabForSignoff(c: {
   status: string;
   decidedAt?: string | null;
@@ -45,10 +48,12 @@ export function deskTabForSignoff(c: {
   return "other";
 }
 
-/** Deep link that SSR-mounts SignoffCard on the right scheda. */
-export function actionsCaseHref(caseId: string, tab?: Exclude<DeskTab, "board"> | string): string {
-  const q = new URLSearchParams();
-  if (tab && tab !== "board") q.set("tab", tab);
-  q.set("case", caseId);
-  return `/actions?${q.toString()}`;
+/** Deep link for a sign-off case on the redesigned Sign-off desk. */
+export function actionsCaseHref(caseId: string, _tab?: Exclude<DeskTab, "board"> | string): string {
+  return `/signoff?case=${encodeURIComponent(caseId)}`;
+}
+
+/** Deep link for a claim on the Disputes page. */
+export function disputeClaimHref(claimId: string): string {
+  return `/disputes?claim=${encodeURIComponent(claimId)}`;
 }
