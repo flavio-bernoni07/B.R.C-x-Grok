@@ -5,17 +5,18 @@
  * file when the process has no key, and never returns the key to the browser.
  * Hold-to-talk uses transcription. The ephemeral token is for a browser realtime socket.
  */
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createXai } from "@ai-sdk/xai";
-import { repoRoot } from "../paths";
+import { dataPath, repoRoot } from "../paths";
 import { apiKey, hasKey } from "./client";
 
 const VOICE_MODEL = "grok-voice-transcribe-2.0";
 const REALTIME_MODEL = "grok-voice-latest";
 const TTS_VOICE = "eve";
 /** Bias Grok Voice toward the words this back office actually uses. */
-const KEYTERMS = ["Esselunga", "Coop Italia", "Auchan", "Carrefour", "Conad", "Carnaroli", "Arborio", "ORDRSP", "paddy", "Riso Scotti"];
+const KEYTERMS = ["Should I buy Carnaroli", "Esselunga", "Coop Italia", "Auchan", "Carrefour", "Conad", "Carnaroli", "Arborio", "ORDRSP", "paddy", "Riso Scotti"];
 const ENV_KEYS = ["XAI_API_KEY", "GROK_API_KEY", "XAI_BASE_URL", "XAI_VOICE_MODEL"] as const;
 
 let envLoaded = false;
@@ -129,8 +130,42 @@ export async function transcribeAudio(audio: Uint8Array, mediaType = "audio/webm
   return { text, mode: "grok_voice" };
 }
 
-/** Speak one answer in Grok's voice. The bytes are audio/mpeg. The key stays here. */
-export async function speakText(text: string): Promise<Uint8Array> {
+/**
+ * Speak one answer in Grok's voice. The bytes are audio/mpeg. The key stays here.
+ * The same sentence is spoken once: it is kept in memory and in data/runtime/voice-cache,
+ * so the demo answer plays at once and still plays if the speech call fails on the day.
+ */
+const spoken = new Map<string, Promise<Uint8Array>>();
+
+export function speakText(text: string): Promise<Uint8Array> {
+  const line = text.trim().slice(0, 700);
+  const key = createHash("sha256").update(`${TTS_VOICE}\n${line}`).digest("hex").slice(0, 32);
+  const file = dataPath("runtime", "voice-cache", `${key}.mp3`);
+  const known = spoken.get(key);
+  if (known) return known;
+  const job = (async () => {
+    try {
+      const bytes = new Uint8Array(readFileSync(file));
+      if (bytes.byteLength) return bytes;
+    } catch {
+      /* not spoken yet */
+    }
+    const bytes = await speakLive(line);
+    try {
+      mkdirSync(dataPath("runtime", "voice-cache"), { recursive: true });
+      writeFileSync(file, bytes);
+    } catch {
+      /* the memory copy still serves */
+    }
+    return bytes;
+  })();
+  spoken.set(key, job);
+  job.catch(() => spoken.delete(key));
+  if (spoken.size > 200) spoken.delete(spoken.keys().next().value!);
+  return job;
+}
+
+async function speakLive(text: string): Promise<Uint8Array> {
   loadVoiceEnv();
   const key = apiKey();
   if (!key) throw new Error("Missing XAI_API_KEY or GROK_API_KEY for voice.");

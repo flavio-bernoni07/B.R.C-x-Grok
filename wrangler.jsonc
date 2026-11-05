@@ -1,0 +1,28 @@
+{
+  "name": "brc-dashboard",
+  "main": "host/index.ts",
+  "compatibility_date": "2026-11-05",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "Dashboard",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "standard-1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DASHBOARD",
+        "class_name": "Dashboard"
+      }
+    ]
+  },
+  "exports": {
+    "Dashboard": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}
