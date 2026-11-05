@@ -18,7 +18,7 @@ There is no separate INTEGRATION.md at the repo root; contracts live in `PORTING
 
 - Customer UI: `/support` (microphone + text fallback)
 - APIs: `/api/support/session`, `/chat`, `/disputes`, `/voice/token`, `/voice/transcribe`, `/voice/speak`
-- Phone: `/api/telephony/incoming` (xAI SIP webhook), `/api/telephony/simulate` (offline rehearsal)
+- Phone: `/api/telephony/incoming` (xAI SIP webhook), `/api/telephony/simulate` (offline rehearsal / Voice Agent Builder tool). Laptop demo: `pnpm phone:demo` (see `docs/phone-voice.md`)
 - Employee list: `/disputes` (and `/api/disputes`); workspace API `/api/actions/disputes` still feeds the drawer
 - Notifications table + conversation transcripts as `documents` kind `customer conversation`
 
