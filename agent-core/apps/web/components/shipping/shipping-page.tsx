@@ -373,7 +373,16 @@ export function ShippingPage() {
   useEffect(load, [load]);
 
   return (
-    <Page>
+    <Page
+      ask={
+        <SectionChat
+          className="border-t-0 pt-0"
+          placeholder="Ask Grok about trucks, pallets or invoices…"
+          context={{ page: "shipping", view }}
+          suggestions={["How were the orders grouped into trucks?", "Which pallets are not scanned yet?"]}
+        />
+      }
+    >
       <PageHeader title="Shipping">
         <Segmented
           options={[
@@ -388,11 +397,6 @@ export function ShippingPage() {
       {view === "routes" ? data ? <RoutesView data={data} reload={load} /> : <div className="h-[460px] animate-pulse rounded-[16px] bg-hh-honeydew" /> : null}
       {view === "dock" ? <DockView /> : null}
       {view === "invoices" ? <InvoicesView /> : null}
-      <SectionChat
-        placeholder="Ask Grok about trucks, pallets or invoices…"
-        context={{ page: "shipping", view }}
-        suggestions={["How were the orders grouped into trucks?", "Which pallets are not scanned yet?"]}
-      />
     </Page>
   );
 }

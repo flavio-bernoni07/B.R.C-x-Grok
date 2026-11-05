@@ -98,78 +98,84 @@ export function DisputesView() {
   const credited = credits.reduce((s, c) => s + (c.outcome?.amount ?? 0), 0);
 
   return (
-    <Page>
-      <PageHeader title="Disputes" />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Claims" value={claims.length} />
-        <Kpi label="Need a person" value={waiting} />
-        <Kpi label="Credited" value={`€${Math.round(credited).toLocaleString("en-GB")}`} />
-        <Kpi label="Replies sent" value={replies} />
-      </div>
-
-      {list ? (
-        <ClaimsTable rows={claims} selected={open ? selected : undefined} onSelect={(r) => {
-          setSelected(r.claim_id);
-          setOpen(true);
-        }} />
-      ) : (
-        <div className="h-40 animate-pulse rounded-[16px] bg-hh-honeydew" />
-      )}
-
-      <details className="group">
-        <summary className="cursor-pointer list-none text-[14px] text-ink-68 hover:text-ink">
-          Paste a new claim <span className="inline-block transition-transform group-open:rotate-90">›</span>
-        </summary>
-        <div className="mt-4">
-        <div className="space-y-3">
-          {list?.samples.length ? (
-            <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-68">
-              <span>Demo claims:</span>
-              {list.samples.map((s) => (
-                <button
-                  key={s.name}
-                  type="button"
-                  onClick={() => {
-                    setText(s.text);
-                    setSource(s.name);
-                  }}
-                  className="rounded-full bg-hh-honeydew px-2.5 py-0.5 text-ink-78 hover:text-ink"
-                >
-                  {s.name.replace(/\.txt$/, "").replace(/_/g, " ")}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            placeholder="Da: ufficio.acquisti@… Oggetto: Reclamo consegna ordine …"
-            className="w-full resize-y rounded-[10px] bg-white p-3 font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_rgb(32_49_25/0.09)] outline-none focus:shadow-[inset_0_0_0_1.5px_rgb(32_49_25/0.3)]"
+    <>
+      <Page
+        ask={
+          <SectionChat
+            className="border-t-0 pt-0"
+            placeholder="Ask Grok about the claims…"
+            context={{ page: "disputes" }}
+            suggestions={["Which claims need a person, and why?", "Which claims did Grok settle on its own?"]}
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={busy || !text.trim()}
-              onClick={submit}
-              className="rounded-full bg-hh-dark px-4 py-1.5 font-bold text-[13px] text-hh-window disabled:opacity-50"
-            >
-              {busy ? "Reading the claim…" : "Handle claim"}
-            </button>
-            {error ? <span className="text-[13px] text-st-attention-ink">{error}</span> : null}
+        }
+      >
+        <PageHeader title="Disputes" />
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Kpi label="Claims" value={claims.length} />
+          <Kpi label="Need a person" value={waiting} />
+          <Kpi label="Credited" value={`€${Math.round(credited).toLocaleString("en-GB")}`} />
+          <Kpi label="Replies sent" value={replies} />
+        </div>
+
+        {list ? (
+          <ClaimsTable rows={claims} selected={open ? selected : undefined} onSelect={(r) => {
+            setSelected(r.claim_id);
+            setOpen(true);
+          }} />
+        ) : (
+          <div className="h-40 animate-pulse rounded-[16px] bg-hh-honeydew" />
+        )}
+
+        <details className="group">
+          <summary className="cursor-pointer list-none text-[14px] text-ink-68 hover:text-ink">
+            Paste a new claim <span className="inline-block transition-transform group-open:rotate-90">›</span>
+          </summary>
+          <div className="mt-4">
+          <div className="space-y-3">
+            {list?.samples.length ? (
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-68">
+                <span>Demo claims:</span>
+                {list.samples.map((s) => (
+                  <button
+                    key={s.name}
+                    type="button"
+                    onClick={() => {
+                      setText(s.text);
+                      setSource(s.name);
+                    }}
+                    className="rounded-full bg-hh-honeydew px-2.5 py-0.5 text-ink-78 hover:text-ink"
+                  >
+                    {s.name.replace(/\.txt$/, "").replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={8}
+              placeholder="Da: ufficio.acquisti@… Oggetto: Reclamo consegna ordine …"
+              className="w-full resize-y rounded-[10px] bg-white p-3 font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_rgb(32_49_25/0.09)] outline-none focus:shadow-[inset_0_0_0_1.5px_rgb(32_49_25/0.3)]"
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={busy || !text.trim()}
+                onClick={submit}
+                className="rounded-full bg-hh-dark px-4 py-1.5 font-bold text-[13px] text-hh-window disabled:opacity-50"
+              >
+                {busy ? "Reading the claim…" : "Handle claim"}
+              </button>
+              {error ? <span className="text-[13px] text-st-attention-ink">{error}</span> : null}
+            </div>
           </div>
-        </div>
-        </div>
-      </details>
-      <SectionChat
-        placeholder="Ask Grok about the claims…"
-        context={{ page: "disputes" }}
-        suggestions={["Which claims need a person, and why?", "Which claims did Grok settle on its own?"]}
-      />
+          </div>
+        </details>
+      </Page>
       <Drawer open={open && !!detail && detail.claim_id === selected} onClose={() => setOpen(false)}>
         {detail ? <ClaimPanel detail={detail} /> : null}
       </Drawer>
-    </Page>
+    </>
   );
 }
