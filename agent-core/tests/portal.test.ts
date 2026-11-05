@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { freshErp } from "../agent/lib/core/world";
 import { seedPortalDemoOrders } from "../agent/lib/demo/portal_orders";
 import {
+  backfillPortalVerdicts,
   claimToPortalRecord,
   CUSTOMER_CONV_KIND,
   DEMO_RETAILER_GLN,
@@ -14,6 +15,8 @@ import {
   listEmployeePortalDisputes,
   simulatedSession,
 } from "../agent/lib/dispute/portal";
+import { listClaims } from "../agent/lib/dispute/views";
+import { requestSignoff } from "../agent/lib/core/signoff";
 import { voiceCapabilities } from "../agent/lib/dispute/voice";
 
 function erpWithPortal() {
@@ -254,6 +257,49 @@ describe("customer dispute portal", () => {
     const body = JSON.parse(erp.documents({ kind: CUSTOMER_CONV_KIND, ref: a.conversation_id })[0].body!);
     expect(body.messages.some((m: { role: string }) => m.role === "customer")).toBe(true);
     expect(body.messages.some((m: { role: string }) => m.role === "assistant")).toBe(true);
+  });
+
+  it("backfillPortalVerdicts restores Grok suggests on legacy phone claims without verdict", async () => {
+    const erp = erpWithPortal();
+    const docId = erp.addDocument("customer claim", "ORD-3001", "legacy phone shortage", { path: "customer/legacy" });
+    const claimId = erp.nextId("dispute", "DSP-");
+    erp.saveClaim({ claimId, sourceDoc: docId, status: "action_required" });
+    erp.setClaim(claimId, {
+      orderRef: "ORD-3001",
+      extraction: {
+        order_ref: "ORD-3001",
+        claim_type: "shortage",
+        quantity: 1100,
+        product: "Carnaroli",
+        confidence: 0.7,
+        portal: {
+          retailer_id: "BUYER001",
+          category: "shortage",
+          claimed_quantity: 1100,
+          customer_description: "received only 1100",
+          channel: "phone",
+          conversation_id: "CNV-legacy",
+          status: "ACTION_REQUIRED",
+        },
+      },
+    });
+    requestSignoff(erp, {
+      row: "dispute",
+      kind: "customer_dispute",
+      subjectRef: claimId,
+      title: "legacy phone claim",
+      proposal: { channel: "phone" },
+      reasons: ["legacy always-handoff"],
+    });
+    expect(erp.claim(claimId)?.verdict).toBeNull();
+    expect(listClaims(erp).find((r) => r.claim_id === claimId)?.grok).toBeNull();
+
+    const { repaired } = await backfillPortalVerdicts(erp);
+    expect(repaired).toContain(claimId);
+    const row = listClaims(erp).find((r) => r.claim_id === claimId)!;
+    expect(row.grok?.decision).toBe("reject");
+    expect(row.grok?.confidence).toBeGreaterThan(0.5);
+    expect(row.status).toBe("closed");
   });
 
   it("spoken complaint path: confirmed transcript text creates employee dispute", async () => {

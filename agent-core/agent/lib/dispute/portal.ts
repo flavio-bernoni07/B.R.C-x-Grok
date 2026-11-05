@@ -919,12 +919,27 @@ export async function handleCustomerMessage(
 
     state = seeded.linked;
 
-    const verdictCaller = hasKey() ? null : offlinePortalVerdictCaller(extraction, facts);
-    const pipeline = await applyVerdictToClaim(erp, seeded.disputeId, extraction, {
-      includeFixtures: false,
-      verdictCaller,
-      portal: seeded.portal as unknown as Record<string, unknown>,
-    });
+    // Code checks first (team rule): deterministic offline verdict for phone/chat.
+    // Live Grok is for email exceptions; portal intake must never leave a DSP-… without a suggestion.
+    const verdictCaller = offlinePortalVerdictCaller(extraction, facts);
+    let pipeline;
+    try {
+      pipeline = await applyVerdictToClaim(erp, seeded.disputeId, extraction, {
+        includeFixtures: false,
+        verdictCaller,
+        portal: seeded.portal as unknown as Record<string, unknown>,
+      });
+    } catch (err) {
+      // Last resort: still attach an offline verdict so Disputes never shows "–".
+      erp.log("code", "dispute.portal_verdict_fallback", seeded.disputeId, {
+        detail: { error: (err as Error).message },
+      });
+      pipeline = await applyVerdictToClaim(erp, seeded.disputeId, extraction, {
+        includeFixtures: false,
+        verdictCaller: offlinePortalVerdictCaller(extraction, facts),
+        portal: seeded.portal as unknown as Record<string, unknown>,
+      });
+    }
 
     const handedOff = pipeline.status === "awaiting_person";
     const portalStatus: PortalStatus = handedOff
@@ -1089,4 +1104,49 @@ export function decideCustomerDispute(
   });
   erp.log(`person:${d.by}`, "dispute.portal_decided", claimId, { detail: { status, reason: d.reason } });
   return { status, claim_id: claimId, case_id: caseId };
+}
+
+/**
+ * Repair phone/chat claims that were saved before the normal pipeline ran (no verdict → Disputes shows "–").
+ * Runs the same offline verdict path and retires legacy `customer_dispute` sign-offs.
+ */
+export async function backfillPortalVerdicts(erp: Erp): Promise<{ repaired: string[] }> {
+  const repaired: string[] = [];
+  for (const c of erp.claims()) {
+    const portal = portalMeta(c);
+    const channel = portal.channel === "phone" || portal.channel === "customer_chat" || portal.conversation_id;
+    if (!channel) continue;
+    if (c.verdict && typeof c.verdict === "object" && (c.verdict as { decision?: string }).decision) continue;
+
+    const extraction = parseExtraction({
+      ...(c.extraction as Record<string, unknown>),
+      order_ref: c.orderRef ?? (c.extraction as ClaimExtraction | null)?.order_ref,
+      invoice_ref: c.invoiceRef ?? (c.extraction as ClaimExtraction | null)?.invoice_ref,
+      quantity: (c.extraction as ClaimExtraction | null)?.quantity ?? (portal.claimed_quantity as number | null),
+      amount: (c.extraction as ClaimExtraction | null)?.amount ?? (portal.claimed_amount as number | null),
+      claim_type: (c.extraction as ClaimExtraction | null)?.claim_type ?? portal.category,
+      product: (c.extraction as ClaimExtraction | null)?.product ?? null,
+      confidence: (c.extraction as ClaimExtraction | null)?.confidence ?? 0.7,
+      raw_notes: String(portal.customer_description ?? "backfilled phone/chat claim"),
+    });
+    const facts = pullFacts(extraction, { store: disputeStore(erp, false) });
+
+    // Retire legacy always-handoff cases so Sign-off does not double-list them.
+    for (const so of erp.signoffs({ row: "dispute" })) {
+      if (so.subjectRef !== c.claimId || so.status !== "pending" || so.kind !== "customer_dispute") continue;
+      decide(erp, so.caseId, {
+        approve: false,
+        by: "system",
+        reason: "Superseded by normal dispute verdict pipeline",
+      });
+    }
+
+    await applyVerdictToClaim(erp, c.claimId, extraction, {
+      includeFixtures: false,
+      verdictCaller: offlinePortalVerdictCaller(extraction, facts),
+      portal: { ...portal, channel: portal.channel === "phone" ? "phone" : "customer_chat" },
+    });
+    repaired.push(c.claimId);
+  }
+  return { repaired };
 }

@@ -1,10 +1,13 @@
 import { getReadyErp } from "@agent/lib/db/app";
+import { backfillPortalVerdicts } from "@agent/lib/dispute/portal";
 import { callersFor, demoClaims, handleClaim } from "@agent/lib/dispute/service";
 import { claimDetail, listClaims } from "@agent/lib/dispute/views";
 
 /** GET /api/disputes: every claim (same function as the dispute_list tool) and the demo claim emails. */
 export async function GET() {
   const erp = await getReadyErp();
+  // Phone/chat claims saved before the normal pipeline had no verdict → "–" in the table.
+  await backfillPortalVerdicts(erp);
   return Response.json({ claims: listClaims(erp), samples: demoClaims() });
 }
 
