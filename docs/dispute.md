@@ -56,4 +56,4 @@ Still later / not blocking the demo: quality-lot evidence handoff, shared contra
 
 ## Open questions
 
-See [MENTOR.md](../MENTOR.md) (Dispute section): real sign-off threshold, how reconciliation is scored, whether FatturaPA must appear in the demo, GDO dispute practice.
+See [MENTOR.md](../MENTOR.md): the sign-off practice in production, how they predict stock, and which claims show up most often.
