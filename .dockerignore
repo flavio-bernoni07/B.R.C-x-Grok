@@ -1,0 +1,15 @@
+.git
+**/.git
+**/node_modules
+**/.next
+**/.eve
+**/.venv
+**/__pycache__
+**/.env.local
+data/app.sqlite
+data/app.sqlite-*
+data/out
+data/runtime
+planning/.venv
+host/node_modules
+**/.DS_Store

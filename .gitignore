@@ -17,3 +17,4 @@ data/app.sqlite*
 data/runtime/
 # Local secrets (XAI_API_KEY=... for live Grok calls)
 .env.local
+node_modules/

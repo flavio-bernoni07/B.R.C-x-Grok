@@ -113,6 +113,62 @@ async function stopRecorder(take: Take): Promise<Blob> {
   });
 }
 
+/**
+ * A word Grok can point at on the page: an order or case ref, a decimal, or a number with a
+ * thousands separator. Bare small numbers ("8 cases", "500 g") match too much to point at.
+ */
+function pointToken(word: string): string | null {
+  const w = word.replace(/^[“"'(]+/, "").replace(/[”"'),.;:!?]+$/, "");
+  if (/^[A-Z]{2,5}-[A-Z0-9-]*\d[A-Z0-9-]*$/.test(w)) return w;
+  if (/^\d[\d,]*\.\d+$/.test(w) || /^\d{1,3}(?:,\d{3})+$/.test(w)) return w;
+  return null;
+}
+
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The element on the sheet that shows this token: on screen first, then the biggest type. */
+function findOnPage(token: string): HTMLElement | null {
+  const sheet = document.querySelector(".voice-sheet");
+  if (!sheet) return null;
+  const box = sheet.getBoundingClientRect();
+  const numeric = /^\d/.test(token);
+  const forms = numeric ? [...new Set([token, token.replace(/,/g, "")])] : [token];
+  const patterns = forms.map((form) =>
+    numeric ? new RegExp(`(?<![\\d.,])${escapeRe(form)}(?![\\d]|[.,]\\d)`) : new RegExp(`(?<![\\w-])${escapeRe(form)}(?![\\w-])`),
+  );
+  const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
+  let best: HTMLElement | null = null;
+  let bestScore = -Infinity;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent ?? "";
+    if (!patterns.some((re) => re.test(text))) continue;
+    const el = node.parentElement;
+    if (!el || el.closest(".voice-subs, .voice-dock, .sr-only, [hidden], [inert], [aria-hidden='true']")) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) continue;
+    const style = getComputedStyle(el);
+    // Drawn for real: no hidden or see-through ancestor, and on screen nothing else covers it.
+    const seen = (el as HTMLElement & { checkVisibility?: (o: object) => boolean }).checkVisibility?.({ opacityProperty: true, visibilityProperty: true });
+    if (seen === false || style.visibility === "hidden" || Number(style.opacity) < 0.1) continue;
+    const onScreen = rect.bottom > box.top + 8 && rect.top < box.bottom - 8 && rect.right > box.left && rect.left < box.right;
+    if (onScreen) {
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (!hit || !(el === hit || el.contains(hit) || hit.contains(el))) continue;
+    }
+    const score = (onScreen ? 1000 : 0) + (parseFloat(style.fontSize) || 14);
+    if (score > bestScore) {
+      best = el;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Where the cursor's tip lands on a target: toward the end of its text, low in the box. */
+function aimAt(rect: DOMRect): { x: number; y: number } {
+  return { x: rect.left + Math.min(rect.width - 4, Math.max(12, rect.width * 0.7)), y: rect.top + rect.height * 0.72 };
+}
+
 /** Free the mic. The blob is whatever was recorded. */
 async function releaseTake(take: Take): Promise<Blob> {
   const blob = await stopRecorder(take).catch(() => new Blob());
@@ -208,6 +264,10 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
   const speechCtx = useRef<AudioContext | null>(null);
   const speechSrc = useRef<AudioBufferSourceNode | null>(null);
   const endRef = useRef<() => void>(() => {});
+  // Grok's cursor and the outline around what it points at. Moved by hand: they follow the voice, not React.
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const markRef = useRef<HTMLDivElement>(null);
+  const marked = useRef<Element | null>(null);
 
   const setPhase = (next: Phase) => {
     phaseRef.current = next;
@@ -379,18 +439,129 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
     }
   };
 
+  const moveCursor = (x: number, y: number, jump = false) => {
+    const el = cursorRef.current;
+    if (!el) return;
+    if (jump) el.style.transition = "none";
+    el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+    el.classList.add("is-on");
+    if (jump) {
+      void el.offsetWidth;
+      el.style.transition = "";
+    }
+  };
+
+  const clickCursor = () => {
+    const el = cursorRef.current;
+    if (!el) return;
+    el.classList.remove("is-click");
+    void el.offsetWidth;
+    el.classList.add("is-click");
+  };
+
+  const drawMark = () => {
+    const mark = markRef.current;
+    const target = marked.current;
+    if (!mark) return;
+    if (!target || !target.isConnected) {
+      mark.classList.remove("is-on");
+      return;
+    }
+    const r = target.getBoundingClientRect();
+    const pad = 6;
+    // A hidden outline appears on its target and fades in; only a visible one glides to the next.
+    const appearing = !mark.classList.contains("is-on");
+    if (appearing) mark.style.transition = "opacity 200ms ease";
+    mark.style.transform = `translate3d(${Math.round(r.left - pad)}px, ${Math.round(r.top - pad)}px, 0)`;
+    mark.style.width = `${Math.round(r.width + pad * 2)}px`;
+    mark.style.height = `${Math.round(r.height + pad * 2)}px`;
+    if (appearing) {
+      void mark.offsetWidth;
+      mark.style.transition = "";
+    }
+    mark.classList.add("is-on");
+  };
+
+  const markElement = (target: Element | null) => {
+    marked.current = target;
+    drawMark();
+  };
+
+  const hideCursor = () => {
+    cursorRef.current?.classList.remove("is-on", "is-click");
+    markElement(null);
+  };
+
+  /** The cursor starts on the voice button, the first time it shows in a turn. */
+  const cursorFromButton = () => {
+    const el = cursorRef.current;
+    if (!el || el.classList.contains("is-on")) return;
+    const orb = [...document.querySelectorAll(".voice-orb")].find((b) => b.getBoundingClientRect().width > 0);
+    if (!orb) return;
+    const r = orb.getBoundingClientRect();
+    moveCursor(r.left + r.width * 0.5, r.top + r.height * 0.6, true);
+  };
+
+  /** Point at something on the page, scrolling it into view first when it is off screen. */
+  const pointAt = (turn: number, target: HTMLElement) => {
+    cursorFromButton();
+    const sheet = document.querySelector(".voice-sheet")?.getBoundingClientRect();
+    const r = target.getBoundingClientRect();
+    const off = sheet && (r.top < sheet.top + 60 || r.bottom > sheet.bottom - 120);
+    const go = () => {
+      if (!alive(turn) || !target.isConnected) return;
+      const at = aimAt(target.getBoundingClientRect());
+      moveCursor(at.x, at.y);
+      markElement(target);
+    };
+    if (off) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      window.setTimeout(go, 420);
+    } else go();
+  };
+
+  /**
+   * Before a page opens, the cursor goes to its link in the sidebar and clicks it.
+   * Resolves with the click point, or null when the sidebar has no link for that page.
+   */
+  const walkTo = (turn: number, href: string) =>
+    new Promise<{ x: number; y: number } | null>((resolve) => {
+      const path = new URL(href, window.location.origin).pathname;
+      const link = [...document.querySelectorAll<HTMLAnchorElement>("aside a[href]")].find(
+        (a) => new URL(a.href).pathname === path && a.getBoundingClientRect().width > 0,
+      );
+      if (!link || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        resolve(null);
+        return;
+      }
+      cursorFromButton();
+      const r = link.getBoundingClientRect();
+      const at = { x: r.left + Math.min(r.width * 0.42, 80), y: r.top + r.height * 0.62 };
+      requestAnimationFrame(() => moveCursor(at.x, at.y));
+      window.setTimeout(() => {
+        if (!alive(turn)) return resolve(null);
+        markElement(link);
+        clickCursor();
+        window.setTimeout(() => {
+          markElement(null);
+          resolve(alive(turn) ? at : null);
+        }, 180);
+      }, 640);
+    });
+
   const rest = () => {
     clearHide();
     setPhase("idle");
     setCaption(null);
     setAnalyser(null);
+    hideCursor();
   };
 
   /**
    * Open Grok's page: the new sheet grows out of the voice button in a circle while the old one
    * sinks back. Without the View Transitions API, or with reduced motion, the page just opens.
    */
-  const openPage = (href: string) => {
+  const openPage = (href: string, from: { x: number; y: number } | null = null) => {
     const target = new URL(href, window.location.origin);
     const wanted = target.pathname + target.search;
     if (wanted === window.location.pathname + window.location.search) return;
@@ -404,11 +575,14 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
       go();
       return;
     }
+    // The circle grows from where Grok clicked, else from the voice button. It may start outside the sheet.
     const box = sheet.getBoundingClientRect();
     const orb = button.getBoundingClientRect();
-    const x = orb.left + orb.width / 2 - box.left;
-    const y = orb.top + orb.height / 2 - box.top;
-    const r = Math.ceil(Math.hypot(Math.max(x, box.width - x), Math.max(y, box.height - y)));
+    const x = (from ? from.x : orb.left + orb.width / 2) - box.left;
+    const y = (from ? from.y : orb.top + orb.height / 2) - box.top;
+    const r = Math.ceil(
+      Math.max(...[[0, 0], [box.width, 0], [0, box.height], [box.width, box.height]].map(([cx, cy]) => Math.hypot(cx! - x, cy! - y))),
+    );
     const root = document.documentElement;
     root.classList.add("voice-nav");
     const done = () => root.classList.remove("voice-nav");
@@ -471,6 +645,7 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
     takeRef.current = null;
     if (take) void releaseTake(take);
     setAnalyser(null);
+    hideCursor();
     setCaption({ who, text: message });
     setPhase("error");
     clearHide();
@@ -481,23 +656,33 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
 
   const speak = async (turn: number, text: string, href: string | null) => {
     if (!alive(turn)) return;
-    if (href) openPage(href);
     setPhase("speaking");
+    // Grok's voice is fetched while the cursor walks to the page's link and opens it.
+    const voice = fetch("/api/voice/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then(async (res) => {
+      if (!res.ok) throw new Error(`speak ${res.status}`);
+      return { bytes: await res.arrayBuffer(), type: res.headers.get("content-type") || "audio/mpeg" };
+    });
+    voice.catch(() => undefined);
     // The question stays up until Grok's audio starts; then her words take over, timed to the audio.
     const onStart = (seconds: number) => {
       if (!alive(turn)) return;
       setCaption({ who: "grok", text, start: performance.now(), duration: seconds > 0 ? seconds : text.length / 14 });
     };
     try {
-      const res = await fetch("/api/voice/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) throw new Error(`speak ${res.status}`);
-      const bytes = await res.arrayBuffer();
+      if (href) {
+        const there = new URL(href, window.location.origin);
+        if (there.pathname + there.search !== window.location.pathname + window.location.search) {
+          const from = await walkTo(turn, href);
+          if (!alive(turn)) return;
+          openPage(href, from);
+        }
+      }
+      const { bytes, type } = await voice;
       if (!alive(turn)) return;
-      const type = res.headers.get("content-type") || "audio/mpeg";
       const played = await playOnContext(turn, bytes, onStart).catch((err) => {
         console.error("voice context", err);
         return false;
@@ -713,7 +898,79 @@ export function VoiceProvider({ children }: { readonly children: ReactNode }) {
     return () => cancelAnimationFrame(frame);
   }, [phase, analyser]);
 
-  return <VoiceContext.Provider value={{ phase, caption, analyser, toggle }}>{children}</VoiceContext.Provider>;
+  // While Grok talks, the cursor goes to each ref and figure as she says it.
+  useEffect(() => {
+    if (caption?.who !== "grok" || caption.start == null || caption.duration == null) return;
+    const turn = turnRef.current;
+    const { start, duration } = caption;
+    const timers: number[] = [];
+    let last: Element | null = null;
+    for (const word of cuesFor(caption.text).flatMap((cue) => cue.words)) {
+      const token = pointToken(word.text);
+      if (!token) continue;
+      const due = start + word.at * duration * 1000 - performance.now() - 120;
+      timers.push(
+        window.setTimeout(() => {
+          if (!alive(turn)) return;
+          const target = findOnPage(token);
+          if (!target || target === last) return;
+          last = target;
+          pointAt(turn, target);
+        }, Math.max(0, due)),
+      );
+    }
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one schedule per spoken line
+  }, [caption]);
+
+  // Speak the demo answer once ahead of time, so "Should I buy Carnaroli?" plays at once.
+  useEffect(() => {
+    void fetch("/api/voice/warm", { method: "POST" }).catch(() => undefined);
+  }, []);
+
+  // The outline and the cursor stay on their target when the page scrolls.
+  useEffect(() => {
+    const follow = () => {
+      const target = marked.current;
+      if (!target || target.closest("aside")) return;
+      drawMark();
+      const at = aimAt(target.getBoundingClientRect());
+      moveCursor(at.x, at.y, true);
+    };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs only
+  }, []);
+
+  return (
+    <VoiceContext.Provider value={{ phase, caption, analyser, toggle }}>
+      {children}
+      <div ref={markRef} className="grok-mark" aria-hidden="true" />
+      <div ref={cursorRef} className="grok-cursor" aria-hidden="true">
+        <svg viewBox="0 0 22 24" width="22" height="24">
+          <defs>
+            <linearGradient id="grok-cursor-fill" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#fa7e1e" />
+              <stop offset="0.55" stopColor="#d62976" />
+              <stop offset="1" stopColor="#962fbf" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M2 2 L2 19.5 L6.6 15.4 L9.7 22.2 L13 20.8 L9.9 14.1 L16.2 14.1 Z"
+            fill="url(#grok-cursor-fill)"
+            stroke="#fff"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="grok-cursor-tag">Grok</span>
+      </div>
+    </VoiceContext.Provider>
+  );
 }
 
 type Cue = { readonly words: { readonly text: string; readonly at: number }[]; readonly from: number };

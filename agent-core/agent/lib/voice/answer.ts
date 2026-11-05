@@ -141,18 +141,62 @@ function speakPaddy(row: PaddyRow): string {
   return `${line} Last price ${euros(row.price.last)} a tonne, forecast ${euros(row.price.forecast)}.`;
 }
 
+/** "Should I buy…", and how Grok Voice sometimes writes it ("should I by…"). */
+const BUYING = /\b(?:should|shall|can|could|do|must)\s+(?:i|we)\s+(?:buy|by|bye|purchase)\b/i;
+const BUY_WORD = /\b(?:buy|buying|by|bye|purchase)\b/i;
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const up = row[j]!;
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = up;
+    }
+  }
+  return row[b.length]!;
+}
+
+/**
+ * The paddy variety a question names, also when Grok Voice mishears it: "carnaroly",
+ * "car na roli", "karnaroli". One, two or three words run together, a third of the letters off at most.
+ */
+export function varietyIn(question: string): string | null {
+  const names = loadPaddyData().varieties.map((row) => row.variety);
+  const text = question.toLowerCase();
+  const exact = names.find((name) => text.includes(name.toLowerCase()));
+  if (exact) return exact;
+  const words = text.replace(/[^a-zà-ù\s]/g, " ").split(/\s+/).filter(Boolean);
+  let best: { name: string; d: number } | null = null;
+  for (const name of names) {
+    const want = name.toLowerCase();
+    const limit = Math.floor(want.length / 3);
+    for (let i = 0; i < words.length; i++) {
+      let joined = "";
+      for (let k = i; k < Math.min(words.length, i + 3); k++) {
+        joined += words[k];
+        if (Math.abs(joined.length - want.length) > limit) continue;
+        const d = editDistance(joined, want);
+        if (d <= limit && (!best || d < best.d)) best = { name, d };
+      }
+    }
+  }
+  return best?.name ?? null;
+}
+
 function wantsPaddy(question: string): boolean {
   if (/\b(paddy|prices?|forecast|buy(?:ing)?|variet(?:y|ies))\b/i.test(question)) return true;
-  const text = question.toLowerCase();
-  return loadPaddyData().varieties.some((row) => text.includes(row.variety.toLowerCase()));
+  return varietyIn(question) !== null;
 }
 
 async function paddyAnswer(erp: Erp, question: string): Promise<VoiceAnswer> {
   const href = "/stock?view=buying";
   try {
     const plan = await paddyToBuy(erp);
-    const text = question.toLowerCase();
-    const named = plan.rows.filter((row) => text.includes(row.variety.toLowerCase()));
+    const variety = varietyIn(question);
+    const named = plan.rows.filter((row) => row.variety === variety);
     const row = named[0] ?? [...plan.rows].sort((a, b) => (a.cover_weeks ?? 999) - (b.cover_weeks ?? 999))[0];
     if (!row) return { text: "The buying plan has no varieties. Opening the buying page.", href };
     return { text: speakPaddy(row), href: `${href}&variety=${encodeURIComponent(row.variety)}` };
@@ -179,6 +223,9 @@ function countSentence(n: number, one: string, many: string): string {
 export async function answerQuestion(erp: Erp, question: string, opts: VoiceOptions = {}): Promise<VoiceAnswer> {
   const q = question.trim();
   if (!q) return { text: NOTHING, href: null };
+
+  // The demo question, however Grok Voice spells it: "Should I buy Carnaroli?", "should I by car na roli".
+  if ((BUYING.test(q) || (BUY_WORD.test(q) && varietyIn(q))) && !explicitRefs(q).length) return paddyAnswer(erp, q);
 
   const why = WHY.test(q);
   const orders = erp.orders();
@@ -325,8 +372,10 @@ async function grokAnswer(
   order: ReturnType<typeof orderFacts> | null = null,
   page: SearchHit | null = null,
 ): Promise<VoiceAnswer | null> {
-  loadVoiceEnv();
-  if (!opts.caller && !hasKey()) return null;
+  if (!opts.caller) {
+    loadVoiceEnv();
+    if (!hasKey()) return null;
+  }
   try {
     const facts = voiceFacts(erp, [...(page ? [page] : []), ...search(erp, question, 4)], order);
     const messages: Message[] = [
