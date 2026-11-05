@@ -54,7 +54,7 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
     <VoiceProvider>
     <div className="flex h-dvh gap-2.5 bg-hh-window p-2.5 max-md:flex-col">
       <aside className="relative flex w-[230px] shrink-0 flex-col overflow-hidden rounded-[18px] bg-hh-sidebar px-3 pt-7 pb-4 shadow-[inset_0_0_0_1px_rgb(32_49_25/0.05)] max-md:w-full max-md:flex-row max-md:items-center max-md:gap-2 max-md:overflow-x-auto max-md:px-2 max-md:py-2">
-        <Link href="/" className="mb-8 flex items-center gap-2.5 px-2.5 font-bold text-[19px] tracking-[-0.03em] max-md:mb-0 max-md:shrink-0">
+        <Link href="/" className="mb-8 flex items-center gap-2.5 px-2.5 font-bold text-[22px] tracking-[-0.03em] max-md:mb-0 max-md:shrink-0">
           <BrandTile size={30} />
           <span className="max-md:hidden">Risolve</span>
         </Link>
