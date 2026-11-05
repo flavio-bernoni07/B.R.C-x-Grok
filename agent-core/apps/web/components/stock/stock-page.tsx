@@ -9,6 +9,7 @@
  *   person approves in Sign-off. The price model is shown against "price stays the same", even when that wins.
  * The demand forecast runs on demo history: an estimate, labelled as one.
  */
+import type { LotPassport } from "@agent/lib/compliance/passport";
 import type { InventoryProduct } from "@agent/lib/core/inventory";
 import type { ProjectionRow } from "@agent/lib/forecast/demand";
 import { type PaddyWeek, type ProductionPlan, paddyPlan } from "@agent/lib/forecast/plan";
@@ -17,6 +18,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { PassportBody } from "@/components/compliance/passport";
 import { Btn, Card, DataTable, Drawer, Kpi, Legend, PageHeader, Pill, type PillTone, Segmented, day, eur } from "@/components/kit";
 import { LineChart } from "@/components/kit/chart";
 import { whenShort } from "@/components/home/home-intro";
@@ -72,14 +74,50 @@ function HowComputed({ children }: { readonly children: React.ReactNode }) {
 }
 
 /** One product in the side panel: what is free, what is promised, the batches, who waits, what to make next. */
-function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gtin: string }) {
+function ProductDetail({
+  inv,
+  gtin,
+  initialBatch,
+  openPassport,
+}: {
+  readonly inv: InventoryData;
+  readonly gtin: string;
+  readonly initialBatch?: string | null;
+  readonly openPassport?: boolean;
+}) {
   const p = inv.products.find((x) => x.gtin === gtin);
+  const batchesSorted = p
+    ? [...p.batches].sort((a, b) => ((a.availableFrom ?? "") < (b.availableFrom ?? "") ? -1 : 1))
+    : [];
+  const defaultBatch =
+    initialBatch && batchesSorted.some((b) => b.batch === initialBatch)
+      ? initialBatch
+      : openPassport
+        ? (batchesSorted.find((b) => b.status === "hold")?.batch ??
+          batchesSorted.find((b) => b.status === "released")?.batch ??
+          batchesSorted[0]?.batch ??
+          null)
+        : null;
+  const [openBatch, setOpenBatch] = useState<string | null>(defaultBatch);
+  const [passports, setPassports] = useState<Record<string, LotPassport | null>>({});
+  useEffect(() => {
+    setOpenBatch(defaultBatch);
+  }, [gtin, defaultBatch]);
+  useEffect(() => {
+    if (!openBatch || openBatch in passports) return;
+    fetch(`/api/compliance/batch/${encodeURIComponent(openBatch)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { passport?: LotPassport } | null) => {
+        setPassports((prev) => ({ ...prev, [openBatch]: d?.passport ?? null }));
+      })
+      .catch(() => setPassports((prev) => ({ ...prev, [openBatch]: null })));
+  }, [openBatch, passports]);
   if (!p) return null;
   const pr = inv.forecast.projections.find((x) => x.gtin === gtin);
   const next = pr?.plan.batches[0];
   const waiting = inv.backorders?.[gtin] ?? [];
   const free = Math.max(p.released - p.reserved, 0);
-  const batches = [...p.batches].sort((a, b) => ((a.availableFrom ?? "") < (b.availableFrom ?? "") ? -1 : 1));
+  const batches = batchesSorted;
   return (
     <div className="space-y-6 p-8">
       <div>
@@ -122,18 +160,41 @@ function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gt
       ) : null}
       <Card title="Batches">
         {batches.length ? (
-          <ul className="space-y-1.5 text-[14px]">
-            {batches.map((b) => (
-              <li key={b.batch} className="flex justify-between gap-3">
-                <span>
-                  <b>{b.batch}</b> <span className="text-ink-68">· {b.status}</span>
-                </span>
-                <span className="text-ink-68 tabular-nums">
-                  {n0(b.qty)}
-                  {b.availableFrom ? ` · ${day(b.availableFrom)}` : ""}
-                </span>
-              </li>
-            ))}
+          <ul className="text-[14px]">
+            {batches.map((b) => {
+              const open = openBatch === b.batch;
+              const pass = passports[b.batch];
+              const statusLabel = b.status === "hold" ? "On hold" : b.status === "planned" ? "Planned" : b.status === "released" ? "Released" : b.status;
+              return (
+                <li key={b.batch} className="border-hairline border-b last:border-0">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 py-2.5 text-left"
+                    onClick={() => setOpenBatch(open ? null : b.batch)}
+                    aria-expanded={open}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-bold text-ink">{b.batch}</span>
+                      <span className="mt-0.5 block text-[13px] text-ink-68">
+                        {statusLabel}
+                        {open ? "" : " — open passport"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-ink-68 tabular-nums">
+                      <span className="block">{n0(b.qty)}</span>
+                      {b.availableFrom ? <span className="block text-[12px]">from {day(b.availableFrom)}</span> : null}
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="border-hairline border-t bg-hh-seasalt/50 px-1 py-3.5">
+                      {pass === undefined ? <p className="text-[13px] text-ink-68">Loading passport…</p> : null}
+                      {pass === null ? <p className="text-[13px] text-ink-68">No product record for this batch.</p> : null}
+                      {pass ? <PassportBody p={pass} /> : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-[14px] text-ink-68">No batch on record.</p>
@@ -437,7 +498,11 @@ export function StockPage() {
             className="border-t-0 pt-0"
             placeholder="Ask Grok about stock, batches or paddy…"
             context={{ page: "stock", view }}
-            suggestions={["Which products run short next?", "When should we buy Carnaroli paddy?"]}
+            suggestions={[
+              "Which products run short next?",
+              "Show me Carnaroli compliance passport",
+              "When should we buy Carnaroli paddy?",
+            ]}
           />
         }
       >
@@ -457,7 +522,9 @@ export function StockPage() {
         {view === "buying" ? paddy ? <BuyingView paddy={paddy} initial={params.get("variety")} /> : loading : null}
       </Page>
       <Drawer open={!!product && view === "products"} onClose={() => router.replace("/stock", { scroll: false })}>
-        {inv && product ? <ProductDetail inv={inv} gtin={product} /> : null}
+        {inv && product ? (
+          <ProductDetail inv={inv} gtin={product} initialBatch={params.get("batch")} openPassport={params.get("passport") === "1" || !!params.get("batch")} />
+        ) : null}
       </Drawer>
     </>
   );

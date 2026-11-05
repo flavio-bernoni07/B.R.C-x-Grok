@@ -1,0 +1,253 @@
+{
+  "_comment": "DEMO DATA: lot compliance passports keyed by milled batch id (same ids as data/world/stock.json). EU cites are real; document bodies are synthetic. Art. 18 = Reg (EC) 178/2002 one-step-back / one-step-forward. Italian origin labelling = DM 26 Jul 2017 (prorogued through 31 Dec 2026). MRLs = Reg 396/2005. China GMO papers = Decision 2011/884/EU (import only). EUDR does not cover rice.",
+  "demo": true,
+  "batches": [
+    {
+      "batch": "LOT-C-0417",
+      "gtin": "8000000000001",
+      "lot_mark": "L261104C417",
+      "variety": "Carnaroli",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-VER-0417",
+        "supplier": "Cooperativa Agricola Vercelli Nord",
+        "region": "Vercelli (Piemonte)",
+        "farm": "Cascina Nuova",
+        "received_on": "2026-10-28",
+        "tonnes": 42
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-C417",
+        "tested_on": "2026-10-29",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs (default 0.01 mg/kg where no specific MRL)."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-C417",
+        "summary": "Italian paddy; GMO-free declaration on file (Reg 1829/2003 / 1830/2003 labelling not triggered)."
+      },
+      "badges": ["SRP"],
+      "required_docs": ["origin", "mrl", "gmo", "plant"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-C-0418",
+      "gtin": "8000000000001",
+      "lot_mark": "L261104C418",
+      "variety": "Carnaroli",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-VER-0418",
+        "supplier": "Cooperativa Agricola Vercelli Nord",
+        "region": "Vercelli (Piemonte)",
+        "farm": "Cascina Belvedere",
+        "received_on": "2026-10-30",
+        "tonnes": 38
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-C418",
+        "tested_on": "2026-10-31",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-C418",
+        "summary": "Italian paddy; GMO-free declaration on file."
+      },
+      "badges": ["SRP"],
+      "required_docs": ["origin", "mrl", "gmo", "plant"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-C-0419",
+      "gtin": "8000000000001",
+      "lot_mark": "L261109C419",
+      "variety": "Carnaroli",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-NOV-0419",
+        "supplier": "Consorzio Riso Novarese",
+        "region": "Novara (Piemonte)",
+        "farm": "Azienda San Matteo",
+        "received_on": "2026-11-03",
+        "tonnes": 28
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-C419",
+        "tested_on": "2026-11-03",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-C419",
+        "summary": "Italian paddy; GMO-free declaration on file."
+      },
+      "badges": ["BIO", "SRP"],
+      "required_docs": ["origin", "mrl", "gmo", "plant", "bio"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-A-0311",
+      "gtin": "8000000000000",
+      "lot_mark": "L261031A311",
+      "variety": "Arborio",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-PV-0311",
+        "supplier": "Op. Riso Pavese",
+        "region": "Pavia (Lombardia)",
+        "farm": "Cascina Rosa",
+        "received_on": "2026-10-20",
+        "tonnes": 55
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-A311",
+        "tested_on": "2026-10-21",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-A311",
+        "summary": "Italian paddy; GMO-free declaration on file."
+      },
+      "badges": ["Fairtrade", "SRP"],
+      "required_docs": ["origin", "mrl", "gmo", "plant"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-AC-0101",
+      "gtin": "18000000000003",
+      "lot_mark": "L261020AC01",
+      "variety": "Arborio",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-PV-0311",
+        "supplier": "Op. Riso Pavese",
+        "region": "Pavia (Lombardia)",
+        "farm": "Cascina Rosa",
+        "received_on": "2026-10-20",
+        "tonnes": 55
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-A311",
+        "tested_on": "2026-10-21",
+        "summary": "Same milled Arborio intake as LOT-A-0311; carton pack run."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-A311",
+        "summary": "Italian paddy; GMO-free declaration on file."
+      },
+      "badges": ["SRP"],
+      "required_docs": ["origin", "mrl", "gmo", "plant"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-R-0055",
+      "gtin": "8000000000049",
+      "lot_mark": "L261028R055",
+      "variety": "Arborio",
+      "origin": {
+        "cultivation": "Italia",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "origine del riso: Italia"
+      },
+      "paddy_intake": {
+        "id": "PADDY-IT-PV-0055",
+        "supplier": "Op. Riso Pavese",
+        "region": "Pavia (Lombardia)",
+        "farm": "Cascina Rosa",
+        "received_on": "2026-10-18",
+        "tonnes": 12
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-R055",
+        "tested_on": "2026-10-19",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs."
+      },
+      "gmo": {
+        "status": "ok",
+        "declaration_id": "GMO-FREE-R055",
+        "summary": "Italian paddy; GMO-free declaration on file."
+      },
+      "badges": [],
+      "required_docs": ["origin", "mrl", "gmo", "plant"],
+      "missing_docs": []
+    },
+    {
+      "batch": "LOT-B-0901",
+      "gtin": "8003660012345",
+      "lot_mark": "L261015B901",
+      "variety": "Basmati",
+      "origin": {
+        "cultivation": "India",
+        "processing": "Italia",
+        "packing": "Italia",
+        "label": "Paese di coltivazione: India · Paese di lavorazione: Italia · Paese di confezionamento: Italia"
+      },
+      "paddy_intake": {
+        "id": "IMP-IN-BAS-0901",
+        "supplier": "Demo import desk — Punjab basmati",
+        "region": "Punjab (India)",
+        "farm": "Consolidated export lot",
+        "received_on": "2026-10-12",
+        "tonnes": 20
+      },
+      "mrl": {
+        "status": "pass",
+        "lab": "Demo lab Pavia",
+        "report_id": "LAB-MRL-B901",
+        "tested_on": "2026-10-14",
+        "summary": "Residues below Reg (EC) 396/2005 MRLs on intake sample."
+      },
+      "gmo": {
+        "status": "gap",
+        "declaration_id": null,
+        "summary": "Import path. Decision 2011/884/EU papers (health certificate + analytical report per lot) are missing for this demo lot — batch stays on quality hold until a person confirms."
+      },
+      "badges": [],
+      "required_docs": ["origin", "mrl", "gmo", "plant", "china_gmo_pack"],
+      "missing_docs": ["china_gmo_pack"],
+      "hold_on_seed": true,
+      "hold_note": "Compliance: China/Asia GMO emergency papers missing (Decision 2011/884/EU demo gate)"
+    }
+  ]
+}

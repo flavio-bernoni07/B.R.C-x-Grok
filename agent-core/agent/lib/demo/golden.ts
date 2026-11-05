@@ -204,6 +204,9 @@ export async function runGolden(
         await seedExtremeCase(erp, { say });
       }
     }
+    // After history so every milled batch (including history lots) gets a compliance passport.
+    const { seedCompliance } = await import("../compliance/seed");
+    seedCompliance(erp, { say });
   }
   return result;
 }

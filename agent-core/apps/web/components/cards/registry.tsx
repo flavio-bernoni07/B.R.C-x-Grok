@@ -12,6 +12,7 @@ import { AuditCard } from "@/components/core/audit";
 import { ImpactCard, OverviewCard } from "@/components/core/overview";
 import { SignoffCard, SignoffQueue } from "@/components/core/signoff";
 import { StockCard } from "@/components/core/stock";
+import { CompliancePassportCard } from "@/components/compliance/passport";
 import { Panel } from "@/components/kit";
 import { cards as disputeCards } from "@/components/dispute";
 import { cards as operationsCards } from "@/components/operations";
@@ -25,6 +26,7 @@ const coreCards: Record<string, Card> = {
   overview_snapshot: OverviewCard,
   impact_summary: ImpactCard,
   stock_status: StockCard,
+  compliance_passport: CompliancePassportCard,
   audit_trail: AuditCard,
   signoff_queue: ({ output }) => (
     <Panel title="Waiting for a person">
