@@ -18,7 +18,7 @@ import { parseExtraction } from "./claim_reader";
 import { pullFacts } from "./pull_facts";
 import { parseVerdictPayload, pyNum, VerdictDecision } from "./verdict";
 
-export const defaultOutDir = () => dataPath("disputes", "outcomes");
+export const defaultOutDir = () => (process.env.VERCEL ? "/tmp/brc-runtime/outcomes" : dataPath("disputes", "outcomes"));
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});

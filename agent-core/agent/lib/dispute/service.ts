@@ -35,15 +35,18 @@ export const OUTCOME_KINDS: Record<string, string> = {
 
 type Obj = Record<string, unknown>;
 
-/** Where the app writes outcome files. */
-export const runtimeOutDir = () => dataPath("runtime", "disputes");
+/**
+ * Where the app writes outcome files.
+ * On Vercel the project disk is read-only, so outcomes land in /tmp.
+ */
+export const runtimeOutDir = () => (process.env.VERCEL ? "/tmp/brc-runtime/disputes" : dataPath("runtime", "disputes"));
 
 /**
  * The app's Playbook: a copy of data/disputes/playbook.md made on first use
  * (BRC_PLAYBOOK overrides the path, like BRC_DB for the database; tests use it).
  */
 export function runtimePlaybookPath(): string {
-  const path = process.env.BRC_PLAYBOOK || dataPath("runtime", "playbook.md");
+  const path = process.env.BRC_PLAYBOOK || (process.env.VERCEL ? "/tmp/brc-runtime/playbook.md" : dataPath("runtime", "playbook.md"));
   if (!existsSync(path)) {
     mkdirSync(dirname(path), { recursive: true });
     copyFileSync(defaultPlaybookPath(), path);
