@@ -85,9 +85,9 @@ We wrote the reconciliation cases ourselves to cover threeway's blind spots, so 
 
 ## Open the dashboard
 
-https://url-draw-tour-disks.trycloudflare.com
+https://brc-x-grok.vercel.app
 
-That link is the dashboard. It stays up while the Mac that hosts it is on. There is no account and no install.
+That link is the dashboard. It stays up when this Mac is off. There is no account and no install. The first open after a quiet stretch takes a few seconds while the demo database loads.
 
 ## Run it
 

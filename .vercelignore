@@ -1,0 +1,17 @@
+.git
+**/.git
+**/node_modules
+**/.next
+**/.eve
+**/.venv
+**/__pycache__
+**/.env.local
+**/.env
+data/app.sqlite
+data/app.sqlite-*
+data/out
+data/runtime
+planning
+host/node_modules
+**/.DS_Store
+.playwright-mcp
