@@ -18,7 +18,7 @@ export function StockView() {
   }, []);
   return (
     <Page>
-      <PageHeader title="Stock" sub="Available to promise = released + planned ready by the date − confirmed not shipped. Batches on quality hold never count.">
+      <PageHeader title="Stock">
         <a href={askHref("Which products are short or on hold, and which orders does that affect?")} className="rounded-full bg-hh-dark px-4 py-1.5 font-bold text-[13px] text-hh-window">
           Ask Grok
         </a>

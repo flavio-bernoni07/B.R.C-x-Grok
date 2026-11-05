@@ -3,11 +3,16 @@
  * of documents behind the order), the Shipping file and the stock ledger. Read-only: nothing here
  * decides, sends or changes a record. Every figure comes from a Mini ERP row or the audit log.
  */
+import { orderStory, type StoryStep } from "./story";
+import { caseProblem, caseRole } from "../core/case-view";
 import { chain, type TraceChain } from "../core/trace";
 import type { Erp } from "../core/erp";
 import { availableToPromise, batches, isoDate, OPEN_ORDER_STATUSES } from "../core/stock";
 import { openCases, shippingFile } from "../shipping/service";
 import { orderDetail } from "./views";
+import { type Caught, caughtProblems } from "./caught";
+import { type ContractSummary, contractFor } from "../core/contracts";
+import { orderDocuments } from "../core/document-file";
 
 export type InboxStatus = "attention" | "on_track" | "waiting" | "completed";
 export const STATUS_LABEL: Record<InboxStatus, string> = {
@@ -30,6 +35,12 @@ export type JourneyStep = {
 
 export type WorkspaceException = { caseId: string; text: string; href: string };
 
+/** Who has the order now: an agent working it, a person who must decide, the retailer, or nobody. */
+export type Owner = { kind: "agent" | "person" | "team" | "retailer" | "none"; name: string; doing: string };
+
+/** An order delivered in two parts because stock was short: what ships now and what follows. */
+export type Split = { now: number; later: number; laterDate: string | null; product: string | null; by: "grok" | "code"; message: string | null; why: string | null };
+
 export type OrderWorkspace = {
   orderRef: string;
   retailer: string;
@@ -41,6 +52,8 @@ export type OrderWorkspace = {
   nextStep: string;
   counter: { agents: number; people: number; text: string };
   journey: JourneyStep[];
+  /** Every step in plain words, from the audit log (order/story.ts). */
+  story: StoryStep[];
   summary: {
     ordered: number;
     confirmed: number;
@@ -84,7 +97,19 @@ export type OrderWorkspace = {
   exceptions: WorkspaceException[];
   history: { at: string; who: string; action: string; document: string | null }[];
   agents: string[];
+  owner: Owner;
+  split: Split | null;
+  /** Net value: confirmed (else ordered) units × unit price on the order lines. */
+  value: number;
+  /** Core journey steps done, of the total (claims not counted). */
+  progress: { done: number; total: number; current: string | null };
   askQuestion: string;
+  /** What code and Grok caught on this order (README case study): problem, money at stake, status. */
+  caught: Caught[];
+  /** The retailer's annual contract (billed monthly), when there is one. */
+  contract: ContractSummary | null;
+  /** Every document tied to the order, each downloadable at its href. */
+  documents: { docId: string; kind: string; ref: string | null; filename: string; href: string }[];
 };
 
 const ATTENTION_STATUSES = new Set(["awaiting_confirmation", "pending_price", "price_fix", "pending_manual_edi", "manual_edi", "stock_short"]);
@@ -252,14 +277,14 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
   const claimIds = new Set(c.claims.map((cl) => cl.claim_id));
   for (const s of erp.signoffs({ status: "pending" })) {
     if (s.subjectRef === ref || (order.sourceDoc && s.subjectRef === order.sourceDoc) || claimIds.has(s.subjectRef ?? "")) {
-      exceptions.push({ caseId: s.caseId, text: s.title || (s.reasons ?? []).join("; ") || "Waiting for a person", href: `/actions?case=${encodeURIComponent(s.caseId)}` });
+      exceptions.push({ caseId: s.caseId, text: s.title || (s.reasons ?? []).join("; ") || "Waiting for a person", href: `/signoff?case=${encodeURIComponent(s.caseId)}` });
     }
   }
   let ship: ReturnType<typeof shippingFile> | null = null;
   try {
     ship = shippingFile(erp, ref);
     for (const x of openCases(erp, ref)) {
-      exceptions.push({ caseId: x.case_id, text: x.explanation, href: `/actions?case=${encodeURIComponent(x.case_id)}` });
+      exceptions.push({ caseId: x.case_id, text: x.explanation, href: `/signoff?case=${encodeURIComponent(x.case_id)}` });
     }
   } catch {
     ship = null;
@@ -320,6 +345,68 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
   }
 
   const gtins = [...new Set(order.lines.map((l) => l.gtin).filter((g): g is string => !!g))];
+
+  // Who has it now. A waiting sign-off names the role that decides; else the step that is open.
+  const waitingCase = erp
+    .signoffs({ status: "pending" })
+    .find(
+      (s) =>
+        s.subjectRef === ref ||
+        (order.sourceDoc && s.subjectRef === order.sourceDoc) ||
+        claimIds.has(s.subjectRef ?? "") ||
+        exceptions.some((x) => x.caseId === s.subjectRef) ||
+        (s.kind === "dispatch_plan" && ((s.proposal as { plan?: { orders?: string[] } } | null)?.plan?.orders ?? []).includes(ref)),
+    );
+  let owner: Owner;
+  if (waitingCase) {
+    const role = waitingCase.kind === "dispatch_plan" ? "Transport planner" : caseRole(waitingCase);
+    // An exception case reads as its short card line ("Pallet 04 on the wrong truck"), not the sign-off title.
+    const card = waitingCase.kind === "exception_case" ? caughtProblems(erp, ref).find((x) => x.caseId === waitingCase.subjectRef) : undefined;
+    owner = { kind: "person", name: role, doing: waitingCase.kind === "dispatch_plan" ? "Approve the truck plan" : (card?.problem ?? caseProblem(waitingCase)) };
+  } else if (exceptions.length) owner = { kind: "person", name: "Warehouse lead", doing: exceptions[0].text.replace(/^pallet /, "Pallet ") };
+  else if (status === "completed") owner = { kind: "none", name: "Nobody", doing: "Done" };
+  else if (order.status === "pending") owner = { kind: "retailer", name: retailer, doing: "Send a corrected order" };
+  else {
+    const open = firstOpen?.key;
+    // No sign-off is waiting, so nobody has to approve this step. Grok (and code) has the order.
+    // A warehouse team face here read as a person on the hook for work that needs no approval.
+    owner =
+      open === "confirmed"
+        ? { kind: "agent", name: "Order agent", doing: "Checking the order" }
+        : open === "reserved" || open === "planned"
+          ? { kind: "agent", name: "Logistics agent", doing: "Planning the truck" }
+          : open === "picked" || open === "loaded" || open === "dispatched"
+            ? { kind: "agent", name: "Back office", doing: open === "picked" ? "Picking the pallets" : open === "loaded" ? "Scanning and loading" : "Shipment is on the road" }
+            : open === "invoiced"
+              ? { kind: "agent", name: "Documents agent", doing: "Writing the invoice" }
+              : open === "received_by_retailer"
+                ? { kind: "retailer", name: retailer, doing: "Receiving the delivery" }
+                : open === "paid"
+                  ? { kind: "retailer", name: retailer, doing: "Paying the invoice" }
+                  : { kind: "none", name: "Nobody", doing: "Done" };
+  }
+
+  // A split delivery: the backorders saved on the order, with the stock-short step that proposed them.
+  const backorders = ((order.notes ?? {}) as { backorders?: { qty: number; date: string | null; gtin: string | null }[] }).backorders ?? [];
+  const qtyStep = allAudit.filter((a) => a.action === "order.qty_short").at(-1);
+  const qtyDetail = (qtyStep?.detail ?? {}) as { message?: string; why?: unknown; action?: string };
+  const later = backorders.reduce((a, b) => a + b.qty, 0);
+  const split: Split | null = later
+    ? {
+        now: confirmed,
+        later,
+        laterDate: backorders.map((b) => b.date).filter((d): d is string => !!d).sort()[0] ?? null,
+        product: backorders[0]?.gtin ? (erp.product({ gtin: backorders[0].gtin })?.name ?? null) : null,
+        by: qtyStep?.actor === "grok" ? "grok" : "code",
+        message: qtyDetail.message ?? null,
+        why: typeof qtyDetail.why === "string" ? qtyDetail.why : null,
+      }
+    : null;
+
+  const value = Math.round(order.lines.reduce((a, l) => a + (l.qtyConfirmed ?? l.qtyOrdered ?? 0) * (l.unitPrice ?? 0), 0) * 100) / 100;
+  const core = journey.filter((j) => j.key !== "claim");
+  const progress = { done: core.filter((j) => j.done).length, total: core.length, current: firstOpen?.label ?? null };
+
   return {
     orderRef: ref,
     retailer,
@@ -335,6 +422,7 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
       text: `Grok and code did ${agents} steps, people approved ${people}`,
     },
     journey,
+    story: orderStory(erp, ref),
     summary: {
       ordered,
       confirmed,
@@ -419,6 +507,13 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
     exceptions,
     history: audit.map((a) => ({ at: a.at, who: who(a.actor), action: actionText(a.action), document: a.source_doc })),
     agents: agentsOf(audit.map((a) => a.action)),
+    owner,
+    split,
+    value,
+    progress,
     askQuestion: `Tell me about order ${ref}: where is it, what is open, and what should happen next?`,
+    caught: caughtProblems(erp, ref),
+    contract: contractFor(order.buyerGln),
+    documents: orderDocuments(erp, ref, [...c.invoices.map((i) => i.invoice), ...c.claims.map((cl) => cl.claim_id), ...c.shipments.map((sh) => sh.desadv)]),
   };
 }

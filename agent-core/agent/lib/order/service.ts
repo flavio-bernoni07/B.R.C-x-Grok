@@ -2,33 +2,56 @@
  * Order row on the shared Mini ERP: ORDERS in, sign-off, ORDRSP and hand-over out
  * (port of order/service.py).
  *
- *   receiveOrder()      parse -> stock -> price, with Grokbot loops; stops at a person
+ *   receiveOrder()      parse -> stock -> price, with Grokbot loops; stops at a person, or, under
+ *                       the policy `auto_when_clean`, Grok confirms a clean order itself
  *   confirmOrder()      the person approves: ORDRSP is written, the hand-over is returned
  *   resolvePriceCase()  the person types a manual EDI (back to Parse) or parks the order
  *
- * The order-dec.md rules hold: Grok's fixes go back through the code checks, a wrong price
- * never reaches the confirm step, and a person confirms every order.
+ * The order-dec.md rules hold: Grok's fixes go back through the code checks and a wrong price
+ * never reaches the confirm step. Who confirms is the team policy (agent-core/policy.json):
+ * `always_person` (Python's rule: a person confirms every order) or `auto_when_clean` (Grok, the
+ * order agent, confirms an order that passed every check with no Grok correction, no split and
+ * no price issue; every other order still waits for a person). Prices are checked against the
+ * buyer's annual contract (core/contracts.ts), or the default contract when it has none.
  */
-import type { Erp, Order } from "../core/erp";
+import { supplyContractFor } from "../core/contracts";
+import { type Erp, nowIso, type Order } from "../core/erp";
+import { type Policy, readPolicy } from "../core/policy";
 import { decide, requestSignoff } from "../core/signoff";
 import { availableToPromise, nextReadyDate } from "../core/stock";
 import type { Caller } from "../grok/client";
+import { ingestConfirmedOrder } from "../shipping/service";
 import { ErpAvailabilityProvider } from "./availability";
-import { loadContract, type SupplyContract } from "./contract";
+import type { SupplyContract } from "./contract";
 import { polishPriceMail, proposeParseFix, proposeQtyResolution } from "./grokbot";
 import { buildOrdrsp, type OrdrspHandoff, qtyText } from "./ordrsp";
-import type { OrderLine, ParsedOrder, ParseFlag } from "./parser";
+import { type OrderLine, type ParsedOrder, type ParseFlag, parseOrdersEdi } from "./parser";
 import { PipelineStatus, runOrderPipeline } from "./pipeline";
 import { pyFloat, pyG, pyStr } from "./py";
 
 export const MAX_ROUNDS = 3;
 
-export type ReceiveResult = {
-  status: "awaiting_person";
+export type ReceiveResult =
+  | {
+      status: "awaiting_person";
+      case_id: string;
+      order_ref: string | null;
+      step: "manual_edi" | "stock_short" | "price_fix" | "confirm";
+    }
+  | AutoConfirmed;
+
+/** Grok confirmed a clean order on its own (policy auto_when_clean): ORDRSP written, order with Shipping. */
+export type AutoConfirmed = {
+  status: "confirmed";
   case_id: string;
-  order_ref: string | null;
-  step: "manual_edi" | "stock_short" | "price_fix" | "confirm";
+  order_ref: string;
+  step: "auto_confirmed";
+  ordrsp_ref: string;
+  handoff: ConfirmedOrderHandoff;
 };
+
+/** Who decides when Grok confirms an order (the sign-off record's `decidedBy`). */
+export const GROK_ORDER_AGENT = "Grok, order agent";
 
 export type Backorder = { line_no: number; gtin: string | null; qty: number; date: string | null };
 
@@ -80,9 +103,10 @@ const erpLines = (lines: OrderLine[]) =>
 export async function receiveOrder(
   erp: Erp,
   rawEdi: string,
-  opts: { sourceName?: string; contract?: SupplyContract | null; caller?: Caller | null } = {},
+  opts: { sourceName?: string; contract?: SupplyContract | null; caller?: Caller | null; policy?: Policy } = {},
 ): Promise<ReceiveResult> {
-  const contract = opts.contract ?? loadContract();
+  const contract = opts.contract ?? supplyContractFor(buyerOf(rawEdi));
+  const policy = opts.policy ?? readPolicy();
   const caller = opts.caller ?? null;
   const docId = erp.addDocument("ORDERS", null, rawEdi, { path: opts.sourceName ?? "ORDERS" });
   erp.log("retailer", "orders.received", null, { sourceDoc: docId });
@@ -240,20 +264,36 @@ export async function receiveOrder(
         notes: { backorders, grokbot: notes },
       });
       const draft = buildOrdrsp(parsed);
+      const proposal = {
+        lines,
+        availability: result.availability.map((a) => ({ ...a })),
+        price_check: result.price_check ? result.price_check.toDict() : null,
+        backorders,
+        grokbot: notes,
+        draft_ordrsp: draft.body,
+      };
+      const clean =
+        policy.order_confirmation === "auto_when_clean" &&
+        !notes.length &&
+        !backorders.length &&
+        result.availability.length === parsed.lines.length &&
+        result.availability.every((a) => a.ok) &&
+        !!result.price_check?.ok &&
+        result.price_check.lines.length === parsed.lines.length &&
+        result.price_check.lines.every((l) => l.reason === "match");
+      if (clean) return grokConfirms(erp, ref, { docId, proposal, contractId: contract.id });
       const caseId = requestSignoff(erp, {
         row: "order",
         kind: "confirm",
         subjectRef: ref,
         title: `Confirm order ${ref} before the ORDRSP goes out`,
-        proposal: {
-          lines,
-          availability: result.availability.map((a) => ({ ...a })),
-          price_check: result.price_check ? result.price_check.toDict() : null,
-          backorders,
-          grokbot: notes,
-          draft_ordrsp: draft.body,
-        },
-        reasons: ["Order rule: a person confirms every order before ORDRSP", ...personReasons],
+        proposal,
+        reasons: [
+          policy.order_confirmation === "auto_when_clean"
+            ? "Order rule: Grok confirms only clean orders; this one needs a person"
+            : "Order rule: a person confirms every order before ORDRSP",
+          ...personReasons,
+        ],
       });
       erp.log("code", "order.checks_passed", ref, { sourceDoc: docId, detail: { case: caseId } });
       return { status: "awaiting_person", case_id: caseId, order_ref: ref, step: "confirm" };
@@ -281,6 +321,11 @@ export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: 
     }
   }
   decide(erp, caseId, { approve: true, by: d.by, reason: d.reason });
+  return writeOrdrsp(erp, order, caseId);
+}
+
+/** Code writes the ORDRSP for a confirmed order and returns the hand-over for Shipping. */
+function writeOrdrsp(erp: Erp, order: Order, caseId: string): ConfirmedOrderHandoff {
   const parsed = parsedFromErp(order);
   const ordrsp = buildOrdrsp(parsed, { responseDate: order.orderDate || null });
   const docId = erp.addDocument("ORDRSP", order.orderRef, ordrsp.body);
@@ -292,6 +337,51 @@ export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: 
     backorders: ((order.notes ?? {}).backorders as Backorder[] | undefined) || [],
     signoff_case: caseId,
   };
+}
+
+/** The buyer GLN of a raw ORDERS (to pick its contract before the checks run), or null. */
+function buyerOf(rawEdi: string): string | null {
+  try {
+    return parseOrdersEdi(rawEdi).order.buyer_gln ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Policy auto_when_clean, on an order that passed every check with nothing changed: Grok, the
+ * order agent, confirms it. The confirmation is kept like a person's (an approved confirm case in
+ * the sign-off queue, decided by "Grok, order agent", with a reason that names the checks), code
+ * writes the ORDRSP, and the order goes to Shipping. No model call is needed: the checks decide,
+ * and Grok is the agent that acts on them; every step is in the audit log.
+ */
+function grokConfirms(erp: Erp, ref: string, a: { docId: string; proposal: Record<string, unknown>; contractId: string }): AutoConfirmed {
+  const order = erp.order(ref)!;
+  const n = order.lines.length;
+  const checks = [
+    "EDI read with no parser flags",
+    `stock available to promise for ${n === 1 ? "the line" : `all ${n} lines`} (Mini ERP batches less confirmed orders)`,
+    `every price matches contract ${a.contractId}`,
+    "no Grok correction, no split",
+  ];
+  const reason = `Every check passed: ${checks.join("; ")}. Policy auto_when_clean: Grok confirms clean orders.`;
+  const caseId = erp.nextId("signoff", "SO-");
+  erp.insertSignoff({
+    caseId,
+    row: "order",
+    kind: "confirm",
+    subjectRef: ref,
+    title: `Order ${ref}: every check passed, Grok confirmed it`,
+    proposal: { ...a.proposal, auto: { policy: "auto_when_clean", checks } },
+    reasons: ["Order policy auto_when_clean: a clean order is confirmed by Grok, no person needed"],
+    status: "approved",
+  });
+  erp.updateSignoff(caseId, { decidedBy: GROK_ORDER_AGENT, decisionReason: reason, decidedAt: nowIso() });
+  erp.log("code", "order.checks_passed", ref, { sourceDoc: a.docId, detail: { case: caseId } });
+  erp.log("grok", "order.auto_confirmed", ref, { sourceDoc: caseId, detail: { by: GROK_ORDER_AGENT, reason, policy: "auto_when_clean", checks } });
+  const handoff = writeOrdrsp(erp, order, caseId);
+  ingestConfirmedOrder(erp, handoff);
+  return { status: "confirmed", case_id: caseId, order_ref: ref, step: "auto_confirmed", ordrsp_ref: handoff.ordrsp_ref, handoff };
 }
 
 export function rejectOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): void {

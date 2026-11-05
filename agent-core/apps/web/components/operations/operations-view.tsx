@@ -31,7 +31,7 @@ export function OperationsView({ initialTab }: { readonly initialTab: OpsTab }) 
   };
   return (
     <Page>
-      <PageHeader title="Operations" sub={SUB[tab]}>
+      <PageHeader title="Operations">
         <Segmented options={OPS_TABS} value={tab} onChange={change} />
       </PageHeader>
       {tab === "inventory" ? <InventoryTab /> : null}

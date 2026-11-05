@@ -42,7 +42,7 @@ export const TEMPLATES: Record<string, [string, string, string[]]> = {
   TRUCK_UNAVAILABLE: ["logistics", "transport_planner", ["PLAN_ON_TRUCK"]],
   NO_TRUCK: ["logistics", "transport_planner", ["PLAN_ON_TRUCK"]],
   PLAN_MISSING_PRODUCT_DATA: ["master_data", "master_data_clerk", []],
-  WRONG_TRUCK: ["warehouse", "warehouse_lead", ["RESCAN_PALLET"]],
+  WRONG_TRUCK: ["warehouse", "warehouse_lead", ["RESCAN_PALLET", "SHIP_WITHOUT_PALLET"]],
   DUPLICATE_SCAN: ["warehouse", "warehouse_operator", ["IGNORE_DUPLICATE"]],
   MISSING_PALLET: ["warehouse", "warehouse_lead", ["RESCAN_PALLET", "SHIP_WITHOUT_PALLET"]],
   WRONG_PRODUCT: ["warehouse", "warehouse_lead", ["RESCAN_PALLET", "SHIP_WITHOUT_PALLET"]],

@@ -1,0 +1,13 @@
+Da: supply.chain@pampanorama.it
+A: dispute@risoscotti.it
+Oggetto: Penale ritardo consegna ordine {{order}}
+
+Buongiorno,
+
+la consegna dell'ordine {{order}} (DDT {{ddt}}) e' arrivata in ritardo rispetto allo slot
+prenotato. Come da nostre condizioni generali applichiamo una penale del {{penalty_pct}}% sul valore
+della fattura {{invoice}} (imponibile {{net_it}} euro), cioe' {{penalty_it}} euro, che
+tratterremo dal prossimo pagamento salvo vostra nota di credito.
+
+Cordiali saluti,
+Pam Panorama - Supply chain

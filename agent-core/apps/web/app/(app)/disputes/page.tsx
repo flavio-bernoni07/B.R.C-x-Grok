@@ -1,6 +1,10 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { DisputesView } from "@/components/dispute/disputes-view";
 
-/** Disputes live in Actions now (ops workspace). Keep this path so old links still land. */
 export default function Page() {
-  redirect("/actions");
+  return (
+    <Suspense>
+      <DisputesView />
+    </Suspense>
+  );
 }

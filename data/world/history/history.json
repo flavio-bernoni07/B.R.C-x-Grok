@@ -1,0 +1,444 @@
+{
+  "_comment": "Demo data, invented: three months of orders (24 Aug to 4 Nov 2026) that agent-core/agent/lib/demo/history.ts replays through the real rows after the dispatch day. Each shipped order first gets its own production lot (lots), so the stock on hand on 4 Nov stays what data/world/stock.json says and Arborio is untouched. Retailer messages are the ORDERS_*.edi files (scripts/build-demo-world.ts), the claim emails in claims/ and the remittances below (Esselunga's takes a €300 flyer contribution with no promo annex behind it: a claim for the credit desk); every amount in them is filled in from the Mini ERP documents of that order ({{invoice}}, {{price}}, {{amount}} ...), and Grok's answers for the claims are recorded in grok_recorded.json.",
+  "orders": [
+    {
+      "ref": "COO-26-08412",
+      "lots": [
+        {
+          "batch": "LOT-R-0049",
+          "item": "RSP-FUNGHI-210",
+          "qty": 4800,
+          "note": "Risotto pronto ai funghi, ready-meals line, finished 21 Aug"
+        },
+        {
+          "batch": "LOT-RZ-0024",
+          "item": "RSP-ZAFF-210",
+          "qty": 4800,
+          "note": "Risotto pronto allo zafferano, ready-meals line, finished 21 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-08-26",
+        "truck": "TRUCK-PV-11",
+        "plate": "FK310GD"
+      },
+      "deliver": {
+        "date": "2026-08-27",
+        "signed_by": "Coop CeDi Nord, ricevimento",
+        "received": {
+          "RSP-FUNGHI-210": 4560
+        },
+        "note": "1 cartone mancante: 240 confezioni di risotto ai funghi"
+      }
+    },
+    {
+      "ref": "LID-40212",
+      "lots": [
+        {
+          "batch": "LOT-GL-0204",
+          "item": "GAL-150G",
+          "qty": 14400,
+          "note": "Gallette di riso 150 g, puffing line, finished 25 Aug"
+        },
+        {
+          "batch": "LOT-B1-0288",
+          "item": "BAS-1KG",
+          "qty": 4800,
+          "note": "Basmati 1 kg, line 5, finished 25 Aug"
+        },
+        {
+          "batch": "LOT-VN-0058",
+          "item": "VEN-500G",
+          "qty": 3600,
+          "note": "Venere 500 g, line 5, finished 26 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-08-31",
+        "truck": "TRUCK-PV-12",
+        "plate": "FK522LR"
+      },
+      "deliver": {
+        "date": "2026-09-01",
+        "signed_by": "Lidl CeDi Biandrate, ricevimento"
+      }
+    },
+    {
+      "ref": "ESS-47390",
+      "lots": [
+        {
+          "batch": "LOT-RB-0371",
+          "item": "RIBE-1KG",
+          "qty": 7680,
+          "note": "Ribe 1 kg, line 3, finished 31 Aug"
+        },
+        {
+          "batch": "LOT-GL-0198",
+          "item": "GAL-150G",
+          "qty": 3600,
+          "note": "Gallette di riso 150 g, puffing line, finished 31 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-09-01",
+        "truck": "TRUCK-PV-10",
+        "plate": "FK688NB"
+      },
+      "deliver": {
+        "date": "2026-09-02",
+        "signed_by": "Esselunga CeDi Melzo, ricevimento"
+      }
+    },
+    {
+      "ref": "COO-26-08530",
+      "lots": [
+        {
+          "batch": "LOT-RB-0371",
+          "item": "RIBE-1KG",
+          "qty": 9600,
+          "note": "Ribe 1 kg, line 3, finished 28 Aug"
+        },
+        {
+          "batch": "LOT-PB-0188",
+          "item": "PARB-1KG",
+          "qty": 4800,
+          "note": "Parboiled 1 kg, line 4, finished 28 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-09-02",
+        "truck": "TRUCK-PV-13",
+        "plate": "FL104SE"
+      },
+      "deliver": {
+        "date": "2026-09-03",
+        "signed_by": "Coop CeDi Nord, ricevimento"
+      }
+    },
+    {
+      "ref": "PAM-77015",
+      "lots": [
+        {
+          "batch": "LOT-SU-0044",
+          "item": "SUSHI-500G",
+          "qty": 3600,
+          "note": "Riso per Sushi 500 g, line 5, finished 29 Aug"
+        },
+        {
+          "batch": "LOT-JS-0131",
+          "item": "JAS-1KG",
+          "qty": 1920,
+          "note": "Thai Jasmine 1 kg, line 5, finished 29 Aug"
+        },
+        {
+          "batch": "LOT-B-0884",
+          "item": "BAS-500G",
+          "qty": 3600,
+          "note": "Basmati 500 g, finished 30 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-09-03",
+        "truck": "TRUCK-PV-14",
+        "plate": "FL377TB"
+      },
+      "deliver": {
+        "date": "2026-09-04",
+        "signed_by": "Pam CeDi Spinea, ricevimento (slot 04/09 ore 07:30)"
+      }
+    },
+    {
+      "ref": "DSP-90233",
+      "lots": [
+        {
+          "batch": "LOT-C-0402",
+          "item": "CAR-1KG",
+          "qty": 4800,
+          "note": "Carnaroli 1 kg, line 1, finished 31 Aug"
+        },
+        {
+          "batch": "LOT-IN-0104",
+          "item": "INT-1KG",
+          "qty": 1920,
+          "note": "Integrale 1 kg, line 4, finished 31 Aug"
+        }
+      ],
+      "ship": {
+        "date": "2026-09-04",
+        "truck": "TRUCK-PV-15",
+        "plate": "FL690AZ"
+      },
+      "deliver": {
+        "date": "2026-09-05",
+        "signed_by": "Despar CeDi Mestrino, ricevimento"
+      }
+    },
+    {
+      "ref": "UNS-61190",
+      "lots": [
+        {
+          "batch": "LOT-BV-0079",
+          "item": "BEV-1L",
+          "qty": 2160,
+          "note": "Bevanda di riso 1 L, drinks line, finished 2 Oct"
+        },
+        {
+          "batch": "LOT-GL-0218",
+          "item": "GAL-150G",
+          "qty": 7200,
+          "note": "Gallette di riso 150 g, puffing line, finished 2 Oct"
+        }
+      ],
+      "ship": {
+        "date": "2026-10-07",
+        "truck": "TRUCK-PV-16",
+        "plate": "FM215KC"
+      },
+      "deliver": {
+        "date": "2026-10-08",
+        "signed_by": "Unes CeDi Vimodrone, ricevimento",
+        "received": {
+          "BEV-1L": 2124
+        },
+        "note": "36 confezioni di bevanda di riso danneggiate (cartone schiacciato), respinte allo scarico"
+      }
+    },
+    {
+      "ref": "EUR-77310",
+      "lots": [
+        {
+          "batch": "LOT-B1-0301",
+          "item": "BAS-1KG",
+          "qty": 9600,
+          "note": "Basmati 1 kg, line 5, finished 9 Oct"
+        },
+        {
+          "batch": "LOT-RB-0389",
+          "item": "RIBE-1KG",
+          "qty": 4800,
+          "note": "Ribe 1 kg, line 3, finished 9 Oct"
+        }
+      ],
+      "ship": {
+        "date": "2026-10-14",
+        "truck": "TRUCK-PV-17",
+        "plate": "FM448PN"
+      },
+      "deliver": {
+        "date": "2026-10-15",
+        "signed_by": "Eurospin CeDi Calcinato, ricevimento"
+      }
+    },
+    {
+      "ref": "IPR-30577",
+      "lots": [
+        {
+          "batch": "LOT-VN-0066",
+          "item": "VEN-500G",
+          "qty": 3600,
+          "note": "Venere 500 g, line 5, finished 16 Oct"
+        },
+        {
+          "batch": "LOT-RZ-0029",
+          "item": "RSP-ZAFF-210",
+          "qty": 4800,
+          "note": "Risotto pronto allo zafferano, ready-meals line, finished 16 Oct"
+        }
+      ],
+      "ship": {
+        "date": "2026-10-21",
+        "truck": "TRUCK-PV-18",
+        "plate": "FN032RD"
+      },
+      "deliver": {
+        "date": "2026-10-22",
+        "signed_by": "Iper CeDi Arese, ricevimento"
+      }
+    },
+    {
+      "ref": "CON-26-1044",
+      "lots": [
+        {
+          "batch": "LOT-IN-0112",
+          "item": "INT-1KG",
+          "qty": 960,
+          "note": "Integrale 1 kg, line 4, finished 23 Oct"
+        },
+        {
+          "batch": "LOT-PB-0204",
+          "item": "PARB-1KG",
+          "qty": 2880,
+          "note": "Parboiled 1 kg, line 4, finished 23 Oct"
+        },
+        {
+          "batch": "LOT-RA-0009",
+          "item": "RSP-ASP-210",
+          "qty": 2400,
+          "note": "Risotto pronto agli asparagi, ready-meals line, finished 23 Oct"
+        }
+      ],
+      "ship": {
+        "date": "2026-10-28",
+        "truck": "TRUCK-PV-19",
+        "plate": "FN261GH"
+      },
+      "deliver": {
+        "date": "2026-10-29",
+        "signed_by": "Conad CeDi Ancona, ricevimento"
+      }
+    },
+    {
+      "ref": "ESS-48811",
+      "lots": [
+        {
+          "batch": "LOT-RB-0398",
+          "item": "RIBE-1KG",
+          "qty": 7680,
+          "note": "Ribe 1 kg, line 3, finished 30 Oct"
+        },
+        {
+          "batch": "LOT-B-0896",
+          "item": "BAS-500G",
+          "qty": 3600,
+          "note": "Basmati 500 g, finished 30 Oct"
+        },
+        {
+          "batch": "LOT-GL-0226",
+          "item": "GAL-150G",
+          "qty": 3600,
+          "note": "Gallette di riso 150 g, puffing line, finished 30 Oct"
+        }
+      ],
+      "ship": {
+        "date": "2026-11-04",
+        "truck": "TRUCK-PV-20",
+        "plate": "FN508LK"
+      }
+    },
+    {
+      "ref": "LID-40388",
+      "ship": {
+        "date": "2026-11-05",
+        "truck": "TRUCK-PV-21",
+        "plate": "FN733MS",
+        "planned_only": true
+      }
+    },
+    {
+      "ref": "BEN-31877",
+      "expect": "price_fix"
+    },
+    {
+      "ref": "AUC-55120",
+      "expect": "confirm"
+    }
+  ],
+  "claims": [
+    {
+      "key": "coop_shortage",
+      "order": "COO-26-08412",
+      "file": "claims/01_coop_shortage.txt",
+      "date": "2026-08-28",
+      "item": "RSP-FUNGHI-210",
+      "qty": 240,
+      "expect": "closed"
+    },
+    {
+      "key": "unes_damage",
+      "order": "UNS-61190",
+      "file": "claims/02_unes_damage.txt",
+      "date": "2026-10-09",
+      "item": "BEV-1L",
+      "qty": 36,
+      "expect": "closed"
+    },
+    {
+      "key": "eurospin_promo",
+      "order": "EUR-77310",
+      "file": "claims/03_eurospin_promo_price.txt",
+      "date": "2026-10-20",
+      "item": "BAS-1KG",
+      "qty": 9600,
+      "claimed_price": 2.59,
+      "expect": "closed"
+    },
+    {
+      "key": "pam_late",
+      "order": "PAM-77015",
+      "file": "claims/04_pam_late_penalty.txt",
+      "date": "2026-09-10",
+      "penalty_pct": 3,
+      "expect": "closed"
+    },
+    {
+      "key": "iper_shortage",
+      "order": "IPR-30577",
+      "file": "claims/05_iper_shortage_after_clean_pod.txt",
+      "date": "2026-11-02",
+      "item": "VEN-500G",
+      "qty": 120,
+      "expect": "awaiting_person"
+    }
+  ],
+  "remittances": [
+    {
+      "ref": "RA-COO-2026-10-30",
+      "date": "2026-10-30",
+      "orders": [
+        {
+          "order": "COO-26-08412",
+          "credit_from": "coop_shortage"
+        },
+        {
+          "order": "COO-26-08530"
+        }
+      ]
+    },
+    {
+      "ref": "RA-LID-2026-10-30",
+      "date": "2026-10-30",
+      "orders": [
+        {
+          "order": "LID-40212"
+        }
+      ]
+    },
+    {
+      "ref": "RA-ESS-2026-10-31",
+      "date": "2026-10-31",
+      "orders": [
+        {
+          "order": "ESS-47390",
+          "adjustments": [
+            {
+              "code": "PC",
+              "amount": 300.0,
+              "note": "Contributo volantino ottobre"
+            }
+          ]
+        }
+      ],
+      "verdict": "esselunga_flyer"
+    },
+    {
+      "ref": "RA-PAM-2026-11-02",
+      "date": "2026-11-02",
+      "orders": [
+        {
+          "order": "PAM-77015"
+        }
+      ]
+    },
+    {
+      "ref": "RA-DSP-2026-11-03",
+      "date": "2026-11-03",
+      "orders": [
+        {
+          "order": "DSP-90233",
+          "short_unexplained": 250.0
+        }
+      ],
+      "verdict": "despar_deduction"
+    }
+  ]
+}

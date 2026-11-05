@@ -2,7 +2,7 @@
 
 import type { FinanceView } from "@agent/lib/finance/documents";
 import { useEffect, useState } from "react";
-import { DataTable, day, eur, Panel, Pill, SourceTag } from "@/components/kit";
+import { DataTable, day, eur, Pill, Section, SourceTag } from "@/components/kit";
 
 type Doc = { docId: string; kind: string; ref: string | null; createdAt: string; body: string };
 
@@ -28,13 +28,13 @@ export function FinanceTab() {
   const kinds = [...new Set(data.documents.map((d) => d.kind))];
   const docs = data.documents.filter((d) => kind === "all" || d.kind === kind);
   return (
-    <div className="space-y-5">
-      <div className="space-y-1 rounded-[12px] bg-hh-honeydew px-4 py-3 text-[13px]">
+    <div className="space-y-10">
+      <div className="space-y-1 text-[12px] text-ink-68">
         {data.notes.map((n) => (
           <p key={n}>{n}</p>
         ))}
       </div>
-      <Panel title="Invoices" aside="linked to the order and the shipment they bill">
+      <Section title="Invoices" aside="linked to the order and the shipment they bill">
         <DataTable
           rows={data.invoices}
           rowKey={(i) => i.invoiceRef}
@@ -69,9 +69,9 @@ export function FinanceTab() {
             Credit notes: {data.creditNotes.map((c) => `${c.kind} for ${c.ref}`).join(", ")}.
           </p>
         ) : null}
-      </Panel>
+      </Section>
       <div className={doc ? "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_520px]" : "grid gap-5"}>
-        <Panel
+        <Section
           title="Documents"
           aside={
             <select aria-label="Document kind" className="rounded-md border bg-background px-2 py-0.5 text-[12px]" value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -97,9 +97,9 @@ export function FinanceTab() {
               { key: "c", header: "Written", cell: (d) => day(d.createdAt) },
             ]}
           />
-        </Panel>
+        </Section>
         {doc ? (
-          <Panel
+          <Section
             title={`${doc.kind} · ${doc.ref ?? doc.docId}`}
             aside={
               <button type="button" onClick={() => setDoc(null)} className="text-ink-68 hover:text-ink">
@@ -114,7 +114,7 @@ export function FinanceTab() {
             <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-all rounded-[10px] bg-white/70 p-3 font-mono text-[12px] leading-snug">
               {doc.kind.startsWith("INVOIC") || doc.kind === "DESADV" || doc.kind.startsWith("ORD") ? doc.body.replace(/'/g, "'\n") : doc.body}
             </pre>
-          </Panel>
+          </Section>
         ) : null}
       </div>
     </div>

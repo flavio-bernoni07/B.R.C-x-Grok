@@ -51,7 +51,7 @@ const columns: Column<ShippingListRow>[] = [
   { key: "what", header: "What happened", cell: (r) => <span className="block max-w-[360px] truncate" title={whatHappened(r)}>{whatHappened(r)}</span> },
   {
     key: "threeway",
-    header: "threeway",
+    header: "threeway (old CRM)",
     cell: (r) => (r.reconcile ? <ThreewayAnswer answer={r.reconcile.threeway} wrong={r.reconcile.threeway_wrong} /> : <span className="text-ink-50">–</span>),
   },
   {
@@ -114,7 +114,7 @@ export function ReconcileBody({ view }: { readonly view: ReconcileView }) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-[12px] bg-white/60 px-3 py-2">
-          <div className="text-[12px] text-ink-68">threeway</div>
+          <div className="text-[12px] text-ink-68">threeway (old CRM)</div>
           <div className="mt-1 text-[14px]">
             <ThreewayAnswer answer={view.threeway} wrong={view.threeway_wrong} />
           </div>
@@ -377,7 +377,7 @@ export function BenchTable({ res }: { readonly res: BenchResult }) {
     { key: "right", header: "Right answer", cell: (r) => answerText(r.expected) },
     {
       key: "threeway",
-      header: "threeway",
+      header: "threeway (old CRM)",
       cell: (r) => <ThreewayAnswer answer={r.threeway} wrong={!(r.threeway_attention_ok && r.threeway_causes_ok)} />,
     },
     {

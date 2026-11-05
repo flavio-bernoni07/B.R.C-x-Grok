@@ -17,6 +17,10 @@
 
 ## What I found
 
+## Routes
+
+How today's trucks and the planned route are built, and the 6 Nov figures: [routes.md](routes.md).
+
 ## What I decided
 
 ## What I need from others

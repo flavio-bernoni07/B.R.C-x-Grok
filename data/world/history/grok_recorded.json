@@ -1,0 +1,344 @@
+{
+  "_comment": "Recorded Grok answers for the order history (demo data), so the seed runs with the network off. They go through exactly the same code checks as a live answer. Values like {{invoice}} or {{amount}} are filled in by agent/lib/demo/history.ts from the Mini ERP documents of that order (invoice numbers are given out when the seed runs); a value that is only a placeholder becomes a number.",
+  "order.fix_parse": {
+    "AUC-55120": {
+      "corrected_edi": "UNH+1+ORDERS:D:96A:UN'\nBGM+220+AUC-55120+9'\nDTM+137:20261104:102'\nNAD+BY+8000000000131::9'\nNAD+SU+SUPPLIER001::9'\nLIN+1++8003660012439:EN'\nQTY+21:3600'\nPRI+AAA:3.29:CT'\nUNS+S'\nUNT+10+1'\n",
+      "confidence": 0.88,
+      "changes": [
+        {
+          "segment": "DTM",
+          "before": "04/11/2026",
+          "after": "20261104",
+          "why": "dd/mm/yyyy written instead of CCYYMMDD"
+        },
+        {
+          "segment": "QTY",
+          "before": "3.600",
+          "after": "3600",
+          "why": "Italian thousands separator: two pallets of 1,800 packs, not three packs"
+        }
+      ]
+    }
+  },
+  "order.price_mail": {
+    "BEN-31877": {
+      "mail": "Oggetto: Differenza di prezzo sull'ordine BEN-31877 — CTR-SCOTTI-BEN-2026\n\nGentile Bennet (demo),\n\nabbiamo ricevuto il vostro messaggio ORDERS per l'ordine BEN-31877. Il prezzo unitario indicato non corrisponde al contratto di fornitura CTR-SCOTTI-BEN-2026 tra Bennet (demo) e Riso Scotti S.p.A. (demo).\n\nDettaglio:\n- GTIN 8003660012460: ordinato a €2.79, prezzo di contratto €2.69 (quantità 3600.0)\n\nVi chiediamo di confermare il prezzo di contratto o di inviarci un ORDERS corretto.\n\nCordiali saluti,\nRiso Scotti S.p.A. (demo)\n(Bozza: da rivedere e inviare a mano)\n"
+    }
+  },
+  "claims": {
+    "coop_shortage": {
+      "read_claim": {
+        "order_ref": "{{order}}",
+        "invoice_ref": "{{invoice}}",
+        "product": "{{product}}",
+        "quantity": "{{qty}}",
+        "amount": "{{amount}}",
+        "claim_type": "shortage",
+        "confidence": 0.93,
+        "raw_notes": "Coop counted {{received}} against {{shipped}} on the DESADV; reservation written on the DDT at unloading"
+      },
+      "verdict": {
+        "decision": "accept",
+        "amount": "{{amount}}",
+        "confidence": 0.9,
+        "needs_sign_off": false,
+        "summary": "The signed DDT carries a reservation for one missing carton of {{qty}} packs, and the invoice bills the {{shipped}} on the DESADV. Credit {{qty}} x {{price}}.",
+        "points": [
+          {
+            "text": "The retailer signed the DDT with a reservation: {{received}} received of {{shipped}} shipped",
+            "amount": "{{amount}}",
+            "source": {
+              "kind": "pod",
+              "ref": "{{ddt}}",
+              "detail": "{{pod}}"
+            }
+          },
+          {
+            "text": "Invoice {{invoice}} bills {{shipped}} packs at {{price}}, the quantity on the DESADV",
+            "amount": null,
+            "source": {
+              "kind": "invoice",
+              "ref": "{{invoice}}",
+              "detail": "invoice line {{item}}"
+            }
+          },
+          {
+            "text": "Playbook shortage rule: the signed DDT beats the despatch advice when the reservation was written at unloading",
+            "amount": null,
+            "source": {
+              "kind": "playbook",
+              "ref": "Shortage / OSD",
+              "detail": "prefer signed DDT/POD"
+            }
+          }
+        ]
+      }
+    },
+    "unes_damage": {
+      "read_claim": {
+        "order_ref": "{{order}}",
+        "invoice_ref": "{{invoice}}",
+        "product": "{{product}}",
+        "quantity": "{{qty}}",
+        "amount": "{{amount}}",
+        "claim_type": "damage",
+        "confidence": 0.92,
+        "raw_notes": "Crushed cartons refused at unloading; reservation on the DDT, photos on the Unes portal (UNS-Q-4471)"
+      },
+      "verdict": {
+        "decision": "accept",
+        "amount": "{{amount}}",
+        "confidence": 0.88,
+        "needs_sign_off": false,
+        "summary": "The DDT was signed with a reservation for {{qty}} damaged packs refused at unloading, and the invoice bills them. Credit {{qty}} x {{price}}.",
+        "points": [
+          {
+            "text": "DDT signed at unloading with a reservation: {{qty}} packs damaged and refused",
+            "amount": "{{amount}}",
+            "source": {
+              "kind": "pod",
+              "ref": "{{ddt}}",
+              "detail": "{{pod}}"
+            }
+          },
+          {
+            "text": "Invoice {{invoice}} bills the {{shipped}} packs shipped at {{price}}",
+            "amount": null,
+            "source": {
+              "kind": "invoice",
+              "ref": "{{invoice}}",
+              "detail": "invoice line {{item}}"
+            }
+          },
+          {
+            "text": "Playbook damage rule: accept the damaged quantity at the order price when a signed DDT supports it",
+            "amount": null,
+            "source": {
+              "kind": "playbook",
+              "ref": "Damage",
+              "detail": "signed DDT annotation"
+            }
+          }
+        ]
+      }
+    },
+    "eurospin_promo": {
+      "read_claim": {
+        "order_ref": "{{order}}",
+        "invoice_ref": "{{invoice}}",
+        "product": "{{product}}",
+        "quantity": "{{qty}}",
+        "amount": "{{amount}}",
+        "claim_type": "pricing",
+        "confidence": 0.9,
+        "raw_notes": "Eurospin expects an October promo price of {{claimed_price}}; no promo reference given"
+      },
+      "verdict": {
+        "decision": "reject",
+        "amount": null,
+        "confidence": 0.86,
+        "needs_sign_off": false,
+        "summary": "Invoice {{invoice}} bills {{product}} at {{price}}, the price on Eurospin's own ORDERS and on contract {{contract}}, which has no promo annex in 2026. A promotion from last year does not carry over. Reply with the contract and the order.",
+        "points": [
+          {
+            "text": "Contract {{contract}} sets {{price}} for this quantity and states there is no promo annex in 2026",
+            "amount": null,
+            "source": {
+              "kind": "contract",
+              "ref": "{{contract}}",
+              "detail": "price list {{item}}, notes"
+            }
+          },
+          {
+            "text": "Eurospin's ORDERS {{order}} carried the same unit price, {{price}}",
+            "amount": null,
+            "source": {
+              "kind": "order",
+              "ref": "{{order}}",
+              "detail": "PRI on the ORDERS line"
+            }
+          },
+          {
+            "text": "The invoice price equals the order price: threeway finds no price difference",
+            "amount": null,
+            "source": {
+              "kind": "invoice",
+              "ref": "{{invoice}}",
+              "detail": "invoice line {{item}}"
+            }
+          }
+        ]
+      }
+    },
+    "pam_late": {
+      "read_claim": {
+        "order_ref": "{{order}}",
+        "invoice_ref": "{{invoice}}",
+        "product": null,
+        "quantity": null,
+        "amount": "{{penalty}}",
+        "claim_type": "late_delivery",
+        "confidence": 0.9,
+        "raw_notes": "Late-delivery penalty of {{penalty_pct}}% on the invoice taxable amount; no slot time given in the claim"
+      },
+      "verdict": {
+        "decision": "reject",
+        "amount": null,
+        "confidence": 0.84,
+        "needs_sign_off": false,
+        "summary": "The DDT was signed at the Pam CeDi on {{deliver_date}}, in the booked slot, and contract {{contract}} has no late-delivery penalty clause. Reply with the signed DDT; nothing is owed.",
+        "points": [
+          {
+            "text": "Signed DDT: received in full on {{deliver_date}}, in the slot the CeDi booked",
+            "amount": null,
+            "source": {
+              "kind": "pod",
+              "ref": "{{ddt}}",
+              "detail": "{{pod}}"
+            }
+          },
+          {
+            "text": "Contract {{contract}} has no late-delivery penalty clause",
+            "amount": null,
+            "source": {
+              "kind": "contract",
+              "ref": "{{contract}}",
+              "detail": "notes"
+            }
+          },
+          {
+            "text": "Playbook late-delivery rule: a penalty only if the contract sets one",
+            "amount": null,
+            "source": {
+              "kind": "playbook",
+              "ref": "Late delivery / OTIF",
+              "detail": "no penalty amount in the contract"
+            }
+          }
+        ]
+      }
+    },
+    "iper_shortage": {
+      "read_claim": {
+        "order_ref": "{{order}}",
+        "invoice_ref": "{{invoice}}",
+        "product": "{{product}}",
+        "quantity": "{{qty}}",
+        "amount": "{{amount}}",
+        "claim_type": "shortage",
+        "confidence": 0.88,
+        "raw_notes": "Shortage found at a month-end inventory, eleven days after delivery; cites internal receiving report RCV-IPR-10233"
+      },
+      "verdict": {
+        "decision": "reject",
+        "amount": null,
+        "confidence": 0.5,
+        "needs_sign_off": true,
+        "summary": "The DDT was signed with no reservation and the order, DESADV and invoice agree, so the Playbook leans to reject. But Iper cites a receiving report (RCV-IPR-10233) that is not in the Mini ERP, and the count was made eleven days later. A person should ask Iper for the report before replying.",
+        "points": [
+          {
+            "text": "Signed DDT with no reservation: everything received on {{deliver_date}}",
+            "amount": null,
+            "source": {
+              "kind": "pod",
+              "ref": "{{ddt}}",
+              "detail": "{{pod}}"
+            }
+          },
+          {
+            "text": "Order, DESADV and invoice agree on {{shipped}} packs",
+            "amount": null,
+            "source": {
+              "kind": "threeway",
+              "ref": "matched",
+              "detail": "order = DESADV = invoice"
+            }
+          },
+          {
+            "text": "Contract {{contract}}: shortages must be written on the DDT; a later claim needs the CeDi's receiving report, which we do not have",
+            "amount": null,
+            "source": {
+              "kind": "contract",
+              "ref": "{{contract}}",
+              "detail": "notes"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "deductions": {
+    "despar_deduction": {
+      "decision": "reject",
+      "amount": null,
+      "confidence": 0.6,
+      "needs_sign_off": true,
+      "summary": "Despar paid {{invoice}} short by {{short}} with no reason code, and contract {{contract}} requires one on every deduction. The delivery was signed clean. Ask Despar for the reason before accepting or recovering it.",
+      "points": [
+        {
+          "text": "Remittance {{remittance}} pays {{invoice}} short with no adjustment code",
+          "amount": null,
+          "source": {
+            "kind": "other",
+            "ref": "{{remittance}}",
+            "detail": "REMADV, no AJT segment"
+          }
+        },
+        {
+          "text": "Contract {{contract}}: every deduction must carry a reason code and a reference",
+          "amount": null,
+          "source": {
+            "kind": "contract",
+            "ref": "{{contract}}",
+            "detail": "notes"
+          }
+        },
+        {
+          "text": "The DDT was signed with no reservation",
+          "amount": null,
+          "source": {
+            "kind": "pod",
+            "ref": "{{ddt}}",
+            "detail": "{{pod}}"
+          }
+        }
+      ]
+    },
+    "esselunga_flyer": {
+      "decision": "reject",
+      "amount": null,
+      "confidence": 0.8,
+      "needs_sign_off": false,
+      "summary": "Esselunga took {{deducted}} off {{invoice}} as a flyer contribution. Contract {{contract}} allows promotions only through a signed promo annex, and none is in force. Ask Esselunga for the annex or recover the {{deducted}}.",
+      "points": [
+        {
+          "text": "Remittance {{remittance}} deducts {{deducted}} from {{invoice}}: {{adjustment}}",
+          "amount": null,
+          "source": {
+            "kind": "other",
+            "ref": "{{remittance}}",
+            "detail": "REMADV, AJT segment"
+          }
+        },
+        {
+          "text": "Contract {{contract}}: promotions (flyers, temporary prices) only through a signed promo annex; none is in force for Q4 2026",
+          "amount": null,
+          "source": {
+            "kind": "contract",
+            "ref": "{{contract}}",
+            "detail": "notes"
+          }
+        },
+        {
+          "text": "Invoice {{invoice}} bills the contract prices, with no promo discount agreed",
+          "amount": null,
+          "source": {
+            "kind": "invoice",
+            "ref": "{{invoice}}",
+            "detail": "invoice lines"
+          }
+        }
+      ]
+    }
+  }
+}

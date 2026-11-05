@@ -79,8 +79,13 @@ export type DispatchPlan = {
   plant: { id: string; name: string; lat: number; lon: number };
   orders: string[];
   routes: Route[];
-  /** Today's way: one truck per order, plant to the retailer and back. */
-  baseline: Totals & { trips: { order_ref: string; point: string; km: number }[] };
+  /**
+   * Today's way, as Riso Scotti's logistics office works: the day's orders are consolidated by
+   * destination, so orders for the same retailer warehouse (CeDi) share full trucks, and every truck
+   * drives plant → CeDi → plant. No multi-drop routes across warehouses. One trip per truck;
+   * `order_ref` lists its orders.
+   */
+  baseline: Totals & { trips: { order_ref: string; orders: string[]; point: string; km: number }[] };
   plan: Totals;
   saving: Totals & { km_pct: number; fuel_pct: number };
   unplanned: { order_ref: string; reason: string }[];
@@ -331,14 +336,17 @@ export function planRoutes(
     `drive times are never faster than ${lg.rules.truck_speed_kmh} km/h, the truck limit`,
   ];
 
-  // Baseline: one truck per order, the way planTruckLoads books them today.
-  const trips = planned.map((ref) => {
-    const point = orderLoad(erp, ref).destination!;
+  // Baseline: manual consolidation by destination, the way the logistics office plans today
+  // (Politecnico di Milano thesis on Riso Scotti's logistics, 2020: orders are consolidated so
+  // trucks leave full, one destination each). The nodes above are exactly that: orders for one CeDi
+  // on as few trucks as fit. Each such truck drives there and back.
+  const trips = nodes.map((node) => {
+    const point = node.point.id;
     const km = roads.km(plant, point) + roads.km(point, plant);
     const min = roads.min(plant, point) + roads.min(point, plant);
-    return { order_ref: ref, point, km: r1(km), drive_min: min, driver_days: driverDays(lg, min) };
+    return { order_ref: node.orders.join(", "), orders: [...node.orders], point, km: r1(km), drive_min: min, driver_days: driverDays(lg, min) };
   });
-  const baseline = { ...totals(trips, lg), trips: trips.map(({ order_ref, point, km }) => ({ order_ref, point, km })) };
+  const baseline = { ...totals(trips, lg), trips: trips.map(({ order_ref, orders, point, km }) => ({ order_ref, orders, point, km })) };
 
   let routes: Route[] = [];
   if (nodes.length) {
@@ -461,7 +469,7 @@ export async function briefWithGrok(p: DispatchPlan, opts: { caller?: Caller | n
       content:
         "You are the logistics agent of the Riso Scotti back office. Code has already planned the trucks; you brief the " +
         "transport planner who approves the plan. Say in two or three sentences what the plan does and what it saves " +
-        "against one truck per order, then list what the planner should watch (long trips, driver days, unplanned " +
+        "against the planner's way (orders grouped by warehouse, one truck each), then list what the planner should watch (long trips, driver days, unplanned " +
         "orders). Use only numbers that appear in the plan. Return JSON: {\"summary\": string, \"watch\": [string]}.",
     },
     { role: "user" as const, content: facts },
@@ -487,8 +495,12 @@ export async function briefWithGrok(p: DispatchPlan, opts: { caller?: Caller | n
 export function recordedCaller(shipDate: string): Caller | null {
   const path = dataPath("world", "dispatch", "grok_recorded.json");
   if (!existsSync(path)) return null;
-  const answer = (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>)[shipDate];
-  return answer && typeof answer === "object" ? () => JSON.parse(JSON.stringify(answer)) : null;
+  // One answer, or several for the same day (the plan changes with the orders): each retry takes the next.
+  const recorded = (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>)[shipDate];
+  const answers = (Array.isArray(recorded) ? recorded : [recorded]).filter((a) => a && typeof a === "object");
+  if (!answers.length) return null;
+  let call = 0;
+  return () => JSON.parse(JSON.stringify(answers[Math.min(call++, answers.length - 1)]));
 }
 
 export function dispatchSignoffs(erp: Erp, status?: string) {

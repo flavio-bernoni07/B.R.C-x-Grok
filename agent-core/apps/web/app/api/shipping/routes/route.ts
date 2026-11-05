@@ -1,13 +1,23 @@
 import { getReadyErp } from "@agent/lib/db/app";
 import { DISPATCH_DAY } from "@agent/lib/demo/dispatch";
-import { dispatchSignoffs, proposeDispatchPlan, readyOrders, RoutePlanError } from "@agent/lib/shipping/routes";
+import { dispatchSignoffs, planRoutes, proposeDispatchPlan, readyOrders, RoutePlanError } from "@agent/lib/shipping/routes";
 
 /** The latest dispatch plan for a ship date (waiting, approved or rejected) and the orders still to plan. */
 export async function GET(request: Request) {
   const erp = await getReadyErp();
   const shipDate = new URL(request.url).searchParams.get("date") ?? DISPATCH_DAY;
   const cases = dispatchSignoffs(erp).filter((s) => (s.proposal as { ship_date?: string } | null)?.ship_date === shipDate);
-  return Response.json({ ship_date: shipDate, ready: readyOrders(erp), plan_case: cases.at(-1) ?? null });
+  const ready = readyOrders(erp);
+  // Code's plan for the orders still to plan (no Grok, no sign-off): what the page shows before anyone asks.
+  let preview = null;
+  if (ready.length) {
+    try {
+      preview = planRoutes(erp, { shipDate, orderRefs: ready });
+    } catch {
+      preview = null;
+    }
+  }
+  return Response.json({ ship_date: shipDate, ready, plan_case: cases.at(-1) ?? null, preview });
 }
 
 /** Ask the logistics agent for a plan: code plans, Grok briefs, the transport planner decides in the sign-off card. */

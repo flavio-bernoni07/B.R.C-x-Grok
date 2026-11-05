@@ -7,7 +7,7 @@
  */
 import type { Signoff } from "@agent/lib/core/erp";
 import type { EveToolPart } from "eve/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { AuditCard } from "@/components/core/audit";
 import { ImpactCard, OverviewCard } from "@/components/core/overview";
 import { SignoffCard, SignoffQueue } from "@/components/core/signoff";
@@ -40,7 +40,35 @@ export function isCardTool(part: EveToolPart): boolean {
   return part.name in CARDS && part.state === "completed" && part.output != null;
 }
 
+/** A card in the thread stays short: past 320 px it folds, with "Show all" to open it. */
+function Fold({ children }: { readonly children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tall, setTall] = useState(false);
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => {
+    if (ref.current) setTall(ref.current.scrollHeight > 340);
+  }, []);
+  return (
+    <div className="relative">
+      <div ref={ref} className={tall && !open ? "max-h-[320px] overflow-hidden" : undefined}>
+        {children}
+      </div>
+      {tall && !open ? (
+        <div className="absolute inset-x-0 bottom-0 flex h-24 items-end justify-center bg-gradient-to-t from-hh-seasalt to-transparent pb-2">
+          <button type="button" onClick={() => setOpen(true)} className="rounded-full bg-white px-4 py-1.5 font-bold text-[13px] shadow-[inset_0_0_0_1px_rgb(32_49_25/0.12)]">
+            Show all
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ToolCard({ part }: { readonly part: EveToolPart }) {
   const Card = CARDS[part.name];
-  return Card ? <Card output={part.output} /> : null;
+  return Card ? (
+    <Fold>
+      <Card output={part.output} />
+    </Fold>
+  ) : null;
 }

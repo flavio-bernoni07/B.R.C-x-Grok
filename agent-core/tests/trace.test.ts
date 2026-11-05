@@ -16,7 +16,7 @@ describe("trace (core/trace.py)", () => {
   it("walks the golden order like the Python", async () => {
     process.env.BRC_PLAYBOOK = "/tmp/brc-trace-playbook-test.md";
     const erp = freshErp();
-    await runGolden(erp);
+    await runGolden(erp, { caseStudy: false }); // the Python reference has no remittance
     const c = chain(erp, "ESS-GOLD-001");
     const got = JSON.parse(JSON.stringify({ ...c, audit: c.audit.map((a) => ({ ...a, at: null })) }));
     expect(got).toEqual(REF);

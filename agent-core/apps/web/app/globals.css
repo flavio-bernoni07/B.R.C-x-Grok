@@ -28,7 +28,11 @@
 }
 
 @theme inline {
-  /* HeyHandy brand palette (HeyHandy/brand/tokens.ts) */
+  /*
+   * HeyHandy brand palette (HeyHandy/brand/tokens.ts) with HeyHandy's colour method (brand/UI.md):
+   * one ink (Dark Green), one accent (Flex Green), quiet tints, and three states for a pill:
+   * Live (Flex Green), Quiet (Honeydew), Strong (Dark Green). Something a person must act on is Strong.
+   */
   --color-hh-dark: #203119;
   --color-hh-honeydew: #ebf1e4;
   --color-hh-flex: #bfff80;
@@ -37,18 +41,23 @@
   --color-hh-seasalt: #f9f9f9;
   --color-hh-opal: #9fc6bf;
   --color-hh-asparagus: #559646;
+  /* Flex Green deep enough to read as a number on white (KPI "Saved", "Make this week"). */
+  --color-hh-lime: #6fb514;
   /* UI kit tints, only inside the app window (HeyHandy/brand/UI.md) */
   --color-hh-window: #eef3e8;
   --color-hh-sidebar: #e3ebdb;
   --color-hh-selection: #fbfdf9;
-  /* Client-screen status states (UI.md: only for status) */
-  --color-st-attention: #fbe2a4;
-  --color-st-attention-ink: #6d4a08;
+  /* States follow the method: no amber, no red fills */
+  --color-st-attention: #e3ebdb;
+  --color-st-attention-ink: #203119;
   --color-st-ok: #d9f5bf;
   --color-st-ok-ink: #2c6a1d;
   --color-st-wait: #e4e9de;
   --color-st-wait-ink: #5f6a5b;
+  /* A small mark beside a wrong answer only (UI.md), never a fill. Waiting on a person is yellow, not this red. */
   --color-st-wrong: #d2473b;
+  --color-st-pending: #f6e3a1;
+  --color-st-pending-ink: #8a6400;
   /* Dark Green at the kit's ink levels */
   --color-ink: #203119;
   --color-ink-78: rgb(32 49 25 / 0.78);
@@ -208,4 +217,135 @@ textarea {
 @utility shimmer-none {
   --shimmer-image: none;
   --shimmer-text-fill: currentColor;
+}
+
+/* UI.md "Rise": up out of a soft blur on the long ease-out. Messages and panels arrive this way. */
+@keyframes hh-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.hh-rise {
+  animation: hh-rise 0.7s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh-rise {
+    animation: none;
+  }
+}
+
+/* The question chips (kit/chip-rail.tsx): two copies of the row slide left by one copy, in a loop. */
+@keyframes hh-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.hh-marquee {
+  animation: hh-marquee 30s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh-marquee {
+    animation: none;
+  }
+}
+
+/* Wispr-style voice bar, bottom right of every page. */
+.voice-dock {
+  position: fixed;
+  z-index: 80;
+  right: 22px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.voice-pill {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  max-width: min(540px, calc(100vw - 32px));
+  height: 48px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #121212;
+  color: #f7f7f5;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 16px 40px rgb(0 0 0 / 0.32);
+  cursor: pointer;
+}
+
+.voice-pill:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.voice-pill:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.voice-pill-live {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 0 0 6px rgb(146 118 255 / 0.22),
+    0 16px 40px rgb(0 0 0 / 0.32);
+}
+
+.voice-glow {
+  position: absolute;
+  z-index: -1;
+  inset: -18px -26px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgb(146 118 255 / 0.5), rgb(92 140 255 / 0.14) 46%, transparent 74%);
+  filter: blur(10px);
+  opacity: 0;
+}
+
+.voice-pill-live .voice-glow {
+  opacity: 1;
+}
+
+.voice-wave {
+  display: flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
+.voice-bar {
+  width: 3px;
+  height: 26px;
+  border-radius: 999px;
+  background: white;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.voice-words {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

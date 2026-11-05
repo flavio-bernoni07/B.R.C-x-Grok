@@ -4,8 +4,9 @@
  */
 import type { Erp } from "../core/erp";
 import { listOrders } from "./views";
-import { type InboxStatus, orderWorkspace, STATUS_LABEL } from "./workspace";
+import { type InboxStatus, type Owner, orderWorkspace, type Split, STATUS_LABEL } from "./workspace";
 
+export type { InboxStatus } from "./workspace";
 export type InboxFilter = "all" | "attention" | "progress" | "completed";
 
 export type InboxRow = {
@@ -17,6 +18,11 @@ export type InboxRow = {
   status: InboxStatus;
   statusLabel: string;
   agents: string[];
+  owner: Owner;
+  split: Split | null;
+  units: number;
+  value: number;
+  progress: { done: number; total: number; current: string | null };
   /** False for a sign-off case whose order was never saved (no workspace to open). */
   hasWorkspace: boolean;
 };
@@ -48,6 +54,11 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         status: ws.status,
         statusLabel: ws.statusLabel,
         agents: ws.agents,
+        owner: ws.owner,
+        split: ws.split,
+        units: ws.summary.ordered,
+        value: ws.value,
+        progress: ws.progress,
         hasWorkspace: true,
       });
     } else {
@@ -61,6 +72,11 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         status,
         statusLabel: STATUS_LABEL[status],
         agents: ["Order"],
+        owner: status === "attention" ? { kind: "person", name: "Order desk", doing: s.check } : { kind: "none", name: "Nobody", doing: "Done" },
+        split: null,
+        units: s.qtyOrdered ?? 0,
+        value: 0,
+        progress: { done: 1, total: 10, current: "Confirmed" },
         hasWorkspace: false,
       });
     }

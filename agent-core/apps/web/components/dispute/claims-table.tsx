@@ -2,7 +2,8 @@
 
 import type { ClaimRow } from "@agent/lib/dispute/views";
 import { type Column, DataTable, Panel, Pill } from "@/components/kit";
-import { grokSays, outcomePill, retailerSays } from "./format";
+import { GrokMark } from "@/components/kit/icons";
+import { confidencePct, grokSays, outcomePill, retailerSays } from "./format";
 
 const columns: Column<ClaimRow>[] = [
   {
@@ -19,8 +20,24 @@ const columns: Column<ClaimRow>[] = [
   { key: "says", header: "Retailer says", cell: (r) => retailerSays(r) },
   {
     key: "grok",
-    header: "Grok",
-    cell: (r) => <span className={r.grok?.needs_sign_off ? "text-st-attention-ink" : undefined}>{grokSays(r.grok)}</span>,
+    header: "Grok suggests",
+    cell: (r) => (
+      <span className="flex items-center gap-2">
+        {r.grok && !r.grok.needs_sign_off && !r.outcome?.approved_by ? <GrokMark size={15} title="Settled by Grok, no person needed" /> : null}
+        <span className={r.grok?.needs_sign_off ? "font-bold text-ink" : undefined}>{grokSays(r.grok)}</span>
+      </span>
+    ),
+  },
+  {
+    key: "conf",
+    header: "Grok confidence level",
+    align: "right",
+    cell: (r) =>
+      r.grok ? (
+        <b className={r.grok.lowest_confidence < 0.55 ? "font-bold text-st-pending-ink tabular-nums" : "font-bold text-ink tabular-nums"}>{confidencePct(r.grok.lowest_confidence)}</b>
+      ) : (
+        "–"
+      ),
   },
   {
     key: "outcome",

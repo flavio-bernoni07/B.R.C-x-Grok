@@ -11,21 +11,24 @@ const TYPE_LABEL: Record<string, string> = {
 
 export const claimTypeLabel = (t: string | null | undefined) => (t ? (TYPE_LABEL[t] ?? t) : "Unread");
 
-/** "Shortage · €528.00 · 240 Carnaroli 1 kg". */
+/** "Shortage · €528.00 · 240 Carnaroli 1 kg". A claim of no known type with an amount (a deduction
+ *  such as a promo contribution) is "Other"; with nothing to go on it is "Unclear". */
 export function retailerSays(r: Pick<ClaimRow, "claim_type" | "claimed_amount" | "claimed_quantity" | "product">): string {
-  const bits = [claimTypeLabel(r.claim_type)];
+  const bits = [r.claim_type === "other" && r.claimed_amount != null ? "Other" : claimTypeLabel(r.claim_type)];
   if (r.claimed_amount != null) bits.push(eur(r.claimed_amount));
   const what = [r.claimed_quantity != null ? qty(r.claimed_quantity) : null, r.product].filter(Boolean).join(" ");
   if (what) bits.push(what);
   return bits.join(" · ");
 }
 
-/** "€528 · 3 sources", "reject · 3 sources" or "unsure · 0.40". */
+/** Confidence as a percentage. 0.60 is "60%", never "unsure · 0.60". */
+export const confidencePct = (v: number) => `${Math.round(v * 100)}%`;
+
+/** What Grok suggests, in a word or two: "credit €528", "reject", "repay €250". The confidence has its own column. */
 export function grokSays(g: ClaimRow["grok"]): string {
   if (!g) return "–";
-  if (g.needs_sign_off) return `unsure · ${g.lowest_confidence.toFixed(2)}`;
-  const n = `${g.sources} ${g.sources === 1 ? "source" : "sources"}`;
-  return g.amount != null && g.decision !== "reject" ? `${eur(g.amount, g.amount % 1 ? 2 : 0)} · ${n}` : `${g.decision} · ${n}`;
+  const d = g.decision.replace(/_/g, " ");
+  return g.amount != null && g.decision !== "reject" ? `${d} ${eur(g.amount, g.amount % 1 ? 2 : 0)}` : d;
 }
 
 export function outcomePill(r: Pick<ClaimRow, "status" | "outcome">): { tone: PillTone; label: string } {

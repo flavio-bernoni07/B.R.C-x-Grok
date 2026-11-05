@@ -1,0 +1,14 @@
+Da: qualita.fornitori@unes.it
+A: credit.note@risoscotti.it
+Oggetto: Merce danneggiata ordine {{order}} - richiesta nota di credito
+
+Buongiorno,
+
+con la consegna del {{deliver_date_it}} (DDT {{ddt}}) sono arrivate {{qty}} confezioni di
+{{product}} con il cartone schiacciato e il tappo rotto. Le abbiamo respinte allo scarico e
+l'autista ha firmato la riserva sul DDT. Alleghiamo due foto (rif. portale UNS-Q-4471).
+
+Vi chiediamo la nota di credito sulla fattura {{invoice}}: {{qty}} x {{price_it}} = {{amount_it}} euro.
+
+Grazie,
+Unes Supermercati - Qualita' fornitori

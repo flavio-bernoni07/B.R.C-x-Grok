@@ -10,7 +10,7 @@ let erp: Erp;
 beforeAll(async () => {
   process.env.BRC_PLAYBOOK = "/tmp/brc-ops-home-playbook.md";
   erp = freshErp();
-  await runGolden(erp, { dispatchDay: false }); // the golden order alone; the 6 Nov dispatch day has its own tests
+  await runGolden(erp, { dispatchDay: false, caseStudy: false }); // the golden order alone, shipped and invoiced; the 6 Nov dispatch day has its own tests
 });
 
 describe("impact summary", () => {
@@ -36,10 +36,10 @@ describe("search", () => {
   it("finds orders, invoices, claims, retailers and trucks", () => {
     expect(search(erp, "gold-001")[0]).toMatchObject({ label: "ESS-GOLD-001", href: "/orders?ref=ESS-GOLD-001" });
     expect(search(erp, "FT-2026/0001")[0]).toMatchObject({ href: "/orders?ref=ESS-GOLD-001" });
-    expect(search(erp, "TRUCK-PV-01")[0]).toMatchObject({ href: "/operations?tab=warehouse" });
+    expect(search(erp, "TRUCK-PV-01")[0]).toMatchObject({ href: "/shipping" });
     expect(search(erp, "esselunga").some((h) => h.sub === "Retailer")).toBe(true);
     const claim = search(erp, "CLM-00002")[0];
-    expect(claim.href).toMatch(/^\/actions\?case=SO-/);
+    expect(claim.href).toMatch(/^\/signoff\?case=SO-/);
     expect(search(erp, "x")).toEqual([]);
   });
 });

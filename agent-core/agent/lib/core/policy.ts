@@ -1,7 +1,12 @@
 /**
- * Team policy read from agent-core/policy.json. Today only `order_confirmation`:
- * `always_person` (default, the Order team's rule) or `auto_when_clean`.
- * Read only: the auto-confirm path is not built, so `auto_when_clean` changes nothing yet.
+ * Team policy read from agent-core/policy.json (BRC_POLICY overrides the path). Today only
+ * `order_confirmation`:
+ *
+ *   always_person    a person confirms every order before ORDRSP (the Order team's first rule,
+ *                    and the default when the file is missing or unreadable)
+ *   auto_when_clean  an order that passes every check with no Grok correction, no split and no
+ *                    price issue is confirmed by Grok, the order agent (order/service.ts
+ *                    `receiveOrder`); anything else still waits for a person
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,6 +14,8 @@ import { repoRoot } from "../paths";
 
 export type Policy = { order_confirmation: "always_person" | "auto_when_clean" };
 export const DEFAULT_POLICY: Policy = { order_confirmation: "always_person" };
+export const ALWAYS_PERSON: Policy = { order_confirmation: "always_person" };
+export const AUTO_WHEN_CLEAN: Policy = { order_confirmation: "auto_when_clean" };
 
 export function readPolicy(): Policy {
   try {
@@ -23,4 +30,6 @@ export function readPolicy(): Policy {
 }
 
 export const policyLabel = (p: Policy) =>
-  p.order_confirmation === "always_person" ? "Order confirmation: a person always confirms" : "Order confirmation: clean orders go through on their own";
+  p.order_confirmation === "always_person"
+    ? "Order confirmation: a person always confirms"
+    : "Order confirmation: Grok confirms clean orders, a person confirms every exception";

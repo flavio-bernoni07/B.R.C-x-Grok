@@ -29,7 +29,6 @@ export function SignoffView() {
     <Page>
       <PageHeader
         title="Sign-off"
-        sub="When code or Grok cannot finish a case, it stops here with a proposal and the documents behind it. You approve or reject that proposal and write one line on why — that line is what the Playbook learns from."
       >
         <Segmented
           value={filter}

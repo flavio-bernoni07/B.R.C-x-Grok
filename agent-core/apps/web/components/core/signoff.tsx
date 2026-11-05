@@ -321,7 +321,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
   // Desk is Actions; order/shipping still have their pages.
   const subjectHref =
     c.row === "dispute"
-      ? `/actions?case=${encodeURIComponent(c.caseId)}`
+      ? `/signoff?case=${encodeURIComponent(c.caseId)}`
       : c.row === "order" && c.subjectRef
         ? `/orders?ref=${encodeURIComponent(c.subjectRef)}`
         : c.row === "shipping" && c.subjectRef
@@ -352,7 +352,7 @@ export function SignoffCard({ signoff, onDecided }: { readonly signoff: Signoff;
             )}{" "}
             · asked {day(c.createdAt)}
             {c.row === "dispute" ? (
-              <span className="text-ink-68"> · open in Actions for the full decision package</span>
+              <span className="text-ink-68"> · open in Sign-off for the full decision package</span>
             ) : null}
           </p>
         ) : null}

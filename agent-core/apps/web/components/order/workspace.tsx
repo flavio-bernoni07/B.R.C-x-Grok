@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { day, eur, Facts, Panel, Pill, type PillTone, qty, SourceTag } from "@/components/kit";
 import { askHref } from "@/components/shell/overview-chat";
 
-export const STATUS_TONE: Record<InboxStatus, PillTone> = { attention: "attention", on_track: "quiet", waiting: "wait", completed: "ok" };
+export const STATUS_TONE: Record<InboxStatus, PillTone> = { attention: "attention", on_track: "live", waiting: "quiet", completed: "ok" };
 
 const when = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: iso.length > 10 ? "2-digit" : undefined, minute: iso.length > 10 ? "2-digit" : undefined, timeZone: "UTC" }) : null;

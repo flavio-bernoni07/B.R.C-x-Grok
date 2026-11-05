@@ -96,8 +96,8 @@ export function PaddyToBuy({ plan, interactive = false }: { readonly plan: Paddy
           d.error
             ? d.error
             : d.created
-              ? `Proposal ${d.case_id} is waiting in Actions for a person to approve with a reason. Nothing is bought by the app.`
-              : `Proposal ${d.case_id} is already waiting in Actions.`,
+              ? `Proposal ${d.case_id} is waiting in Sign-off for a person to approve with a reason. Nothing is bought by the app.`
+              : `Proposal ${d.case_id} is already waiting in Sign-off.`,
         ),
       )
       .catch(() => setMessage("The proposal could not be sent. Please try again."))

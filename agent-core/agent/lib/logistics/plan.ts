@@ -4,7 +4,7 @@
  *
  * One planner only: this calls `planRoutes` (agent/lib/shipping/routes.ts). Real road km (OSRM on
  * OpenStreetMap), fuel use from ICCT, the MASE diesel price; every grouping and stop order is tried
- * within 33 pallets, 24 t and the 9-hour driving limit, against one truck per order. Orders a person
+ * within 33 pallets, 24 t and the 9-hour driving limit, against the planner's way (orders grouped by warehouse, one truck each). Orders a person
  * has not confirmed yet (or confirmed, not yet with Shipping) are included as a preview, so the
  * Ready-to-ship card can show the truck an order would go on.
  *
