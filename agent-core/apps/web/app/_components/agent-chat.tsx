@@ -243,7 +243,14 @@ export function AgentChat({
           }
         >
           {!intro || !isEmpty ? <ConversationTopFade className="top-14 from-hh-seasalt" /> : null}
-          <ConversationContent className={cn("mx-auto w-full max-w-[980px] gap-6 px-4 sm:px-6", homeDock ? "min-h-full py-6" : "pt-12 pb-60")}>
+          <ConversationContent
+            className={cn(
+              "mx-auto w-full gap-6 px-4 sm:px-6",
+              // Home desk: a touch wider than the ask bar below so the widgets read larger;
+              // the header, sidebar and composer stay on their own widths.
+              homeDock ? "min-h-full max-w-[1080px] py-6" : "max-w-[980px] pt-12 pb-60",
+            )}
+          >
             {intro ? (
               <Message className={cn("max-w-full", homeDock && "my-auto")} from="assistant">
                 <MessageContent className="w-full">
