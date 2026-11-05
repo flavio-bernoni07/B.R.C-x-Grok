@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Install / update B.R.C x Grok, start the local dashboard, open the Mac app
-# (falls back to the browser if the .app will not launch).
+# Open the hosted dashboard. It stays up when this Mac is off.
+#   open https://brc-x-grok.vercel.app
 #   curl -fsSL https://raw.githubusercontent.com/flavio-bernoni07/B.R.C-x-Grok/main/scripts/get-dashboard.sh | bash
-#   FORCE=1 bash scripts/get-dashboard.sh   # reinstall deps + Mac app
+#   scripts/get-dashboard.sh --app-only   # the local Mac app, used by pnpm dev:web
+#   FORCE=1 scripts/get-dashboard.sh --local   # install the repo and the Mac app on this machine
 set -euo pipefail
 
 # Keep PATH ASCII-only and never fail the script if nvm is missing.
@@ -207,12 +208,41 @@ open_ui() {
   say "Browser opened at ${URL}"
 }
 
+# The hosted dashboard. No install.
+DASHBOARD_URL="https://brc-x-grok.vercel.app"
+
+open_target() {
+  local target="$1"
+  if command -v open >/dev/null 2>&1; then
+    open "${target}"
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "${target}"
+  else
+    printf '%s\n' "${target}"
+  fi
+}
+
 # --- main ---
-say "B.R.C x Grok setup"
-ensure_repo
-ensure_node_pnpm
-ensure_deps
-ensure_app
-ensure_server
-open_ui
-say "Done. If the window is blank, wait a few seconds or open ${URL}"
+if [ "${1:-}" = "--app-only" ]; then
+  if [ -d "${APP}" ]; then
+    open "${APP}"
+  else
+    open_target "${DASHBOARD_URL}"
+  fi
+  exit 0
+fi
+
+if [ "${1:-}" = "--local" ]; then
+  say "B.R.C x Grok setup"
+  ensure_repo
+  ensure_node_pnpm
+  ensure_deps
+  ensure_app
+  ensure_server
+  open_ui
+  say "Done. If the window is blank, wait a few seconds or open ${URL}"
+  exit 0
+fi
+
+say "Opening ${DASHBOARD_URL}"
+open_target "${DASHBOARD_URL}"
