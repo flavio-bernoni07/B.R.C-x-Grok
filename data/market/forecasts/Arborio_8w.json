@@ -1,0 +1,575 @@
+{
+  "variety": "Arborio",
+  "unit": "EUR/t paddy, Italy",
+  "model": "Prophet on log price, flat trend, yearly seasonality, anchored on the last price; 80% band from past 8-week moves",
+  "as_of": "2026-10-19",
+  "last_price": 576,
+  "change_4w_pct": 0,
+  "change_52w_pct": -7.8,
+  "horizon_weeks": 8,
+  "forecast_end": {
+    "date": "2026-12-14",
+    "mean": 613.2,
+    "lower": 511.6,
+    "upper": 659.4,
+    "change_pct": 6.5
+  },
+  "history": [
+    {
+      "date": "2023-10-23",
+      "price": 576
+    },
+    {
+      "date": "2023-10-30",
+      "price": 576
+    },
+    {
+      "date": "2023-11-06",
+      "price": 624
+    },
+    {
+      "date": "2023-11-13",
+      "price": 624
+    },
+    {
+      "date": "2023-11-20",
+      "price": 624
+    },
+    {
+      "date": "2023-11-27",
+      "price": 624
+    },
+    {
+      "date": "2023-12-04",
+      "price": 624
+    },
+    {
+      "date": "2023-12-11",
+      "price": 624
+    },
+    {
+      "date": "2023-12-25",
+      "price": 624
+    },
+    {
+      "date": "2024-01-01",
+      "price": 624
+    },
+    {
+      "date": "2024-01-08",
+      "price": 576
+    },
+    {
+      "date": "2024-01-15",
+      "price": 576
+    },
+    {
+      "date": "2024-01-29",
+      "price": 576
+    },
+    {
+      "date": "2024-02-05",
+      "price": 528
+    },
+    {
+      "date": "2024-02-12",
+      "price": 528
+    },
+    {
+      "date": "2024-02-19",
+      "price": 528
+    },
+    {
+      "date": "2024-02-26",
+      "price": 528
+    },
+    {
+      "date": "2024-03-04",
+      "price": 528
+    },
+    {
+      "date": "2024-03-11",
+      "price": 528
+    },
+    {
+      "date": "2024-03-18",
+      "price": 528
+    },
+    {
+      "date": "2024-03-25",
+      "price": 528
+    },
+    {
+      "date": "2024-04-01",
+      "price": 528
+    },
+    {
+      "date": "2024-04-08",
+      "price": 528
+    },
+    {
+      "date": "2024-04-15",
+      "price": 528
+    },
+    {
+      "date": "2024-04-22",
+      "price": 528
+    },
+    {
+      "date": "2024-04-29",
+      "price": 528
+    },
+    {
+      "date": "2024-05-06",
+      "price": 528
+    },
+    {
+      "date": "2024-05-13",
+      "price": 528
+    },
+    {
+      "date": "2024-05-20",
+      "price": 538
+    },
+    {
+      "date": "2024-05-27",
+      "price": 586
+    },
+    {
+      "date": "2024-06-03",
+      "price": 586
+    },
+    {
+      "date": "2024-06-10",
+      "price": 673
+    },
+    {
+      "date": "2024-06-17",
+      "price": 673
+    },
+    {
+      "date": "2024-06-24",
+      "price": 721
+    },
+    {
+      "date": "2024-07-01",
+      "price": 721
+    },
+    {
+      "date": "2024-07-08",
+      "price": 721
+    },
+    {
+      "date": "2024-07-15",
+      "price": 769
+    },
+    {
+      "date": "2024-09-30",
+      "price": 817
+    },
+    {
+      "date": "2024-10-07",
+      "price": 961
+    },
+    {
+      "date": "2024-10-14",
+      "price": 961
+    },
+    {
+      "date": "2024-10-28",
+      "price": 961
+    },
+    {
+      "date": "2024-11-04",
+      "price": 961
+    },
+    {
+      "date": "2024-11-11",
+      "price": 961
+    },
+    {
+      "date": "2024-11-18",
+      "price": 961
+    },
+    {
+      "date": "2024-11-25",
+      "price": 961
+    },
+    {
+      "date": "2024-12-02",
+      "price": 961
+    },
+    {
+      "date": "2024-12-09",
+      "price": 961
+    },
+    {
+      "date": "2024-12-30",
+      "price": 961
+    },
+    {
+      "date": "2025-01-06",
+      "price": 961
+    },
+    {
+      "date": "2025-01-13",
+      "price": 961
+    },
+    {
+      "date": "2025-01-20",
+      "price": 961
+    },
+    {
+      "date": "2025-01-27",
+      "price": 961
+    },
+    {
+      "date": "2025-02-03",
+      "price": 961
+    },
+    {
+      "date": "2025-02-10",
+      "price": 961
+    },
+    {
+      "date": "2025-02-17",
+      "price": 961
+    },
+    {
+      "date": "2025-02-24",
+      "price": 961
+    },
+    {
+      "date": "2025-03-03",
+      "price": 913
+    },
+    {
+      "date": "2025-03-10",
+      "price": 913
+    },
+    {
+      "date": "2025-03-17",
+      "price": 913
+    },
+    {
+      "date": "2025-03-24",
+      "price": 913
+    },
+    {
+      "date": "2025-03-31",
+      "price": 913
+    },
+    {
+      "date": "2025-04-07",
+      "price": 913
+    },
+    {
+      "date": "2025-04-14",
+      "price": 913
+    },
+    {
+      "date": "2025-04-21",
+      "price": 913
+    },
+    {
+      "date": "2025-04-28",
+      "price": 913
+    },
+    {
+      "date": "2025-05-05",
+      "price": 913
+    },
+    {
+      "date": "2025-05-12",
+      "price": 913
+    },
+    {
+      "date": "2025-05-19",
+      "price": 865
+    },
+    {
+      "date": "2025-05-26",
+      "price": 817
+    },
+    {
+      "date": "2025-06-02",
+      "price": 769
+    },
+    {
+      "date": "2025-06-09",
+      "price": 769
+    },
+    {
+      "date": "2025-06-16",
+      "price": 769
+    },
+    {
+      "date": "2025-06-23",
+      "price": 769
+    },
+    {
+      "date": "2025-06-30",
+      "price": 769
+    },
+    {
+      "date": "2025-07-07",
+      "price": 769
+    },
+    {
+      "date": "2025-07-14",
+      "price": 769
+    },
+    {
+      "date": "2025-07-21",
+      "price": 680
+    },
+    {
+      "date": "2025-09-29",
+      "price": 577
+    },
+    {
+      "date": "2025-10-06",
+      "price": 577
+    },
+    {
+      "date": "2025-10-13",
+      "price": 625
+    },
+    {
+      "date": "2025-10-20",
+      "price": 625
+    },
+    {
+      "date": "2025-10-27",
+      "price": 625
+    },
+    {
+      "date": "2025-11-03",
+      "price": 625
+    },
+    {
+      "date": "2025-11-10",
+      "price": 625
+    },
+    {
+      "date": "2025-11-17",
+      "price": 625
+    },
+    {
+      "date": "2025-11-24",
+      "price": 625
+    },
+    {
+      "date": "2025-12-01",
+      "price": 625
+    },
+    {
+      "date": "2025-12-08",
+      "price": 625
+    },
+    {
+      "date": "2026-01-05",
+      "price": 577
+    },
+    {
+      "date": "2026-01-12",
+      "price": 577
+    },
+    {
+      "date": "2026-01-19",
+      "price": 577
+    },
+    {
+      "date": "2026-02-02",
+      "price": 528
+    },
+    {
+      "date": "2026-02-09",
+      "price": 528
+    },
+    {
+      "date": "2026-02-16",
+      "price": 528
+    },
+    {
+      "date": "2026-02-23",
+      "price": 528
+    },
+    {
+      "date": "2026-03-02",
+      "price": 528
+    },
+    {
+      "date": "2026-03-09",
+      "price": 528
+    },
+    {
+      "date": "2026-03-16",
+      "price": 576
+    },
+    {
+      "date": "2026-03-23",
+      "price": 576
+    },
+    {
+      "date": "2026-03-30",
+      "price": 576
+    },
+    {
+      "date": "2026-04-06",
+      "price": 576
+    },
+    {
+      "date": "2026-04-13",
+      "price": 576
+    },
+    {
+      "date": "2026-04-20",
+      "price": 576
+    },
+    {
+      "date": "2026-04-27",
+      "price": 576
+    },
+    {
+      "date": "2026-05-04",
+      "price": 576
+    },
+    {
+      "date": "2026-05-11",
+      "price": 528
+    },
+    {
+      "date": "2026-05-18",
+      "price": 528
+    },
+    {
+      "date": "2026-06-01",
+      "price": 480
+    },
+    {
+      "date": "2026-06-08",
+      "price": 480
+    },
+    {
+      "date": "2026-06-15",
+      "price": 480
+    },
+    {
+      "date": "2026-06-22",
+      "price": 500
+    },
+    {
+      "date": "2026-06-29",
+      "price": 525
+    },
+    {
+      "date": "2026-07-06",
+      "price": 573
+    },
+    {
+      "date": "2026-07-13",
+      "price": 625
+    },
+    {
+      "date": "2026-07-20",
+      "price": 577
+    },
+    {
+      "date": "2026-09-14",
+      "price": 576
+    },
+    {
+      "date": "2026-09-21",
+      "price": 576
+    },
+    {
+      "date": "2026-09-28",
+      "price": 528
+    },
+    {
+      "date": "2026-10-05",
+      "price": 528
+    },
+    {
+      "date": "2026-10-12",
+      "price": 576
+    },
+    {
+      "date": "2026-10-19",
+      "price": 576
+    }
+  ],
+  "forecast": [
+    {
+      "date": "2026-10-26",
+      "mean": 593.2,
+      "lower": 559.7,
+      "upper": 589.3
+    },
+    {
+      "date": "2026-11-02",
+      "mean": 604.3,
+      "lower": 544.4,
+      "upper": 615.4
+    },
+    {
+      "date": "2026-11-09",
+      "mean": 610,
+      "lower": 538.8,
+      "upper": 625.1
+    },
+    {
+      "date": "2026-11-16",
+      "mean": 611.7,
+      "lower": 529.7,
+      "upper": 631.2
+    },
+    {
+      "date": "2026-11-23",
+      "mean": 611.4,
+      "lower": 528,
+      "upper": 641
+    },
+    {
+      "date": "2026-11-30",
+      "mean": 610.9,
+      "lower": 526,
+      "upper": 644.6
+    },
+    {
+      "date": "2026-12-07",
+      "mean": 611.4,
+      "lower": 515.4,
+      "upper": 658.2
+    },
+    {
+      "date": "2026-12-14",
+      "mean": 613.2,
+      "lower": 511.6,
+      "upper": 659.4
+    }
+  ],
+  "backtest": {
+    "origins": 17,
+    "horizon_weeks": 8,
+    "mae_prophet_eur_t": 56.7,
+    "mae_naive_eur_t": 48.4,
+    "mape_prophet_pct": 8.6,
+    "mape_naive_pct": 7.7,
+    "prophet_beats_naive": false,
+    "band_coverage_pct": 76,
+    "period": "2024-10-21 to 2026-08-24"
+  },
+  "sources": [
+    {
+      "file": "eu_rice_prices_it.csv",
+      "name": "EU Agri-food Data Portal, Italian rice prices",
+      "url": "https://api.tech.ec.europa.eu/agrifood/api/rice/prices?memberStateCodes=IT&beginDate=01/09/2015&endDate=04/11/2026",
+      "rows": 13762,
+      "latest": "2026-10-19",
+      "retrieved": "2026-11-04T14:18:09+00:00"
+    }
+  ],
+  "caveat": "Statistical baseline from past prices only. It does not know about news, trade policy, harvest size or farmer stocks. Shipped demo baseline used when the live Prophet forecaster is not available on this machine."
+}

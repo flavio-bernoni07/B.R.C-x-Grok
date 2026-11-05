@@ -6,11 +6,12 @@
  * (run through uv). News comes from Grok's own web and X search.
  */
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { xai } from "@ai-sdk/xai";
 import { generateText } from "ai";
+import { dataPath } from "./paths";
 
 const run = promisify(execFile);
 
@@ -127,8 +128,24 @@ export function getMarketSnapshot(): Promise<MarketSnapshot> {
   return cli<MarketSnapshot>(["market"]);
 }
 
-export function getPriceForecast(variety: string, horizonWeeks = 8): Promise<PriceForecast> {
-  return cli<PriceForecast>(["forecast", "--variety", variety, "--horizon", String(horizonWeeks)]);
+/**
+ * Shipped demo baseline under data/market/forecasts/. Used when uv/Prophet is missing
+ * (hosted Vercel, a Mac without the planning toolchain) so Stock → Buying still shows Cost and Price outlook.
+ */
+function demoForecast(variety: string, horizonWeeks: number): PriceForecast | null {
+  const file = dataPath("market", "forecasts", `${variety}_${horizonWeeks}w.json`);
+  if (!existsSync(file)) return null;
+  return JSON.parse(readFileSync(file, "utf8")) as PriceForecast;
+}
+
+export async function getPriceForecast(variety: string, horizonWeeks = 8): Promise<PriceForecast> {
+  try {
+    return await cli<PriceForecast>(["forecast", "--variety", variety, "--horizon", String(horizonWeeks)]);
+  } catch {
+    const demo = demoForecast(variety, horizonWeeks);
+    if (demo) return demo;
+    throw new Error(`No price forecast for ${variety}`);
+  }
 }
 
 export function refreshData(): Promise<Record<string, Source & { rows: number }>> {
