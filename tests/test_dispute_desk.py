@@ -34,6 +34,43 @@ def _unclear():
     return (lambda _t: dict(extraction)), (lambda _m: json.loads(json.dumps(verdict)))
 
 
+def test_desk_pack_surfaces_multi_issue_split(tmp_path: Path) -> None:
+    erp = fresh_erp()
+    extraction = json.loads((DISPUTES / "extractions" / "07_shortage_and_pricing.json").read_text())
+    shortage = json.loads((DISPUTES / "verdicts" / "07_shortage_issue.json").read_text())
+    pricing = json.loads((DISPUTES / "verdicts" / "07_pricing_ambiguous.json").read_text())
+
+    def verdict_c(messages):
+        import re
+
+        text = messages[-1]["content"] if messages else ""
+        match = re.search(r'"claim_type"\s*:\s*"(\w+)"', text)
+        claim_type = match.group(1) if match else "shortage"
+        return json.loads(json.dumps(pricing if claim_type == "pricing" else shortage))
+
+    res = handle_claim(
+        erp,
+        (DISPUTES / "claims" / "07_shortage_and_pricing.txt").read_text(),
+        out_dir=tmp_path / "out",
+        read_caller=lambda _t: dict(extraction),
+        verdict_caller=verdict_c,
+    )
+    assert res["status"] == "awaiting_person"
+    pending = desk.list_cases(erp)
+    assert pending[0]["issue_count"] == 2
+    assert "pricing" in pending[0]["pending_issue_types"]
+    pack_dir = tmp_path / "multi-pack"
+    shown = desk.show_case(erp, res["case_id"], pack_dir=pack_dir)
+    assert any(iv.get("claim_type") == "shortage" for iv in shown["auto_issues"])
+    assert any(iv.get("claim_type") == "pricing" for iv in shown["pending_issues"])
+    readme = (pack_dir / "README.md").read_text()
+    assert "Issues in this claim" in readme
+    assert "needs you" in readme
+    briefing = json.loads((pack_dir / "briefing.json").read_text())
+    assert briefing["pending_issues"]
+    assert briefing["auto_issues"]
+
+
 def test_desk_lists_and_approves_pending_dispute(tmp_path: Path, capsys) -> None:
     db = tmp_path / "desk.sqlite"
     erp = fresh_erp(db)

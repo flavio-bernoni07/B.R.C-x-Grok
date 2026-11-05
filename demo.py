@@ -8,7 +8,9 @@
 2. Shipping:  a quality hold blocks 1,200 packs -> trucks, picking, scans (one wrong truck,
               fixed through an exception case) -> dispatch 10,800 -> TD01 + INVOIC 380 -> reconcile
 3. Dispute:   the retailer reports a missing pallet, the signed DDT backs it -> credit note
-              with no person (nothing is ambiguous); then an unclear claim goes to a person
+              with no person (nothing is ambiguous); then an unclear claim goes to a person;
+              a twin learns the rule; then a multi-issue claim (shortage clear + pricing
+              needs Sara) shares one desk pack and one combined credit note
 4. Cash:      Esselunga pays less: one deduction is our own credit note (matched), the other
               becomes a claim that a person decides
 5. Planning:  this week's buy-or-wait calls, a lot checked from its photo, the stock projection
@@ -156,6 +158,58 @@ def run(*, live: bool = False, db: str = ":memory:", out_dir: Path | None = None
     say(f"Claim {claim3['claim_id']} (same kind, order RS26113): {claim3['status']}"
         + (f", rule {claim3['verdict']['points'][0]['source']['ref']}" if claim3["status"] == "closed" else ""))
     result["learned_claim"] = claim3["status"]
+
+    # One email, two problems: shortage auto-closes; pricing needs a person; one combined TD04.
+    import re
+
+    multi_ext = json.loads((DISPUTES / "extractions" / "07_shortage_and_pricing.json").read_text())
+    multi_shortage = json.loads((DISPUTES / "verdicts" / "07_shortage_issue.json").read_text())
+    multi_pricing = json.loads((DISPUTES / "verdicts" / "07_pricing_ambiguous.json").read_text())
+
+    def _multi_verdict(messages: list[dict[str, str]]) -> dict:
+        text = messages[-1]["content"] if messages else ""
+        match = re.search(r'"claim_type"\s*:\s*"(\w+)"', text)
+        claim_type = match.group(1) if match else "shortage"
+        payload = multi_pricing if claim_type == "pricing" else multi_shortage
+        return json.loads(json.dumps(payload))
+
+    claim4 = handle_claim(
+        erp,
+        (DISPUTES / "claims" / "07_shortage_and_pricing.txt").read_text(),
+        out_dir=out,
+        read_caller=None if live else (lambda _t: dict(multi_ext)),
+        verdict_caller=None if live else _multi_verdict,
+        received_on=date(2026, 11, 4),
+        issue_date=date(2026, 11, 7),
+    )
+    if claim4["status"] == "awaiting_person":
+        case = erp.signoff(claim4["case_id"])
+        pending = [
+            (iv.get("issue") or {}).get("claim_type")
+            for iv in (claim4["verdict"].get("issue_verdicts") or [])
+            if not iv.get("settled")
+        ]
+        say(
+            f"Claim {claim4['claim_id']} has {len(claim4['verdict'].get('issue_verdicts') or [])} issues; "
+            f"sign-off {case['case_id']} only for {', '.join(t for t in pending if t)}"
+        )
+        done_multi = approve_verdict(
+            erp,
+            case["case_id"],
+            by="Sara, credit desk",
+            reason="Autumn promo applies to Arborio on this PO",
+            playbook_path=playbook,
+            issue_date=date(2026, 11, 7),
+        )
+        say(
+            f"Sara approves the pack; combined {done_multi['outcome']['kind']} "
+            f"€{done_multi['outcome'].get('amount')}"
+        )
+        result["multi_issue_amount"] = done_multi["outcome"].get("amount")
+        result["multi_issue_claim"] = "closed"
+    else:
+        result["multi_issue_claim"] = claim4["status"]
+        result["multi_issue_amount"] = (claim4.get("outcome") or {}).get("amount")
 
     if not quiet:
         step("4. Cash")

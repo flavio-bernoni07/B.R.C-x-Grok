@@ -31,6 +31,7 @@
 2. Their approve **activates a rule** for that fingerprint **and stores their why** as applicability conditions (e.g. quantities agree, late gate-in / OTIF).
 3. Claim B of the same kind closes alone **only if that why still holds** on the new facts; otherwise the rule is skipped and a person is asked again.
 4. Shown in `demo.py` (RS26112 → Sara → RS26113) and `tests/test_learning.py` (teaches + reason-applicability).
+5. Multi-issue pack also runs in `demo.py` (shortage auto + pricing → Sara → one combined TD04); desk case packs list auto vs pending issues.
 
 ## Current work (after the pipeline)
 

@@ -167,9 +167,13 @@ def test_golden_order_runs_through_every_row(tmp_path: Path) -> None:
     assert result["unclear_claim"] == "awaiting_person"
     assert result["learned_claim"] == "closed"
     assert result.get("learned_rule_id")
+    assert result["multi_issue_claim"] == "closed"
+    assert result["multi_issue_amount"] == pytest.approx(202.8)
     assert result["pending_signoffs"] == 0
     assert list(tmp_path.glob("ESS-GOLD-001_TD04.xml"))
-    assert "credit notes issued: 1" in result["digest"]
+    assert len(list(tmp_path.glob("*_TD04.xml"))) >= 2
+    # Golden shortage credit + combined multi-issue credit (flyer remittance is reject, not a credit).
+    assert "credit notes issued: 2" in result["digest"]
     assert result["planning"]["lot"] == "awaiting_person" and result["planning"]["suggestion"]["qty"] > 0
     assert (ROOT / "data" / "disputes" / "playbook.md").read_text().count("No past cases yet") == 1
 

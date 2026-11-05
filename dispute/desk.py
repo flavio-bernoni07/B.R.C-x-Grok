@@ -122,6 +122,12 @@ def build_case_pack(erp: Erp, case_id: str) -> dict[str, Any]:
     reasons = list(case.get("reasons") or verdict.get("sign_off_reasons") or [])
     briefing = brief(erp, case_id)  # code path offline; optional Grok rewrite if key set
     evidence = evidence_index(facts, verdict)
+    issue_verdicts = list(verdict.get("issue_verdicts") or [])
+    pending_issues = list(proposal.get("pending_issues") or [])
+    auto_issues = list(proposal.get("auto_issues") or [])
+    if not pending_issues and issue_verdicts:
+        pending_issues = [iv for iv in issue_verdicts if not iv.get("settled")]
+        auto_issues = [iv for iv in issue_verdicts if iv.get("settled")]
     return {
         "case_id": case["case_id"],
         "claim_id": case.get("subject_ref"),
@@ -142,6 +148,24 @@ def build_case_pack(erp: Erp, case_id: str) -> dict[str, Any]:
             "summary": verdict.get("summary"),
         },
         "claim": claim,
+        "issue_verdicts": issue_verdicts,
+        "pending_issues": [
+            {
+                "claim_type": (iv.get("issue") or {}).get("claim_type"),
+                "decision": iv.get("decision") or (iv.get("verdict") or {}).get("decision"),
+                "amount": iv.get("amount") if "amount" in iv else (iv.get("verdict") or {}).get("amount"),
+                "reasons": iv.get("sign_off_reasons") or iv.get("reasons") or [],
+            }
+            for iv in pending_issues
+        ],
+        "auto_issues": [
+            {
+                "claim_type": (iv.get("issue") or {}).get("claim_type"),
+                "decision": iv.get("decision") or (iv.get("verdict") or {}).get("decision"),
+                "amount": iv.get("amount") if "amount" in iv else (iv.get("verdict") or {}).get("amount"),
+            }
+            for iv in auto_issues
+        ],
         "evidence": evidence,
         "evidence_count": len(evidence),
         "reconcile_causes": (facts.get("reconcile") or {}).get("causes") or [],
@@ -174,6 +198,8 @@ def write_case_pack(pack: dict[str, Any], pack_dir: Path | str) -> Path:
             "briefing": pack["briefing"],
             "proposal": pack["proposal"],
             "claim": pack["claim"],
+            "pending_issues": pack.get("pending_issues") or [],
+            "auto_issues": pack.get("auto_issues") or [],
         }, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -210,6 +236,16 @@ def write_case_pack(pack: dict[str, Any], pack_dir: Path | str) -> Path:
         f"- **What happened:** {pack['briefing'].get('what_happened')}",
         f"- **Proposal:** {pack['briefing'].get('proposal')}",
         f"- **Your question:** {pack['blocking_question']}",
+    ]
+    if pack.get("auto_issues") or pack.get("pending_issues"):
+        lines += ["", "## Issues in this claim"]
+        for iv in pack.get("auto_issues") or []:
+            amt = f" €{iv['amount']}" if iv.get("amount") is not None else ""
+            lines.append(f"- **{iv.get('claim_type')}** (auto): {iv.get('decision')}{amt}")
+        for iv in pack.get("pending_issues") or []:
+            amt = f" €{iv['amount']}" if iv.get("amount") is not None else ""
+            lines.append(f"- **{iv.get('claim_type')}** (needs you): {iv.get('decision')}{amt}")
+    lines += [
         "",
         "## Evidence we already have",
     ]
@@ -248,6 +284,12 @@ def list_cases(erp: Erp) -> list[dict[str, Any]]:
         claim = verdict.get("claim") or {}
         facts = proposal.get("facts") or {}
         reasons = list(case.get("reasons") or verdict.get("sign_off_reasons") or [])
+        issue_verdicts = verdict.get("issue_verdicts") or []
+        pending_types = [
+            (iv.get("issue") or {}).get("claim_type")
+            for iv in issue_verdicts
+            if not iv.get("settled")
+        ]
         rows.append(
             {
                 "case_id": case["case_id"],
@@ -258,6 +300,8 @@ def list_cases(erp: Erp) -> list[dict[str, Any]]:
                 "decision": verdict.get("decision"),
                 "amount": verdict.get("amount"),
                 "claim_type": claim.get("claim_type"),
+                "issue_count": len(issue_verdicts) or len(claim.get("issues") or []) or 1,
+                "pending_issue_types": [t for t in pending_types if t],
                 "order_ref": claim.get("order_ref") or (facts.get("order") or {}).get("order_ref"),
                 "reconcile_causes": (facts.get("reconcile") or {}).get("causes") or [],
                 "evidence_count": len(evidence_index(facts, verdict)),
@@ -280,6 +324,9 @@ def show_case(erp: Erp, case_id: str, *, pack_dir: Path | str | None = None) -> 
         "briefing": pack["briefing"],
         "proposal": pack["proposal"],
         "claim": pack["claim"],
+        "issue_verdicts": pack.get("issue_verdicts") or [],
+        "pending_issues": pack.get("pending_issues") or [],
+        "auto_issues": pack.get("auto_issues") or [],
         "evidence": pack["evidence"],
         "reconcile_causes": pack["reconcile_causes"],
         "misses": pack["misses"],
