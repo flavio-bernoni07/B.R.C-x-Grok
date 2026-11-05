@@ -3,11 +3,11 @@
  * of documents behind the order), the Shipping file and the stock ledger. Read-only: nothing here
  * decides, sends or changes a record. Every figure comes from a Mini ERP row or the audit log.
  */
-import { orderStory, type StoryStep } from "./story";
 import { caseProblem, caseRole } from "../core/case-view";
-import { chain, type TraceChain } from "../core/trace";
 import type { Erp } from "../core/erp";
 import { availableToPromise, batches, isoDate, OPEN_ORDER_STATUSES } from "../core/stock";
+import { chain, type TraceChain } from "../core/trace";
+import { orderStory, type StoryStep } from "./story";
 import { openCases, shippingFile } from "../shipping/service";
 import { orderDetail } from "./views";
 import { type Caught, caughtProblems } from "./caught";
@@ -275,7 +275,7 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
   // exceptions: open sign-offs and shipping cases (people decide in Actions)
   const exceptions: WorkspaceException[] = [];
   const claimIds = new Set(c.claims.map((cl) => cl.claim_id));
-  for (const s of erp.signoffs({ status: "pending" })) {
+  for (const s of erp.signoffs({ status: "pending" }).filter((x) => !x.decidedAt)) {
     if (s.subjectRef === ref || (order.sourceDoc && s.subjectRef === order.sourceDoc) || claimIds.has(s.subjectRef ?? "")) {
       exceptions.push({ caseId: s.caseId, text: s.title || (s.reasons ?? []).join("; ") || "Waiting for a person", href: `/signoff?case=${encodeURIComponent(s.caseId)}` });
     }

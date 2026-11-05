@@ -142,7 +142,7 @@ export function runOrderPipeline(
       availability: availChecks,
       price_check: price,
       draft_mail: mail,
-      notes: ["price_mismatch — draft mail ready; human: manual EDI or park pending (not confirm sign-off)"],
+      notes: ["price_mismatch — draft mail ready; human: manual EDI or Pending (not confirm sign-off)"],
     });
   }
 

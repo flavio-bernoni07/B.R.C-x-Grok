@@ -5,11 +5,45 @@
  * and the order detail (lines, checks with their sources, ORDRSP, audit trail). Kit only.
  */
 import type { OrderCheck, OrderDetail, OrderSummary } from "@agent/lib/order/views";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { type Column, DataTable, day, eur, Facts, Pill, qty, SourceTag } from "@/components/kit";
+import { GrokbotIcon } from "@/components/kit/icons";
+import { DeskModal } from "@/components/core/desk-modal";
 
 export function OrderPill({ order }: { readonly order: Pick<OrderSummary, "pill"> }) {
-  return <Pill tone={order.pill.tone}>{order.pill.label}</Pill>;
+  return (
+    <Pill tone={order.pill.tone}>
+      {order.pill.tone === "grok" ? <GrokbotIcon size={14} /> : null}
+      {order.pill.label}
+    </Pill>
+  );
+}
+
+function GrokExplainDot({ order }: { readonly order: OrderSummary }) {
+  const [open, setOpen] = useState(false);
+  if (!order.grokExplain) return null;
+  return (
+    <>
+      <button
+        type="button"
+        title="What Grok did on this order"
+        aria-label={`Grok note for ${order.orderRef}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="relative inline-flex size-6 shrink-0 items-center justify-center rounded-full align-middle hover:scale-[1.04]"
+      >
+        <GrokbotIcon size={18} />
+        <span className="pointer-events-none absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#bfff80] shadow-[0_0_0_1.5px_rgb(32_49_25)]" />
+      </button>
+      {open ? (
+        <DeskModal title={`Grok · ${order.orderRef}`} aside={order.retailer} onClose={() => setOpen(false)}>
+          <p className="text-[14px] leading-relaxed text-ink">{order.grokExplain}</p>
+        </DeskModal>
+      ) : null}
+    </>
+  );
 }
 
 export function OrdersTable({
@@ -24,7 +58,17 @@ export function OrdersTable({
   readonly compact?: boolean;
 }) {
   const columns: Column<OrderSummary>[] = [
-    { key: "order", header: "Order", main: true, cell: (o) => o.orderRef },
+    {
+      key: "order",
+      header: "Order",
+      main: true,
+      cell: (o) => (
+        <span className="inline-flex items-center gap-2">
+          <GrokExplainDot order={o} />
+          <span>{o.orderRef}</span>
+        </span>
+      ),
+    },
     { key: "retailer", header: "Retailer", cell: (o) => o.retailer },
     ...(compact
       ? []
@@ -50,7 +94,7 @@ export function OrdersTable({
       rowKey={(o) => o.orderRef}
       onRowClick={onSelect}
       selectedKey={selected}
-      empty="No orders yet. Send an ORDERS message to start."
+      empty="No orders yet. Run the order simulation or send an ORDERS message."
     />
   );
 }
@@ -92,10 +136,13 @@ function Section({ title, aside, children }: { readonly title: string; readonly 
   );
 }
 
-const Edi = ({ text }: { readonly text: string }) => (
-  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-[10px] bg-hh-honeydew p-2.5 font-mono text-[11.5px] text-ink-78 leading-relaxed">
-    {text.replace(/'(?!$)/g, "'\n")}
-  </pre>
+const Edi = ({ text, title }: { readonly text: string; readonly title?: string }) => (
+  <div className="overflow-hidden rounded-[12px] border border-[rgb(32_49_25/0.12)] bg-hh-honeydew">
+    {title ? <div className="border-[rgb(32_49_25/0.08)] border-b px-3 py-1.5 font-bold text-[12px] text-ink-78">{title}</div> : null}
+    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-[11.5px] text-ink-78 leading-relaxed">
+      {text.replace(/'(?!$)/g, "'\n")}
+    </pre>
+  </div>
 );
 
 export function OrderLines({ order }: { readonly order: OrderDetail }) {
@@ -142,7 +189,7 @@ export function OrderDetailBody({ order, compact = false }: { readonly order: Or
           ["Status", order.status.replace(/_/g, " ")],
           ["Deciding check", order.check],
           ...(order.contractId ? ([["Contract", <SourceTag key="c">{order.contractId}</SourceTag>]] as [ReactNode, ReactNode][]) : []),
-          ...(order.caseId ? ([["Sign-off", `${order.caseId} (${order.caseStatus})`]] as [ReactNode, ReactNode][]) : []),
+          ...(order.caseId ? ([["Sign-off Pending", `${order.caseId} (${order.caseStatus})`]] as [ReactNode, ReactNode][]) : []),
         ]}
       />
 
@@ -150,12 +197,39 @@ export function OrderDetailBody({ order, compact = false }: { readonly order: Or
         <OrderLines order={order} />
       </Section>
 
+      {order.stockPromise?.length ? (
+        <Section title="Available to promise" aside="Mini ERP stock + planned batches">
+          <ul className="space-y-2 text-[13px]">
+            {order.stockPromise.map((s) => (
+              <li key={s.gtin} className="rounded-[10px] bg-hh-honeydew px-3 py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-bold">{s.product ?? s.gtin}</span>
+                  <span className="tabular-nums">{qty(s.atp)} can ship</span>
+                </div>
+                <div className="mt-1 text-[12px] text-ink-68">
+                  released {qty(s.released)} + planned {qty(s.planned)} − committed {qty(s.committed)}
+                  {s.held ? ` · ${qty(s.held)} on hold (never counts)` : ""}
+                  {s.nextReadyDate ? ` · next batch ${day(s.nextReadyDate)}` : ""}
+                </div>
+                <div className="mt-1">
+                  <SourceTag title="ATP source">{s.source}</SourceTag>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
       <Section title="Checks" aside="code first, Grok on exceptions, a person confirms">
         <OrderChecks checks={order.checks} />
       </Section>
 
-      {order.grokbot.length ? (
-        <Section title="Grokbot">
+      {order.grokExplain ? (
+        <Section title="What Grok did">
+          <p className="rounded-[12px] bg-hh-honeydew px-3 py-2.5 text-[13px] leading-relaxed text-ink">{order.grokExplain}</p>
+        </Section>
+      ) : order.grokbot.length ? (
+        <Section title="What Grok did">
           <ul className="space-y-1.5 text-[13px] text-ink-78">
             {order.grokbot.map((n) => (
               <li key={n}>{n}</li>
@@ -165,14 +239,16 @@ export function OrderDetailBody({ order, compact = false }: { readonly order: Or
       ) : null}
 
       {order.draftMail ? (
-        <Section title="Draft price mail" aside="a person reviews and sends it">
-          <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-[10px] bg-hh-honeydew p-2.5 text-[12.5px] text-ink-78">{order.draftMail}</pre>
+        <Section title="Draft mail" aside="a person reviews and sends it">
+          <div className="overflow-hidden rounded-[12px] border border-[rgb(32_49_25/0.12)] bg-hh-honeydew">
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap p-3 text-[12.5px] text-ink-78">{order.draftMail}</pre>
+          </div>
         </Section>
       ) : null}
 
       {ordrsp ? (
         <Section title={order.ordrsp ? "ORDRSP sent" : "Draft ORDRSP"} aside={order.ordrspRef ?? "sent only after a person confirms"}>
-          <Edi text={ordrsp} />
+          <Edi text={ordrsp} title={order.ordrsp ? "ORDRSP" : "Draft ORDRSP"} />
         </Section>
       ) : null}
 

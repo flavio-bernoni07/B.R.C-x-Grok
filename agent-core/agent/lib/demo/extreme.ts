@@ -28,7 +28,7 @@ import type { Erp } from "../core/erp";
 import { availableToPromise, nextReadyDate } from "../core/stock";
 import { approveVerdict, handleClaim } from "../dispute/service";
 import type { Caller, Message } from "../grok/client";
-import { confirmOrder, receiveOrder } from "../order/service";
+import { confirmOrder, receiveOrder, resolveQtyCase } from "../order/service";
 import * as cases from "../shipping/cases";
 import { chooseResolution } from "../shipping/choose";
 import { ingestConfirmedOrder, invoiceShipment, reconcileAndSend, recordDelivery } from "../shipping/service";
@@ -85,7 +85,20 @@ export async function seedExtremeCase(erp: Erp, opts: { say?: (line: string) => 
   const laterDate = nextReadyDate(erp, PRODUCT);
   const product = erp.product({ gtin: PRODUCT })?.name ?? "Riso Scotti Parboiled 1 kg";
   if (now <= 0 || later <= 0 || !laterDate) throw new Error(`${REF}: expected a split, free ${product} is ${now}, next run ${laterDate}`);
-  const r = await receiveOrder(erp, ordersEdi(), { sourceName: `ORDERS_${REF}.edi`, caller: orderCaller(now, later, laterDate, product) });
+  const caller = orderCaller(now, later, laterDate, product);
+  let r = await receiveOrder(erp, ordersEdi(), { sourceName: `ORDERS_${REF}.edi`, caller });
+  if (r.step === "qty_choice") {
+    const chosen = await resolveQtyCase(erp, r.case_id, {
+      by: "Giulia Ferri, order desk",
+      reason: "Coop types dates as dd/mm/yyyy and thousands with a dot: Grok's fix is right, and the split keeps their shelf full",
+      action: "split",
+      caller,
+    });
+    if (chosen.status !== "awaiting_person" && chosen.status !== "confirmed") {
+      throw new Error(`${REF}: split did not return an order to confirm (${chosen.status})`);
+    }
+    r = chosen;
+  }
   if (r.step !== "confirm") throw new Error(`${REF}: expected the fix and the split to confirm, got ${r.step} (${r.case_id})`);
   const lesson = "Coop types dates as dd/mm/yyyy and thousands with a dot: Grok's fix is right, and the split keeps their shelf full";
   const handoff = confirmOrder(erp, r.case_id, { by: "Giulia Ferri, order desk", reason: lesson });

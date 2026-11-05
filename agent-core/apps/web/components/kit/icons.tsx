@@ -102,3 +102,8 @@ export function GrokMark({ size = 16, className, title = "Handled by Grok" }: { 
     </svg>
   );
 }
+
+/** Same mark, the name the order desk already uses. */
+export function GrokbotIcon({ size = 16, title = "Grokbot" }: { readonly size?: number; readonly title?: string }) {
+  return <GrokMark size={size} title={title} />;
+}

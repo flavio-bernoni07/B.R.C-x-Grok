@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * Wispr-style voice bar, bottom right of every page. Click opens the mic;
- * click again sends the Grok Voice transcript into the open thread.
+ * Voice circle on every page, the same size as the send button.
+ * Click opens the mic; click again sends the Grok Voice transcript into the open thread.
+ * While the mic is open, an Apple Intelligence-style border runs around the circle.
  */
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { dispatchVoiceAsk } from "@/lib/voice-ask";
 
-const BARS = 27;
+const BARS = 5;
+const REST = [0.42, 0.72, 1, 0.72, 0.42];
 
 type Phase = "idle" | "listening" | "sending" | "error";
 
@@ -74,28 +76,29 @@ async function stopRecorder(take: Take): Promise<Blob> {
   });
 }
 
-function WisprWave({ analyser, live }: { readonly analyser: AnalyserNode | null; readonly live: boolean }) {
+function OrbBars({ analyser, live }: { readonly analyser: AnalyserNode | null; readonly live: boolean }) {
   const bars = useRef<(HTMLSpanElement | null)[]>([]);
-  const smooth = useRef(new Array<number>(BARS).fill(0.16));
+  const smooth = useRef(REST.slice());
   const energy = useRef(0);
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
+    const paint = (scale: number[]) => {
       for (let i = 0; i < BARS; i++) {
-        const center = Math.sin((i / (BARS - 1)) * Math.PI);
         const el = bars.current[i];
-        if (el) el.style.transform = `scaleY(${(0.28 + center * 0.4).toFixed(3)})`;
+        if (el) el.style.transform = `scaleY(${(scale[i] ?? REST[i] ?? 0.5).toFixed(3)})`;
       }
+    };
+    if (!live || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      paint(REST);
       return;
     }
     let frame = 0;
     let t = 0;
     const samples = analyser ? new Uint8Array(analyser.fftSize) : null;
     const tick = () => {
-      t += live ? 0.2 : 0.11;
+      t += 0.2;
       let raw = 0;
-      if (analyser && samples && live) {
+      if (analyser && samples) {
         analyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (let i = 0; i < samples.length; i++) {
@@ -105,16 +108,16 @@ function WisprWave({ analyser, live }: { readonly analyser: AnalyserNode | null;
         raw = Math.min(1, Math.max(0, (Math.sqrt(sum / samples.length) - 0.015) * 9));
       }
       energy.current += (raw - energy.current) * (raw > energy.current ? 0.55 : 0.18);
+      const next: number[] = [];
       for (let i = 0; i < BARS; i++) {
-        const n = i / (BARS - 1);
-        const center = Math.sin(n * Math.PI);
-        const idle = 0.2 + 0.26 * Math.sin(t * 1.45 + i * 0.55);
-        const flutter = 0.42 + 0.58 * (0.5 + 0.5 * Math.sin(t * 2.6 + i * 0.83));
-        const target = Math.min(1, idle * (0.45 + 0.55 * center) + energy.current * (0.25 + 0.75 * center) * flutter * 1.45);
-        smooth.current[i] = (smooth.current[i] ?? 0) + (target - (smooth.current[i] ?? 0)) * 0.34;
-        const el = bars.current[i];
-        if (el) el.style.transform = `scaleY(${(0.16 + (smooth.current[i] ?? 0) * 0.84).toFixed(3)})`;
+        const center = Math.sin((i / (BARS - 1)) * Math.PI);
+        const flutter = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2.6 + i * 0.9));
+        const target = Math.min(1, 0.28 + center * 0.2 + energy.current * (0.35 + 0.65 * center) * flutter);
+        const value = (smooth.current[i] ?? 0) + (target - (smooth.current[i] ?? 0)) * 0.34;
+        smooth.current[i] = value;
+        next.push(value);
       }
+      paint(next);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -122,28 +125,26 @@ function WisprWave({ analyser, live }: { readonly analyser: AnalyserNode | null;
   }, [analyser, live]);
 
   return (
-    <span className="voice-wave" aria-hidden="true">
-      {Array.from({ length: BARS }, (_, i) => {
-        const center = Math.sin((i / (BARS - 1)) * Math.PI);
-        return (
-          <span
-            key={i}
-            ref={(el) => {
-              bars.current[i] = el;
-            }}
-            className="voice-bar"
-            style={{ opacity: 0.38 + center * 0.62 }}
-          />
-        );
-      })}
+    <span className="voice-orb-wave" aria-hidden="true">
+      {REST.map((scale, i) => (
+        <span
+          key={i}
+          ref={(el) => {
+            bars.current[i] = el;
+          }}
+          className="voice-orb-bar"
+          style={{ transform: `scaleY(${scale})` }}
+        />
+      ))}
     </span>
   );
 }
 
 export function VoiceHold() {
   const router = useRouter();
+  const pathname = usePathname();
+  const dockRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [heard, setHeard] = useState("");
   const [error, setError] = useState("");
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const takeRef = useRef<Take | null>(null);
@@ -161,7 +162,6 @@ export function VoiceHold() {
   const rest = () => {
     phaseRef.current = "idle";
     setPhase("idle");
-    setHeard("");
     setError("");
     setAnalyser(null);
   };
@@ -169,7 +169,6 @@ export function VoiceHold() {
   const fail = (message: string) => {
     takeRef.current = null;
     setAnalyser(null);
-    setHeard("");
     setError(message);
     setPhase("error");
     phaseRef.current = "error";
@@ -284,7 +283,6 @@ export function VoiceHold() {
           let text = "";
           for (let i = 0; i < event.results.length; i++) text += event.results[i]?.[0]?.transcript ?? "";
           take.browserText = text.trim();
-          if (takeRef.current === take && phaseRef.current === "listening") setHeard(take.browserText);
         };
         try {
           recog.start();
@@ -320,7 +318,6 @@ export function VoiceHold() {
     takeRef.current = take;
     phaseRef.current = "listening";
     setError("");
-    setHeard("");
     setPhase("listening");
     void arm(take);
   };
@@ -355,25 +352,75 @@ export function VoiceHold() {
     };
   }, []);
 
-  const caption = phase === "error" ? error : heard;
+  useLayoutEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    let frame = 0;
+    const place = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const sheet = document.querySelector("main");
+        if (!sheet) return;
+        const sheetBox = sheet.getBoundingClientRect();
+        const size = 32;
+        const submit = [...document.querySelectorAll('button[aria-label="Submit"]')].find((button) => {
+          const box = button.getBoundingClientRect();
+          return box.width >= 24 && box.height >= 24 && Math.abs(box.bottom - sheetBox.bottom) < 140;
+        });
+        if (submit) {
+          const box = submit.getBoundingClientRect();
+          el.style.top = `${box.top}px`;
+          el.style.left = `${Math.min(box.right + 12, window.innerWidth - 12 - size)}px`;
+        } else {
+          el.style.top = `${sheetBox.bottom - 34 - size}px`;
+          el.style.left = `${sheetBox.right - 36 - size}px`;
+        }
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+      });
+    };
+    place();
+    const observed = document.querySelector("main");
+    const ro = new ResizeObserver(place);
+    if (observed) ro.observe(observed);
+    ro.observe(document.documentElement);
+    const mo = new MutationObserver(place);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [pathname]);
+
+  const live = phase === "listening" || phase === "sending";
   const status = phase === "listening" ? "Listening" : phase === "sending" ? "Sending to Grok" : "";
   const label = phase === "listening" ? "Stop and send to Grok" : phase === "sending" ? "Sending to Grok" : "Talk to Grok";
 
   return (
-    <div className="voice-dock">
+    <div className="voice-dock" ref={dockRef}>
       <button
         type="button"
-        className={phase === "listening" ? "voice-pill voice-pill-live" : "voice-pill"}
+        className="voice-orb"
         aria-pressed={phase === "listening"}
+        aria-busy={phase === "sending"}
         aria-label={label}
         title={label}
-        disabled={phase === "sending"}
         onClick={toggle}
       >
         <span className="sr-only">{status}</span>
-        <span className="voice-glow" aria-hidden="true" />
-        <WisprWave analyser={analyser} live={phase === "listening"} />
-        {caption ? <span className="voice-words">{caption}</span> : null}
+        {live ? (
+          <>
+            <span className="voice-orb-glow" aria-hidden="true" />
+            <span className="voice-orb-spin" aria-hidden="true" />
+          </>
+        ) : null}
+        <span className="voice-orb-face">
+          <OrbBars analyser={analyser} live={phase === "listening"} />
+        </span>
+        {phase === "error" && error ? <span className="voice-orb-note">{error}</span> : null}
       </button>
     </div>
   );

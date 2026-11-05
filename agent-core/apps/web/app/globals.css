@@ -56,8 +56,11 @@
   --color-st-wait-ink: #5f6a5b;
   /* A small mark beside a wrong answer only (UI.md), never a fill. Waiting on a person is yellow, not this red. */
   --color-st-wrong: #d2473b;
+  /* Waiting on a person is yellow. Rejected stays a soft red. */
   --color-st-pending: #f6e3a1;
   --color-st-pending-ink: #8a6400;
+  --color-st-reject: #f4c7c2;
+  --color-st-reject-ink: #b4332a;
   /* Dark Green at the kit's ink levels */
   --color-ink: #203119;
   --color-ink-78: rgb(32 49 25 / 0.78);
@@ -263,89 +266,121 @@ textarea {
   }
 }
 
-/* Wispr-style voice bar, bottom right of every page. */
+/* Voice control: a 32 px circle, the same size as the send button. */
 .voice-dock {
   position: fixed;
   z-index: 80;
-  right: 22px;
-  bottom: 22px;
-  display: flex;
-  align-items: center;
+  right: 36px;
+  bottom: 34px;
+  width: 32px;
+  height: 32px;
 }
 
-.voice-pill {
+.voice-orb {
   position: relative;
-  isolation: isolate;
-  display: flex;
-  max-width: min(540px, calc(100vw - 32px));
-  height: 48px;
-  align-items: center;
-  gap: 14px;
-  padding: 0 18px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: #121212;
-  color: #f7f7f5;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    0 16px 40px rgb(0 0 0 / 0.32);
+  background: transparent;
   cursor: pointer;
 }
 
-.voice-pill:focus-visible {
-  outline: 2px solid #fff;
+.voice-orb:focus-visible {
+  outline: 2px solid #203119;
   outline-offset: 3px;
 }
 
-.voice-pill:disabled {
-  cursor: default;
-  opacity: 0.72;
+.voice-orb-face {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: #203119;
+  box-shadow: 0 1px 2px rgb(32 49 25 / 0.22);
 }
 
-.voice-pill-live {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.2),
-    0 0 0 6px rgb(146 118 255 / 0.22),
-    0 16px 40px rgb(0 0 0 / 0.32);
-}
-
-.voice-glow {
+.voice-orb-spin,
+.voice-orb-glow {
   position: absolute;
-  z-index: -1;
-  inset: -18px -26px;
-  border-radius: 999px;
-  background: radial-gradient(closest-side, rgb(146 118 255 / 0.5), rgb(92 140 255 / 0.14) 46%, transparent 74%);
-  filter: blur(10px);
-  opacity: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #ff6ad5,
+    #c06bff,
+    #6a8cff,
+    #3ecbff,
+    #5ee0a0,
+    #e7f56a,
+    #ffb020,
+    #ff6a3d,
+    #ff6ad5
+  );
+  animation: voice-intelligence 2.6s linear infinite;
+  pointer-events: none;
 }
 
-.voice-pill-live .voice-glow {
-  opacity: 1;
+.voice-orb-spin {
+  z-index: 1;
+  inset: -3px;
 }
 
-.voice-wave {
+.voice-orb-glow {
+  z-index: 0;
+  inset: -8px;
+  filter: blur(7px);
+  opacity: 0.9;
+}
+
+.voice-orb-wave {
   display: flex;
-  height: 28px;
-  flex: none;
+  height: 14px;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
-.voice-bar {
-  width: 3px;
-  height: 26px;
+.voice-orb-bar {
+  width: 2px;
+  height: 14px;
   border-radius: 999px;
-  background: white;
+  background: #fff;
   transform-origin: center;
-  will-change: transform;
 }
 
-.voice-words {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 15px;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.voice-orb-note {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 3;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #203119;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
 }
+
+@keyframes voice-intelligence {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb-spin,
+  .voice-orb-glow {
+    animation: none;
+  }
+}
+
+/* voice circle */
+

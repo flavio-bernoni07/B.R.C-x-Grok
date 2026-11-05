@@ -5,24 +5,30 @@
  *   receiveOrder()      parse -> stock -> price, with Grokbot loops; stops at a person, or, under
  *                       the policy `auto_when_clean`, Grok confirms a clean order itself
  *   confirmOrder()      the person approves: ORDRSP is written, the hand-over is returned
- *   resolvePriceCase()  the person types a manual EDI (back to Parse) or parks the order
+ *   resolvePriceCase()  the person types a manual EDI (back to Parse) or leaves Pending
+ *   resolveQtyCase()    stock short: operator chooses split (continue) or mail (Pending, no ORDRSP)
+ *   simulateOrderFeed() run every EDI in data/orders/feed.json without stopping the batch
  *
  * The order-dec.md rules hold: Grok's fixes go back through the code checks and a wrong price
  * never reaches the confirm step. Who confirms is the team policy (agent-core/policy.json):
- * `always_person` (Python's rule: a person confirms every order) or `auto_when_clean` (Grok, the
- * order agent, confirms an order that passed every check with no Grok correction, no split and
- * no price issue; every other order still waits for a person). Prices are checked against the
- * buyer's annual contract (core/contracts.ts), or the default contract when it has none.
+ * `always_person` (a person confirms every order) or `auto_when_clean` (Grok confirms an order
+ * that passed every check with no Grok correction, no split and no price issue). A short stock
+ * line still waits: split ships the available qty, mail leaves the order Pending with no ORDRSP.
+ * Prices are checked against the buyer's annual contract (core/contracts.ts).
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { supplyContractFor } from "../core/contracts";
 import { type Erp, nowIso, type Order } from "../core/erp";
 import { type Policy, readPolicy } from "../core/policy";
 import { decide, requestSignoff } from "../core/signoff";
 import { availableToPromise, nextReadyDate } from "../core/stock";
 import type { Caller } from "../grok/client";
+import { dataPath } from "../paths";
 import { ingestConfirmedOrder } from "../shipping/service";
 import { ErpAvailabilityProvider } from "./availability";
 import type { SupplyContract } from "./contract";
+import { draftQtyShortMail } from "./mail";
 import { polishPriceMail, proposeParseFix, proposeQtyResolution } from "./grokbot";
 import { buildOrdrsp, type OrdrspHandoff, qtyText } from "./ordrsp";
 import { type OrderLine, type ParsedOrder, type ParseFlag, parseOrdersEdi } from "./parser";
@@ -36,7 +42,7 @@ export type ReceiveResult =
       status: "awaiting_person";
       case_id: string;
       order_ref: string | null;
-      step: "manual_edi" | "stock_short" | "price_fix" | "confirm";
+      step: "manual_edi" | "stock_short" | "qty_choice" | "price_fix" | "confirm";
     }
   | AutoConfirmed;
 
@@ -48,6 +54,17 @@ export type AutoConfirmed = {
   step: "auto_confirmed";
   ordrsp_ref: string;
   handoff: ConfirmedOrderHandoff;
+};
+
+export type QtyLineChoice = {
+  line_no: number;
+  gtin: string | null;
+  ordered_qty: number;
+  available_qty: number;
+  now_qty: number;
+  later_qty: number;
+  later_date: string | null;
+  product: string | null;
 };
 
 /** Who decides when Grok confirms an order (the sign-off record's `decidedBy`). */
@@ -99,11 +116,26 @@ function parsedFromErp(order: Order): ParsedOrder {
 const erpLines = (lines: OrderLine[]) =>
   lines.map((l, i) => ({ lineNo: l.line_no || i + 1, gtin: l.gtin, quantity: l.quantity, unitPrice: l.unit_price }));
 
+export type ReceiveResume = {
+  notes?: string[];
+  personReasons?: string[];
+  backorders?: Backorder[];
+  /** Original ordered qty by line, kept across a split so the confirm card still shows what was asked. */
+  originalQty?: Map<number, number> | Record<string, number>;
+};
+
 /** Run one ORDERS message until it needs a person. Returns what happened. */
 export async function receiveOrder(
   erp: Erp,
   rawEdi: string,
-  opts: { sourceName?: string; contract?: SupplyContract | null; caller?: Caller | null; policy?: Policy } = {},
+  opts: {
+    sourceName?: string;
+    contract?: SupplyContract | null;
+    caller?: Caller | null;
+    policy?: Policy;
+    /** Carry notes / backorders when an operator split re-enters the pipeline. */
+    resume?: ReceiveResume | null;
+  } = {},
 ): Promise<ReceiveResult> {
   const contract = opts.contract ?? supplyContractFor(buyerOf(rawEdi));
   const policy = opts.policy ?? readPolicy();
@@ -113,10 +145,15 @@ export async function receiveOrder(
   const provider = new ErpAvailabilityProvider(erp);
 
   let edi = rawEdi;
-  const notes: string[] = [];
-  const personReasons: string[] = [];
-  const backorders: Backorder[] = [];
+  const notes: string[] = [...(opts.resume?.notes ?? [])];
+  const personReasons: string[] = [...(opts.resume?.personReasons ?? [])];
+  const backorders: Backorder[] = [...(opts.resume?.backorders ?? [])];
   let originalQty = new Map<number, number>();
+  if (opts.resume?.originalQty) {
+    const raw = opts.resume.originalQty;
+    if (raw instanceof Map) originalQty = new Map(raw);
+    else for (const [k, v] of Object.entries(raw)) originalQty.set(Number(k), v);
+  }
   let lastFlags: ParseFlag[] = [];
 
   for (let round = 0; round <= MAX_ROUNDS; round++) {
@@ -133,10 +170,13 @@ export async function receiveOrder(
       lastFlags = result.parse ? result.parse.flags.map((f) => ({ ...f })) : [];
       const fix = await proposeParseFix(edi, lastFlags, { caller });
       if (fix && round < MAX_ROUNDS) {
+        // Live Grok or the offline Grokbot rules (date / IT thousands) — same apply path.
         erp.log("grok", "order.parse_fix", ref, { sourceDoc: docId, detail: fix.changes ?? null });
-        const changed = (fix.changes || []).map((c) => `${pyStr(c.segment)}: ${pyStr(c.before)} -> ${pyStr(c.after)}`).join(", ");
-        notes.push(`Grok corrected the EDI (${changed}); the parser read it again.`);
-        personReasons.push(`Grok corrected the EDI: ${changed || "see changes"}`);
+        const changed = (fix.changes || [])
+          .map((c) => `${pyStr(c.segment)}: ${pyStr(c.before)} → ${pyStr(c.after)}`)
+          .join(", ");
+        notes.push(`Grokbot corrected the EDI (${changed}); the parser read it again.`);
+        personReasons.push(`Grokbot corrected the EDI: ${changed || "see changes"}`);
         edi = fix.corrected_edi;
         continue;
       }
@@ -145,8 +185,17 @@ export async function receiveOrder(
         kind: "manual_edi",
         subjectRef: ref || docId,
         title: `Order ${ref || "(no number)"}: the EDI cannot be read safely`,
-        proposal: { flags: lastFlags, edi, options: ["manual_edi", "park_pending"] },
-        reasons: [`the parser could not read the EDI and Grok had no safe fix: ${lastFlags.map((f) => f.message).join("; ")}`],
+        proposal: {
+          flags: lastFlags.map((f) => ({
+            what: f.message,
+            where: f.segment || null,
+            code: f.code,
+          })),
+          options: ["manual_edi", "pending"],
+        },
+        reasons: [
+          `The order file could not be read safely and Grokbot had no automatic fix: ${lastFlags.map((f) => f.message).join("; ")}`,
+        ],
       });
       if (ref && parsed) {
         erp.saveOrder({
@@ -165,47 +214,172 @@ export async function receiveOrder(
     }
 
     if (result.status === PipelineStatus.AWAIT_GROK_QTY && parsed) {
-      const overrides = new Map<number, number>();
+      // With a caller, Grok picks the split from the options code computed and the order goes on
+      // to confirm. With no caller, the feed never auto-applies a split: the person chooses.
+      if (caller) {
+        const overrides = new Map<number, number>();
+        for (let i = 0; i < parsed.lines.length && i < result.availability.length; i++) {
+          const line = parsed.lines[i];
+          const check = result.availability[i];
+          if (check.ok) continue;
+          const product = erp.product({ gtin: line.gtin });
+          const buyer = erp.retailer(parsed.buyer_gln)?.name || parsed.buyer_gln || "cliente";
+          const nextDate = line.gtin ? nextReadyDate(erp, line.gtin) : null;
+          const laterAtp = nextDate && line.gtin ? availableToPromise(erp, line.gtin, nextDate).atp : 0;
+          const proposal = await proposeQtyResolution({
+            orderRef: ref || "",
+            gtin: line.gtin || "",
+            product: product?.name || line.gtin || "",
+            buyer,
+            ordered: line.quantity || 0,
+            available: check.available_qty || 0,
+            nextDate,
+            laterAvailable: laterAtp - (check.available_qty || 0),
+            caller,
+          });
+          if (!proposal || proposal.action !== "split") continue;
+          const n = line.line_no || i + 1;
+          overrides.set(n, proposal.now_qty);
+          if (!originalQty.has(n)) originalQty.set(n, line.quantity || 0);
+          if (proposal.later_qty) backorders.push({ line_no: n, gtin: line.gtin, qty: proposal.later_qty, date: proposal.later_date });
+          erp.log(proposal.source, "order.qty_short", ref, { sourceDoc: docId, detail: proposal });
+          notes.push(`Line ${n}: ${proposal.action} - ${proposal.message}`);
+          personReasons.push(`stock was short on line ${n}: ${proposal.action} proposed by ${proposal.source}`);
+        }
+        if (overrides.size && round < MAX_ROUNDS) {
+          edi = orderToEdi(parsed, overrides);
+          continue;
+        }
+      }
+      // Operator chooses split (continue toward ORDRSP for available qty) or mail (Pending, no ORDRSP).
+      const lines: QtyLineChoice[] = [];
       for (let i = 0; i < parsed.lines.length && i < result.availability.length; i++) {
         const line = parsed.lines[i];
         const check = result.availability[i];
         if (check.ok) continue;
-        const product = erp.product({ gtin: line.gtin });
-        const buyer = erp.retailer(parsed.buyer_gln)?.name || parsed.buyer_gln || "cliente";
-        const nextDate = line.gtin ? nextReadyDate(erp, line.gtin) : null;
-        const later = nextDate && line.gtin ? availableToPromise(erp, line.gtin, nextDate).atp : 0;
-        const proposal = await proposeQtyResolution({
-          orderRef: ref || "",
-          gtin: line.gtin || "",
-          product: product?.name || line.gtin || "",
-          buyer,
-          ordered: line.quantity || 0,
-          available: check.available_qty || 0,
-          nextDate,
-          laterAvailable: later - (check.available_qty || 0),
-          caller,
-        });
-        if (!proposal) continue;
         const n = line.line_no || i + 1;
-        overrides.set(n, proposal.now_qty);
-        if (proposal.later_qty) backorders.push({ line_no: n, gtin: line.gtin, qty: proposal.later_qty, date: proposal.later_date });
-        erp.log(proposal.source, "order.qty_short", ref, { sourceDoc: docId, detail: proposal });
-        notes.push(`Line ${n}: ${proposal.action} - ${proposal.message}`);
-        personReasons.push(`stock was short on line ${n}: ${proposal.action} proposed by ${proposal.source}`);
+        const ordered = line.quantity || 0;
+        const available = Math.max(check.available_qty || 0, 0);
+        const nextDate = line.gtin ? nextReadyDate(erp, line.gtin) : null;
+        const rest = Math.max(ordered - available, 0);
+        const product = erp.product({ gtin: line.gtin });
+        lines.push({
+          line_no: n,
+          gtin: line.gtin,
+          ordered_qty: ordered,
+          available_qty: available,
+          now_qty: available,
+          later_qty: nextDate && rest > 0 ? rest : 0,
+          later_date: nextDate && rest > 0 ? nextDate : null,
+          product: product?.name || line.gtin || null,
+        });
       }
-      if (!overrides.size || round >= MAX_ROUNDS) {
+      const canSplit = lines.some((l) => l.now_qty > 0);
+      if (!canSplit) {
         const caseId = requestSignoff(erp, {
           row: "order",
           kind: "stock_short",
           subjectRef: ref || docId,
           title: `Order ${pyStr(ref)}: not enough stock and no split is possible`,
-          proposal: { availability: result.availability.map((a) => ({ ...a })) },
-          reasons: ["stock is short and code found no split or partial delivery"],
+          proposal: {
+            edi,
+            summary: "Nothing can ship now — stock is too short for a partial delivery.",
+            availability: result.availability.map((a) => ({
+              product: erp.product({ gtin: a.gtin })?.name || a.gtin,
+              ordered: a.ordered_qty,
+              available: a.available_qty,
+              ok: a.ok,
+            })),
+          },
+          reasons: ["Stock is short and there is no quantity available to ship now."],
         });
+        if (ref) {
+          erp.saveOrder({
+            orderRef: ref,
+            buyerGln: parsed.buyer_gln,
+            supplierGln: parsed.supplier_gln,
+            orderDate: parsed.order_date,
+            lines: erpLines(parsed.lines),
+            status: "stock_short",
+            sourceDoc: docId,
+            contractId: contract.id,
+            notes: { grokbot: notes },
+          });
+        }
         return { status: "awaiting_person", case_id: caseId, order_ref: ref, step: "stock_short" };
       }
-      edi = orderToEdi(parsed, overrides);
-      continue;
+
+      const short = lines[0];
+      const buyer = erp.retailer(parsed.buyer_gln)?.name || parsed.buyer_gln || "Dear Customer";
+      const supplier = erp.retailer(parsed.supplier_gln)?.name || "Riso Scotti";
+      const draftMail = draftQtyShortMail({
+        orderNumber: ref,
+        buyerName: buyer,
+        supplierName: supplier,
+        productName: short.product,
+        gtin: short.gtin,
+        orderedQty: short.ordered_qty,
+        availableQty: short.available_qty,
+        orderDate: parsed.order_date,
+      });
+      notes.push(
+        `Stock short on line ${short.line_no}: ${pyG(short.available_qty)} of ${pyG(short.ordered_qty)} available. Waiting for split or mail.`,
+      );
+      if (ref) {
+        erp.saveOrder({
+          orderRef: ref,
+          buyerGln: parsed.buyer_gln,
+          supplierGln: parsed.supplier_gln,
+          orderDate: parsed.order_date,
+          lines: erpLines(parsed.lines),
+          status: "pending_qty",
+          sourceDoc: docId,
+          contractId: contract.id,
+          notes: { grokbot: notes, draft_mail: draftMail },
+        });
+      }
+      const caseId = requestSignoff(erp, {
+        row: "order",
+        kind: "qty_choice",
+        subjectRef: ref || docId,
+        title: `Order ${pyStr(ref)}: stock short — split available qty or mail the retailer`,
+        proposal: {
+          // Kept for split rebuild; the UI does not show raw EDI on this gate.
+          edi,
+          lines: lines.map((l) => ({
+            product: l.product,
+            ordered: l.ordered_qty,
+            ship_now: l.now_qty,
+            later: l.later_qty,
+            later_date: l.later_date,
+            line_no: l.line_no,
+            gtin: l.gtin,
+            ordered_qty: l.ordered_qty,
+            available_qty: l.available_qty,
+            now_qty: l.now_qty,
+            later_qty: l.later_qty,
+          })),
+          draft_mail: draftMail,
+          grokbot: notes,
+          options: ["split", "mail"],
+          summary:
+            short.later_date && short.later_qty > 0
+              ? `Ship ${pyG(short.now_qty)} now; ${pyG(short.later_qty)} later (${short.later_date}). Or email the retailer (Pending).`
+              : `Ship ${pyG(short.now_qty)} of ${pyG(short.ordered_qty)} now. Or email the retailer (Pending).`,
+        },
+        reasons: lines.map((l) => {
+          const name = l.product || pyStr(l.gtin);
+          const base = `${name}: ordered ${pyG(l.ordered_qty)}, only ${pyG(l.available_qty)} available now`;
+          return l.later_date && l.later_qty > 0
+            ? `${base}; remainder ${pyG(l.later_qty)} can ship later (${l.later_date})`
+            : base;
+        }),
+      });
+      erp.log("code", "order.qty_short", ref, {
+        sourceDoc: docId,
+        detail: { case: caseId, action: "await_operator", lines },
+      });
+      return { status: "awaiting_person", case_id: caseId, order_ref: ref, step: "qty_choice" };
     }
 
     if (result.status === PipelineStatus.AWAIT_PRICE_HUMAN && parsed && ref) {
@@ -233,9 +407,12 @@ export async function receiveOrder(
           mail_by: source,
           grokbot: notes,
           price_check: result.price_check ? result.price_check.toDict() : null,
-          options: ["manual_edi", "park_pending"],
+          options: ["manual_edi", "pending"],
+          summary: `Unit price on the ORDERS does not match contract ${contract.id}. Mail the retailer or paste a corrected ORDERS.`,
         },
-        reasons: reasons.length ? reasons : ["the price check failed"],
+        reasons: reasons.length
+          ? reasons.map((r) => r.replace(/^GTIN /, "Product "))
+          : ["The price on the order does not match the supply contract."],
       });
       erp.log("code", "order.price_mismatch", ref, { sourceDoc: docId, detail: { case: caseId } });
       return { status: "awaiting_person", case_id: caseId, order_ref: ref, step: "price_fix" };
@@ -305,19 +482,32 @@ export async function receiveOrder(
 }
 
 /** The person approves the confirm sign-off: write ORDRSP, return the hand-over for Shipping. */
-export function confirmOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): ConfirmedOrderHandoff {
+export function confirmOrder(
+  erp: Erp,
+  caseId: string,
+  d: { by: string; reason: string },
+  opts: {
+    /**
+     * Send-off all: these cases already passed stock at the gate; release every ORDRSP without
+     * re-blocking on live ATP (live ATP drops after each prior confirm in the same batch).
+     */
+    trustPriorCheck?: boolean;
+  } = {},
+): ConfirmedOrderHandoff {
   const c = erp.signoff(caseId);
   if (!c || c.kind !== "confirm") throw new Error(`${caseId} is not an order confirmation`);
   const order = erp.order(c.subjectRef ?? "");
   if (!order) throw new Error(`${caseId} is not an order confirmation`);
-  for (const line of order.lines) {
-    // another order may have been confirmed since the checks ran
-    const want = line.qtyConfirmed ?? line.qtyOrdered;
-    const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate).atp;
-    if (want && want > atp) {
-      throw new Error(
-        `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
-      );
+  if (!opts.trustPriorCheck) {
+    for (const line of order.lines) {
+      // Exclude this order's own Send-off reservation; other awaiting/confirmed still count.
+      const want = line.qtyConfirmed ?? line.qtyOrdered;
+      const atp = availableToPromise(erp, line.gtin ?? "", order.orderDate, { exceptOrderRef: order.orderRef }).atp;
+      if (want && want > atp) {
+        throw new Error(
+          `order ${order.orderRef}: only ${pyG(atp)} of ${pyStr(line.gtin)} left since the checks; run the order again before confirming`,
+        );
+      }
     }
   }
   decide(erp, caseId, { approve: true, by: d.by, reason: d.reason });
@@ -384,27 +574,322 @@ function grokConfirms(erp: Erp, ref: string, a: { docId: string; proposal: Recor
   return { status: "confirmed", case_id: caseId, order_ref: ref, step: "auto_confirmed", ordrsp_ref: handoff.ordrsp_ref, handoff };
 }
 
+export type SendOffBatchItem = {
+  case_id: string;
+  order_ref: string | null;
+  ok: boolean;
+  shipping_ref?: string;
+  error?: string;
+};
+
+/** Release every pending confirm case (Send-off all), smallest qty first. */
+export function sendOffConfirmBatch(
+  erp: Erp,
+  d: { by: string; reason: string; caseIds?: string[] },
+): { results: SendOffBatchItem[]; ok: number; failed: number } {
+  const pending = erp
+    .signoffs({ status: "pending", row: "order" })
+    .filter(
+      (c) =>
+        !c.decidedAt &&
+        c.kind === "confirm" &&
+        (!d.caseIds?.length || d.caseIds.includes(c.caseId)),
+    );
+  const ranked = [...pending].sort((a, b) => {
+    const orderA = a.subjectRef ? erp.order(a.subjectRef) : undefined;
+    const orderB = b.subjectRef ? erp.order(b.subjectRef) : undefined;
+    const qtyA = orderA?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    const qtyB = orderB?.lines.reduce((s, l) => s + (l.qtyConfirmed ?? l.qtyOrdered ?? 0), 0) ?? 0;
+    return qtyA - qtyB || a.caseId.localeCompare(b.caseId);
+  });
+  const results: SendOffBatchItem[] = [];
+  for (const c of ranked) {
+    try {
+      const handoff = confirmOrder(erp, c.caseId, { by: d.by, reason: d.reason }, { trustPriorCheck: true });
+      const shippingRef = ingestConfirmedOrder(erp, handoff);
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: true, shipping_ref: shippingRef });
+    } catch (err) {
+      results.push({ case_id: c.caseId, order_ref: c.subjectRef, ok: false, error: (err as Error).message });
+    }
+  }
+  return { results, ok: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
+}
+
 export function rejectOrder(erp: Erp, caseId: string, d: { by: string; reason: string }): void {
   const c = erp.signoff(caseId);
   decide(erp, caseId, { approve: false, by: d.by, reason: d.reason });
   if (c?.subjectRef && erp.order(c.subjectRef)) erp.setOrder(c.subjectRef, { status: "rejected" });
 }
 
-export type ParkedResult = { status: "parked"; order_ref: string | null };
+export type PendingResult = { status: "pending"; order_ref: string | null };
+/** @deprecated use PendingResult */
+export type ParkedResult = PendingResult;
 
-/** Manual EDI goes back to Parse; no EDI parks the order as pending. */
+/** Manual EDI goes back to Parse; without it the order stays Pending (optionally after the price mail). */
 export async function resolvePriceCase(
   erp: Erp,
   caseId: string,
-  d: { by: string; reason: string; manualEdi?: string | null; caller?: Caller | null },
-): Promise<ReceiveResult | ParkedResult> {
+  d: {
+    by: string;
+    reason: string;
+    manualEdi?: string | null;
+    caller?: Caller | null;
+    draftMail?: string | null;
+    mailTo?: string | null;
+    sendMail?: boolean;
+  },
+): Promise<ReceiveResult | PendingResult> {
   const c = erp.signoff(caseId);
   if (!c || !["price_fix", "manual_edi"].includes(c.kind)) throw new Error(`${caseId} is not a price or EDI case`);
   if (d.manualEdi) {
     decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { manual_edi: true } });
     return receiveOrder(erp, d.manualEdi, { sourceName: `manual EDI for ${pyStr(c.subjectRef)}`, caller: d.caller });
   }
-  decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { parked: true } });
-  if (c.subjectRef && erp.order(c.subjectRef)) erp.setOrder(c.subjectRef, { status: "pending" });
-  return { status: "parked", order_ref: c.subjectRef };
+  const proposal = (c.proposal ?? {}) as { draft_mail?: string; grokbot?: string[] };
+  const sentMail = (d.draftMail?.trim() || proposal.draft_mail || "").trim();
+  const mailTo = d.mailTo?.trim() || null;
+  decide(erp, caseId, {
+    approve: true,
+    by: d.by,
+    reason: d.reason,
+    edits: { pending: true, mail_sent: !!d.sendMail, draft_mail: sentMail || null, mail_to: mailTo },
+  });
+  if (c.subjectRef && erp.order(c.subjectRef)) {
+    erp.setOrder(c.subjectRef, {
+      status: "pending",
+      notes: {
+        draft_mail: sentMail || proposal.draft_mail,
+        mail_to: mailTo,
+        mail_sent: !!d.sendMail,
+        grokbot: proposal.grokbot,
+        pending_for: d.sendMail ? "price_mail" : "price_pending",
+      },
+    });
+  }
+  if (d.sendMail) {
+    erp.log(`person:${d.by.trim()}`, "order.price_pending", c.subjectRef, {
+      detail: { case: caseId, action: "mail", mail_to: mailTo },
+    });
+  }
+  return { status: "pending", order_ref: c.subjectRef };
+}
+
+/**
+ * Stock short: operator chooses **split** (accept available qty, re-enter checks → confirm → ORDRSP
+ * for that qty only) or **mail** (Pending with the draft, no ORDRSP). The feed does not wait.
+ */
+export async function resolveQtyCase(
+  erp: Erp,
+  caseId: string,
+  d: {
+    by: string;
+    reason: string;
+    action: "split" | "mail";
+    caller?: Caller | null;
+    /** Edited mail body from the compose UI (falls back to the case draft). */
+    draftMail?: string | null;
+    mailTo?: string | null;
+  },
+): Promise<ReceiveResult | PendingResult> {
+  const c = erp.signoff(caseId);
+  if (!c || c.kind !== "qty_choice") throw new Error(`${caseId} is not a qty choice case`);
+  const proposal = (c.proposal ?? {}) as {
+    edi?: string;
+    lines?: QtyLineChoice[];
+    draft_mail?: string;
+    grokbot?: string[];
+  };
+  const lines = proposal.lines ?? [];
+  if (d.action === "mail") {
+    const sentMail = (d.draftMail?.trim() || proposal.draft_mail || "").trim();
+    const mailTo = d.mailTo?.trim() || null;
+    decide(erp, caseId, {
+      approve: true,
+      by: d.by,
+      reason: d.reason,
+      edits: { qty_action: "mail", draft_mail: sentMail || null, mail_to: mailTo },
+    });
+    if (c.subjectRef && erp.order(c.subjectRef)) {
+      erp.setOrder(c.subjectRef, {
+        status: "pending",
+        notes: {
+          draft_mail: sentMail || proposal.draft_mail,
+          mail_to: mailTo,
+          mail_sent: true,
+          grokbot: proposal.grokbot,
+          pending_for: "qty_short_mail",
+        },
+      });
+    }
+    erp.log(`person:${d.by.trim()}`, "order.qty_pending", c.subjectRef, {
+      detail: { case: caseId, action: "mail", mail_to: mailTo },
+    });
+    return { status: "pending", order_ref: c.subjectRef };
+  }
+
+  if (!proposal.edi || !lines.length) throw new Error(`${caseId} has no EDI to split`);
+  const order = c.subjectRef ? erp.order(c.subjectRef) : null;
+  const parsed = order
+    ? parsedFromErp(order)
+    : runOrderPipeline(proposal.edi).parse?.order ?? null;
+  if (!parsed) throw new Error(`${caseId}: cannot rebuild the order for a split`);
+
+  const overrides = new Map<number, number>();
+  const backorders: Backorder[] = [];
+  const originalQty = new Map<number, number>();
+  for (const line of lines) {
+    overrides.set(line.line_no, line.now_qty);
+    originalQty.set(line.line_no, line.ordered_qty);
+    if (line.later_qty > 0) {
+      backorders.push({ line_no: line.line_no, gtin: line.gtin, qty: line.later_qty, date: line.later_date });
+    }
+  }
+  decide(erp, caseId, { approve: true, by: d.by, reason: d.reason, edits: { qty_action: "split" } });
+  const revised = orderToEdi(parsed, overrides);
+  erp.log(`person:${d.by.trim()}`, "order.qty_split", c.subjectRef, {
+    detail: { case: caseId, overrides: Object.fromEntries(overrides), backorders },
+  });
+  const notes = [
+    ...(proposal.grokbot ?? []),
+    `Operator split: ship available qty now` +
+      (backorders.length ? `; remainder noted as backorder` : ` (remainder off this ORDRSP)`),
+  ];
+  const personReasons = lines.map(
+    (l) => `stock was short on line ${l.line_no}: operator split to ${pyG(l.now_qty)} of ${pyG(l.ordered_qty)}`,
+  );
+  return receiveOrder(erp, revised, {
+    sourceName: `split for ${pyStr(c.subjectRef)}`,
+    caller: d.caller,
+    resume: { notes, personReasons, backorders, originalQty },
+  });
+}
+
+export type SimulateFeedItemResult = {
+  id: string;
+  label: string;
+  file: string;
+  ok: boolean;
+  result?: ReceiveResult;
+  error?: string;
+};
+
+type BenchPoLine = {
+  order_ref?: string;
+  item_code?: string;
+  quantity?: number;
+  unit_price?: number;
+};
+
+type BenchCase = {
+  id: string;
+  kind?: string;
+  description?: string;
+  po?: BenchPoLine[];
+};
+
+/** Map item_code → GTIN from the shared product list (world/products.json). */
+function gtinByItemCode(): Map<string, string> {
+  const raw = JSON.parse(readFileSync(dataPath("world", "products.json"), "utf8")) as {
+    products?: { gtin: string; item_code: string }[];
+  };
+  return new Map((raw.products ?? []).map((p) => [p.item_code, p.gtin]));
+}
+
+/** Build a minimal ORDERS EDI from one labelled bench case (the 22 simulation POs). */
+export function ediFromBenchCase(c: BenchCase, gtinMap: Map<string, string>): string | null {
+  const lines = c.po ?? [];
+  if (!lines.length) return null;
+  const orderRef = lines[0].order_ref || c.id;
+  const segs = [
+    "UNH+1+ORDERS:D:96A:UN'",
+    `BGM+220+${orderRef}+9'`,
+    "DTM+137:20261104:102'",
+    "NAD+BY+BUYER001::9'",
+    "NAD+SU+SUPPLIER001::9'",
+  ];
+  let n = 0;
+  for (const line of lines) {
+    const code = line.item_code || "";
+    const gtin = gtinMap.get(code);
+    if (!gtin || line.quantity == null) continue;
+    n += 1;
+    segs.push(`LIN+${n}++${gtin}:EN'`);
+    segs.push(`QTY+21:${line.quantity}'`);
+    if (line.unit_price != null) segs.push(`PRI+AAA:${line.unit_price}:CT'`);
+  }
+  if (!n) return null;
+  segs.push("UNS+S'");
+  segs.push(`UNT+${segs.length + 1}+1'`);
+  return segs.join("\n");
+}
+
+/** The 22 labelled bench POs already in the repo (data/bench/cases.json), as ORDERS messages. */
+export function benchSimulationOrders(): { id: string; label: string; file: string; edi: string }[] {
+  const bench = JSON.parse(readFileSync(dataPath("bench", "cases.json"), "utf8")) as { cases?: BenchCase[] };
+  const gtinMap = gtinByItemCode();
+  const out: { id: string; label: string; file: string; edi: string }[] = [];
+  for (const c of bench.cases ?? []) {
+    const edi = ediFromBenchCase(c, gtinMap);
+    if (!edi) continue;
+    const ref = c.po?.[0]?.order_ref || c.id;
+    out.push({
+      id: c.id,
+      label: `${c.id} ${ref} — ${c.kind || "case"}`,
+      file: `bench/${c.id}.edi`,
+      edi,
+    });
+  }
+  return out;
+}
+
+/**
+ * Run the full Order simulation without stopping the batch on a human gate:
+ * 1) the 22 labelled bench POs already in the repo
+ * 2) optional golden order
+ * 3) the ESS scenario files in data/orders/feed.json (messy / qty short / price / …)
+ */
+export async function simulateOrderFeed(
+  erp: Erp,
+  opts: { caller?: Caller | null; includeGolden?: boolean; includeBench?: boolean } = {},
+): Promise<{ results: SimulateFeedItemResult[] }> {
+  const feedPath = dataPath("orders", "feed.json");
+  const feed = JSON.parse(readFileSync(feedPath, "utf8")) as {
+    orders?: { id?: string; label?: string; file: string }[];
+  };
+  type Item = { id: string; label: string; file: string; edi?: string; absolute?: string };
+  const items: Item[] = [];
+
+  if (opts.includeBench !== false) {
+    for (const b of benchSimulationOrders()) {
+      items.push({ id: b.id, label: b.label, file: b.file, edi: b.edi });
+    }
+  }
+  if (opts.includeGolden !== false) {
+    items.push({
+      id: "golden",
+      label: "Golden ESS-GOLD-001",
+      file: "world/golden/ORDERS_ESS-GOLD-001.edi",
+      absolute: dataPath("world", "golden", "ORDERS_ESS-GOLD-001.edi"),
+    });
+  }
+  for (const o of feed.orders ?? []) {
+    items.push({
+      id: o.id || o.file,
+      label: o.label || o.file,
+      file: o.file,
+      absolute: join(dataPath("orders", "edi"), o.file),
+    });
+  }
+
+  const results: SimulateFeedItemResult[] = [];
+  for (const item of items) {
+    try {
+      const raw = item.edi ?? readFileSync(item.absolute!, "utf8");
+      const result = await receiveOrder(erp, raw, { sourceName: item.file, caller: opts.caller ?? null });
+      results.push({ id: item.id, label: item.label, file: item.file, ok: true, result });
+    } catch (err) {
+      results.push({ id: item.id, label: item.label, file: item.file, ok: false, error: (err as Error).message });
+    }
+  }
+  return { results };
 }

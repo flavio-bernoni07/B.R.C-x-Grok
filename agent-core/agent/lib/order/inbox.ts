@@ -1,6 +1,6 @@
 /**
- * The Orders inbox: every order read like an email row. Status, status line and agent badges are
- * written by code from the order workspace (trace chain, shipping file, audit log). Read-only.
+ * The Orders inbox: every order read like an email row. Status, owner and the split come from
+ * the order workspace. Grok's mark comes from the order list, which is a lighter read.
  */
 import type { Erp } from "../core/erp";
 import { listOrders } from "./views";
@@ -25,17 +25,23 @@ export type InboxRow = {
   progress: { done: number; total: number; current: string | null };
   /** False for a sign-off case whose order was never saved (no workspace to open). */
   hasWorkspace: boolean;
+  /** True when Grok stepped in on this order. */
+  grokUsed: boolean;
 };
 
 const ORDER: Record<InboxStatus, number> = { attention: 0, on_track: 1, waiting: 2, completed: 3 };
 
 const n = (v: number) => v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
+const grokUsedFor = (pillTone: string, explain: string | null) =>
+  pillTone === "grok" || !!(explain && /Grokbot|\bGrok\b/i.test(explain));
+
 export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string } = {}): InboxRow[] {
   const rows: InboxRow[] = [];
   for (const s of listOrders(erp)) {
     const order = erp.order(s.orderRef);
     const ws = order ? orderWorkspace(erp, s.orderRef) : null;
+    const grokUsed = grokUsedFor(s.pill.tone, s.grokExplain);
     let description = "No lines";
     if (order?.lines.length) {
       const first = order.lines[0];
@@ -60,6 +66,7 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         value: ws.value,
         progress: ws.progress,
         hasWorkspace: true,
+        grokUsed,
       });
     } else {
       const status: InboxStatus = s.caseStatus === "pending" ? "attention" : "completed";
@@ -78,6 +85,7 @@ export function ordersInbox(erp: Erp, opts: { filter?: InboxFilter; q?: string }
         value: 0,
         progress: { done: 1, total: 10, current: "Confirmed" },
         hasWorkspace: false,
+        grokUsed,
       });
     }
   }

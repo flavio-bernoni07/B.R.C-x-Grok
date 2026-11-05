@@ -26,8 +26,18 @@ export function requestSignoff(
   return caseId;
 }
 
+/** Open gate: needs a person. Pending (mail/hold): status still pending but decidedAt is set. */
+export function isOpenSignoff(c: { status: string; decidedAt?: string | null }): boolean {
+  return c.status === "pending" && !c.decidedAt;
+}
+
+/** Mail sent / held — Actions → Pending scheda (not Decided). */
+export function isPendingHold(c: { status: string; decidedAt?: string | null }): boolean {
+  return (c.status === "pending" && !!c.decidedAt) || c.status === "parked";
+}
+
 export function pending(erp: Erp, row?: string): Signoff[] {
-  return erp.signoffs({ status: "pending", row });
+  return erp.signoffs({ status: "pending", row }).filter(isOpenSignoff);
 }
 
 export function decide(
@@ -37,14 +47,28 @@ export function decide(
 ): Signoff {
   const c = erp.signoff(caseId);
   if (!c) throw new SignoffError(`no sign-off ${caseId}`);
-  if (c.status !== "pending") throw new SignoffError(`${caseId} is already ${c.status}`);
+  if (!isOpenSignoff(c)) throw new SignoffError(`${caseId} is already ${c.status}`);
   if (!d.by?.trim()) throw new SignoffError("say who decides");
   if (!d.reason?.trim()) throw new SignoffError("write one line on why: it is what the Playbook learns from");
   const proposal = { ...(c.proposal ?? {}) } as Record<string, unknown>;
   if (d.edits) proposal.edits = d.edits;
-  const status = d.approve ? "approved" : "rejected";
-  erp.updateSignoff(caseId, { status, decidedBy: d.by.trim(), decisionReason: d.reason.trim(), decidedAt: nowIso(), proposal });
-  erp.log(`person:${d.by.trim()}`, `signoff.${status}`, c.subjectRef, { sourceDoc: caseId, detail: { reason: d.reason.trim(), edits: d.edits ?? null } });
+  // Mail / hold as Pending: waits on the retailer — not a closed "approved" (Decided) case.
+  const edits = (d.edits ?? {}) as Record<string, unknown>;
+  const holdPending =
+    d.approve &&
+    (edits.pending === true ||
+      edits.parked === true ||
+      edits.qty_action === "mail" ||
+      edits.send_mail === true ||
+      edits.mail_sent === true);
+  const status = !d.approve ? "rejected" : holdPending ? "pending" : "approved";
+  const decidedAt = nowIso();
+  erp.updateSignoff(caseId, { status, decidedBy: d.by.trim(), decisionReason: d.reason.trim(), decidedAt, proposal });
+  const logKind = !d.approve ? "rejected" : holdPending ? "pending" : "approved";
+  erp.log(`person:${d.by.trim()}`, `signoff.${logKind}`, c.subjectRef, {
+    sourceDoc: caseId,
+    detail: { reason: d.reason.trim(), edits: d.edits ?? null, hold_pending: holdPending || null },
+  });
   return erp.signoff(caseId)!;
 }
 

@@ -18,7 +18,7 @@ import type { PaddyPlan } from "@agent/lib/purchasing/paddy";
 import type { DispatchPlan } from "@agent/lib/shipping/routes";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
-import { Kpi, Meter, PageHeader, day, eur, personFor } from "@/components/kit";
+import { Kpi, Meter, day, eur, personFor } from "@/components/kit";
 import { GrokMark } from "@/components/kit/icons";
 import { RouteMap, TRUCK_COLORS, TruckGlyph } from "@/components/shipping/route-map";
 import { cn } from "@/lib/utils";
@@ -199,8 +199,6 @@ export function HomeIntro() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Home" />
-
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <Kpi size="sm" tone="strong" label="Waiting for you" value={c ? n0(c.signoffsWaiting) : "–"} href="/signoff" />
         <Kpi size="sm" label="Orders" value={c ? n0(c.orders) : "–"} href="/orders" />

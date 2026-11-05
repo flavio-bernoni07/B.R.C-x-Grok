@@ -8,9 +8,18 @@ import { StubAvailabilityProvider } from "../agent/lib/order/availability";
 import { checkPrices, loadContract } from "../agent/lib/order/contract";
 import { decideSignoff } from "../agent/lib/order/decide";
 import * as grokbot from "../agent/lib/order/grokbot";
+import { codeParseFix } from "../agent/lib/order/grokbot";
 import { parseOrdersEdi, parseOrdersFile } from "../agent/lib/order/parser";
 import { PipelineStatus, runOrderFile } from "../agent/lib/order/pipeline";
-import { confirmOrder, receiveOrder, rejectOrder, resolvePriceCase } from "../agent/lib/order/service";
+import {
+  confirmOrder,
+  receiveOrder,
+  rejectOrder,
+  resolvePriceCase,
+  resolveQtyCase,
+  sendOffConfirmBatch,
+  simulateOrderFeed,
+} from "../agent/lib/order/service";
 import { listOrders, orderDetail } from "../agent/lib/order/views";
 import { dataPath } from "../agent/lib/paths";
 
@@ -166,15 +175,88 @@ describe("order service on the Mini ERP", () => {
     expect(r2.step).not.toBe("confirm"); // the first order took the released stock
   });
 
-  it("short stock: split on the planned batch re-enters the stock check", async () => {
+  it("short stock: operator split re-enters the stock check toward confirm", async () => {
     const erp = freshErp();
     recordEvent(erp, "quality_hold", { batch: "LOT-C-0418", qty: 1200 });
     const r = await receiveOrder(erp, ediFor("ESS-SPLIT", "8000000000001", 12000, 2.2));
-    expect(r.step).toBe("confirm");
-    const c = erp.signoff(r.case_id)!;
+    expect(r.step).toBe("qty_choice");
+    const choice = erp.signoff(r.case_id)!;
+    expect(choice.kind).toBe("qty_choice");
+    expect((choice.proposal!.lines as { now_qty: number; later_qty: number }[])[0]).toMatchObject({
+      now_qty: 10800,
+      later_qty: 1200,
+    });
+    const again = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ship what we have", action: "split" });
+    expect("step" in again && again.step).toBe("confirm");
+    const c = erp.signoff(again.case_id)!;
     expect(c.proposal!.backorders).toEqual([{ line_no: 1, gtin: "8000000000001", qty: 1200, date: "2026-11-09" }]);
     expect((c.proposal!.lines as { qty_confirmed: number }[])[0].qty_confirmed).toBe(10800);
-    expect(c.reasons!.some((x) => x.includes("stock was short on line 1: split proposed by code"))).toBe(true);
+    expect(c.reasons!.some((x) => x.includes("operator split to 10800"))).toBe(true);
+  });
+
+  it("short stock: operator mail → Pending with no ORDRSP", async () => {
+    const erp = freshErp();
+    recordEvent(erp, "quality_hold", { batch: "LOT-C-0418", qty: 1200 });
+    const r = await receiveOrder(erp, ediFor("ESS-MAIL", "8000000000001", 12000, 2.2));
+    expect(r.step).toBe("qty_choice");
+    const held = await resolveQtyCase(erp, r.case_id, { by: "Giulia", reason: "ask Esselunga first", action: "mail" });
+    expect(held.status).toBe("pending");
+    expect(erp.order("ESS-MAIL")!.status).toBe("pending");
+    expect(erp.documents({ ref: "ESS-MAIL", kind: "ORDRSP" })).toHaveLength(0);
+    expect(String(erp.signoff(r.case_id)!.proposal!.draft_mail)).toContain("partial availability");
+    const so = erp.signoff(r.case_id)!;
+    expect(so.status).toBe("pending");
+    expect(so.decidedAt).toBeTruthy();
+  });
+
+  it("simulate feed keeps the 22 bench POs and never stops on the first human gate", async () => {
+    const erp = freshErp();
+    const { results } = await simulateOrderFeed(erp);
+    // Labelled bench POs + golden + ESS feed items (wave-*)
+    expect(results.length).toBeGreaterThanOrEqual(21 + 1 + 5);
+    expect(results.filter((r) => r.id.startsWith("C")).length).toBeGreaterThanOrEqual(21);
+    expect(results.every((r) => r.ok)).toBe(true);
+    const steps = new Set(results.map((r) => r.result!.step));
+    expect(steps.has("confirm") || steps.has("qty_choice") || steps.has("price_fix") || steps.has("manual_edi")).toBe(true);
+    expect(results.filter((r) => r.result?.status === "awaiting_person").length).toBe(results.length);
+    // A later ESS feed item still ran even though earlier ones needed a person.
+    expect(results.at(-1)!.id).toBe("wave-5");
+  });
+
+  it("Send-off all releases every pending confirm even when live ATP would block later ones", async () => {
+    const erp = freshErp();
+    await simulateOrderFeed(erp);
+    const confirms = erp.signoffs({ status: "pending", row: "order" }).filter((c) => c.kind === "confirm");
+    expect(confirms.length).toBeGreaterThan(1);
+    const batch = sendOffConfirmBatch(erp, { by: "Giulia", reason: "batch release" });
+    expect(batch.failed).toBe(0);
+    expect(batch.ok).toBe(confirms.length);
+    expect(erp.signoffs({ status: "pending", row: "order" }).filter((c) => c.kind === "confirm")).toHaveLength(0);
+    for (const r of batch.results) {
+      expect(r.ok).toBe(true);
+      expect(r.shipping_ref).toBeTruthy();
+      expect(erp.order(r.order_ref!)!.status).toBe("ready_to_ship");
+    }
+  });
+
+  it("clearOrderDesk wipes prior orders and sign-offs so a second simulate starts fresh", async () => {
+    const erp = freshErp();
+    const productBefore = erp.product({ gtin: "8000000000001" }) ?? erp.product({ itemCode: "RISO-ARB" });
+    await simulateOrderFeed(erp);
+    expect(erp.signoffs().length).toBeGreaterThan(0);
+    expect(erp.orders().length).toBeGreaterThan(0);
+    erp.clearOrderDesk();
+    expect(erp.signoffs()).toHaveLength(0);
+    expect(erp.orders()).toHaveLength(0);
+    expect(erp.documents()).toHaveLength(0);
+    expect(erp.auditLog()).toHaveLength(0);
+    // Master data remains.
+    if (productBefore) expect(erp.product({ gtin: productBefore.gtin })?.name).toBe(productBefore.name);
+    const { results } = await simulateOrderFeed(erp);
+    expect(results.every((r) => r.ok)).toBe(true);
+    // Counters restarted: first new case is SO-00001.
+    const ids = erp.signoffs().map((c) => c.caseId).sort();
+    expect(ids[0]).toBe("SO-00001");
   });
 
   it("wrong price goes to the price step, not the confirm step", async () => {
@@ -183,9 +265,13 @@ describe("order service on the Mini ERP", () => {
     expect(r.step).toBe("price_fix");
     expect(erp.order(r.order_ref!)!.status).toBe("pending_price");
     expect(erp.signoff(r.case_id)!.reasons![0]).toContain("€2.5");
-    const parked = await resolvePriceCase(erp, r.case_id, { by: "Giulia", reason: "wait for Esselunga" });
-    expect(parked.status).toBe("parked");
+    const held = await resolvePriceCase(erp, r.case_id, { by: "Giulia", reason: "wait for Esselunga" });
+    expect(held.status).toBe("pending");
     expect(erp.order(r.order_ref!)!.status).toBe("pending");
+    // Desk: Pending scheda, not Decided.
+    const so = erp.signoff(r.case_id)!;
+    expect(so.status).toBe("pending");
+    expect(so.decidedAt).toBeTruthy();
   });
 
   it("manual EDI goes back to parse", async () => {
@@ -196,10 +282,25 @@ describe("order service on the Mini ERP", () => {
     expect("step" in again && again.step).toBe("confirm");
   });
 
-  it("unreadable EDI without Grok goes to a person", async () => {
+  it("codeParseFix repairs DTM ISO dates and Italian thousands QTY", () => {
+    const messy = edi("ordine_ess_messy.edi");
+    const fix = codeParseFix(messy, [
+      { code: "dtm_bad_format", message: "bad date", segment: "DTM" },
+      { code: "qty_ambiguous_it_thousands", message: "IT thousands", segment: "QTY" },
+    ]);
+    expect(fix).not.toBeNull();
+    expect(fix!.corrected_edi).toContain("20261104");
+    expect(fix!.corrected_edi).toContain("QTY+21:20000");
+    expect(fix!.corrected_edi).not.toContain("20.000");
+  });
+
+  it("messy EDI is auto-fixed by offline Grokbot (date + IT thousands) without a person", async () => {
     const erp = freshErp();
     const r = await receiveOrder(erp, edi("ordine_ess_messy.edi"));
-    expect(r.step).toBe("manual_edi");
+    // No live key: codeParseFix applies the same safe repairs Grokbot would.
+    expect(r.step).toBe("confirm");
+    expect(r.status).toBe("awaiting_person");
+    expect(erp.auditLog().some((a) => a.actor === "grok" && a.action === "order.parse_fix")).toBe(true);
   });
 
   it("Grok's parse fix is parsed again and shown to the person", async () => {
@@ -213,7 +314,7 @@ describe("order service on the Mini ERP", () => {
     });
     const r = await receiveOrder(erp, messy, { caller });
     expect(r.step).toBe("confirm");
-    expect(erp.signoff(r.case_id)!.reasons!.some((x) => x.includes("Grok corrected the EDI: QTY: 20.000 -> 20000"))).toBe(true);
+    expect(erp.signoff(r.case_id)!.reasons!.some((x) => /Grokbot corrected the EDI:.*QTY: 20\.000/.test(x))).toBe(true);
   });
 
   it("Grok cannot put new figures in the qty message", async () => {
@@ -250,14 +351,16 @@ describe("order service on the Mini ERP", () => {
     expect(erp.order("ESS-GOLD-001")!.status).toBe("rejected");
   });
 
-  it("confirm checks stock again when two orders wait", async () => {
+  it("Send-off reservation blocks a second confirm when stock is already spoken for", async () => {
     const erp = freshErp();
     const first = await receiveOrder(erp, GOLDEN);
+    expect(first.step).toBe("confirm");
+    // Soft-reserve while the first waits on Send-off: a twin that needs the same stock
+    // must not land in confirm as well (otherwise Send-off all would oversell).
     const second = await receiveOrder(erp, ediFor("ESS-TWIN", "8000000000001", 12000, 2.2));
-    expect(second.step).toBe("confirm"); // both passed the checks while neither was confirmed
+    expect(["qty_choice", "stock_short"]).toContain(second.step);
     confirmOrder(erp, first.case_id, { by: "Giulia", reason: "ok" });
-    expect(() => confirmOrder(erp, second.case_id, { by: "Giulia", reason: "ok" })).toThrow(/run the order again/);
-    expect(erp.signoff(second.case_id)!.status).toBe("pending");
+    expect(erp.order("ESS-GOLD-001")!.status).toBe("confirmed");
   });
 });
 
@@ -281,7 +384,7 @@ describe("order sign-off decisions and read models", () => {
     expect(erp.order("ESS001")!.status).toBe("rejected");
   });
 
-  it("decideSignoff on a price case parks it or takes a manual EDI", async () => {
+  it("decideSignoff on a price case leaves Pending or takes a manual EDI", async () => {
     const erp = freshErp();
     const r = await receiveOrder(erp, edi("ordine_ess_bad_price.edi"));
     const fixed = edi("ordine_ess_bad_price.edi").replace("PRI+AAA:2.50", "PRI+AAA:1.85");

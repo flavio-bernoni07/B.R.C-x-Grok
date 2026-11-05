@@ -17,11 +17,11 @@ export function search(erp: Erp, q: string, limit = 8): SearchHit[] {
   }
   for (const r of erp.retailers()) if (has(r.name, r.gln)) hits.push({ label: r.name, sub: "Retailer", href: `/orders?retailer=${encodeURIComponent(r.gln)}` });
   for (const i of erp.invoices()) if (has(i.invoiceRef)) hits.push({ label: i.invoiceRef, sub: `Invoice · order ${i.orderRef}`, href: orderHref(i.orderRef) });
-  const pendingBySubject = new Map(erp.signoffs().map((s) => [s.subjectRef, s.caseId]));
+  const pendingBySubject = new Map(erp.signoffs().map((s) => [s.subjectRef, s]));
   for (const c of erp.claims()) {
     if (!has(c.claimId, c.orderRef, c.invoiceRef)) continue;
     const so = pendingBySubject.get(c.claimId);
-    const href = so ? `/signoff?case=${encodeURIComponent(so)}` : c.orderRef ? orderHref(c.orderRef) : "/signoff";
+    const href = so ? `/signoff?case=${encodeURIComponent(so.caseId)}` : c.orderRef ? orderHref(c.orderRef) : "/signoff";
     hits.push({ label: c.claimId, sub: `Claim${c.orderRef ? ` · order ${c.orderRef}` : ""} · ${c.status.replace(/_/g, " ")}`, href });
   }
   try {

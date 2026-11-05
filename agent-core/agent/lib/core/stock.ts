@@ -15,6 +15,8 @@ import { type Batch, type Erp, nowIso } from "./erp";
 export const EVENT_KINDS = ["batch_planned", "batch_finished", "quality_hold", "hold_released", "line_stopped"] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 export const OPEN_ORDER_STATUSES = ["confirmed", "ready_to_ship"];
+/** Orders waiting on Send-off also reserve ATP so the feed cannot oversell the same stock twice. */
+export const RESERVED_ORDER_STATUSES = ["awaiting_confirmation", "confirmed", "ready_to_ship"];
 
 /** Accept YYYYMMDD or YYYY-MM-DD; return YYYY-MM-DD. */
 export function isoDate(value: string | null | undefined): string | null {
@@ -93,11 +95,21 @@ export function productionEvents(erp: Erp) {
   return erp.db.select().from(s.productionEvents).orderBy(asc(s.productionEvents.eventId)).all();
 }
 
-/** Confirmed order quantity for this product that has not shipped yet. */
-export function committedQty(erp: Erp, gtin: string): number {
+/**
+ * Quantity reserved for this product that has not shipped yet.
+ * Includes Send-off (`awaiting_confirmation`) so parallel confirms cannot oversell.
+ */
+export function committedQty(
+  erp: Erp,
+  gtin: string,
+  opts: { exceptOrderRef?: string; includeAwaitingConfirm?: boolean } = {},
+): number {
+  const statuses =
+    opts.includeAwaitingConfirm === false ? OPEN_ORDER_STATUSES : RESERVED_ORDER_STATUSES;
   let total = 0;
   for (const order of erp.orders()) {
-    if (!OPEN_ORDER_STATUSES.includes(order.status)) continue;
+    if (opts.exceptOrderRef && order.orderRef === opts.exceptOrderRef) continue;
+    if (!statuses.includes(order.status)) continue;
     const shipped = erp
       .shipments(order.orderRef)
       .flatMap((sh) => sh.lines)
@@ -113,13 +125,18 @@ export function committedQty(erp: Erp, gtin: string): number {
 
 export type Atp = { gtin: string; byDate: string | null; released: number; planned: number; held: number; committed: number; atp: number };
 
-export function availableToPromise(erp: Erp, gtin: string, byDate?: string | null): Atp {
+export function availableToPromise(
+  erp: Erp,
+  gtin: string,
+  byDate?: string | null,
+  opts: { exceptOrderRef?: string } = {},
+): Atp {
   const by = isoDate(byDate);
   const sum = (bs: Batch[]) => bs.reduce((a, b) => a + b.qty, 0);
   const released = sum(batches(erp, gtin, "released"));
   const held = sum(batches(erp, gtin, "hold"));
   const planned = sum(batches(erp, gtin, "planned").filter((b) => by == null || (b.availableFrom ?? "9999-12-31") <= by));
-  const committed = committedQty(erp, gtin);
+  const committed = committedQty(erp, gtin, { exceptOrderRef: opts.exceptOrderRef });
   return { gtin, byDate: by, released, planned, held, committed, atp: Math.max(released + planned - committed, 0) };
 }
 

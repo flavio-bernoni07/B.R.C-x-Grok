@@ -13,8 +13,6 @@
 - Sign-off rule and Playbook format: see [process-map.md](process-map.md#rules-to-agree-before-coding).
 - Production enters as events, as the brief asks: batch finished, quality hold, line stopped.
 
-## What I found
-
 ## What I decided
 
 - The Mini ERP is `core/erp.py`: one SQLite file, tables for products, retailers, batches, production events, orders, shipments, invoices, proofs, claims, documents, sign-offs and an audit log. `core/world.py` loads `data/world/`.
@@ -31,5 +29,3 @@
 
 - The database schema, the fake world and the golden order
 - The sign-off page and the Playbook file
-
-## Open questions

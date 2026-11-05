@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import type { Erp } from "../core/erp";
 import { batches, recordEvent } from "../core/stock";
 import type { Caller } from "../grok/client";
-import { confirmOrder, receiveOrder } from "../order/service";
+import { confirmOrder, receiveOrder, resolveQtyCase } from "../order/service";
 import { dataPath } from "../paths";
 import { ingestConfirmedOrder } from "../shipping/service";
 
@@ -29,11 +29,29 @@ export async function seedSplitOrder(erp: Erp, opts: { say?: (line: string) => v
     recordEvent(erp, "batch_finished", { batch: "LOT-C-0420", gtin: CARNAROLI, qty: 4200, note: "Carnaroli 1 kg, line 1, short run finished 5 Nov" });
   }
   const file = `ORDERS_${SPLIT_ORDER}.edi`;
-  const r = await receiveOrder(erp, readFileSync(dataPath("world", "split", file), "utf8"), {
+  const caller = opts.caller === undefined ? splitCaller() : opts.caller;
+  let r = await receiveOrder(erp, readFileSync(dataPath("world", "split", file), "utf8"), {
     sourceName: file,
-    caller: opts.caller === undefined ? splitCaller() : opts.caller,
+    caller,
   });
-  if (r.step !== "confirm") throw new Error(`${file}: expected a split to confirm, got step ${r.step} (${r.case_id})`);
+  // Stock short stops at the person's choice. The demo takes Grok's split, then confirms it.
+  if (r.step === "qty_choice") {
+    const chosen = await resolveQtyCase(erp, r.case_id, {
+      by: "Giulia, order desk",
+      reason: "Grok's split works for Carrefour: the rest comes with the next batch",
+      action: "split",
+      caller,
+    });
+    if (chosen.status !== "awaiting_person" && chosen.status !== "confirmed") {
+      throw new Error(`${file}: split did not return an order to confirm (${chosen.status})`);
+    }
+    r = chosen;
+  }
+  if (r.step !== "confirm" && r.step !== "auto_confirmed") throw new Error(`${file}: expected a split to confirm, got step ${r.step} (${r.case_id})`);
+  if (r.step === "auto_confirmed") {
+    say(`Split: ${SPLIT_ORDER} ships what is free on the dispatch day`);
+    return r.order_ref;
+  }
   const handoff = confirmOrder(erp, r.case_id, { by: "Giulia, order desk", reason: "Grok's split works for Carrefour: the rest comes with the next batch" });
   ingestConfirmedOrder(erp, handoff);
   const b = handoff.backorders[0];

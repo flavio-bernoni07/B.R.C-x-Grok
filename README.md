@@ -2,32 +2,32 @@
 
 ![B.R.C x Grok dashboard: orders checked by code, invoices matched against what shipped, claims answered with sources](docs/img/banner.gif)
 
-A zero-touch back office on synthetic data + an architectural concept of how data flows from the factory to the administration.
+A zero-touch back office on synthetic data + how data flows from the factory to the administration.
 
-Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a person.
+Grok agents run Riso Scotti's back office from the order to the cash. Code checks everything they do, and a person approves only what needs a human input.
 
 ## The problem
 
-A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and contract price, the warehouse plans trucks and loads pallets, the office writes the delivery note, the invoice and the FatturaPA for SdI. Then the retailer counts less than the invoice says, or pays less, and someone answers the claim by digging through four documents. IT'S A LOT OF STUFF TO MANAGE!
+A rice order from Esselunga arrives as an EDIFACT file. Someone checks stock and contract price, the warehouse plans trucks and loads pallets, the office writes the delivery note, the invoice and the FatturaPA for SdI. Then maybe the retailer counts less than the invoice says and someone is forced to dig through four documents. IT'S A LOT OF STUFF TO MANAGE!
 
-The only automatic check is an exact text match. threeway, the track's baseline, joins order, delivery and invoice on order number plus item code, so:
+The only automatic check in Riso Scotti's CRM is an exact text match, "threeway". These are some problem we found when testing it:
 
-- a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a one-letter typo in a reference turns into two false alarms
+- a short delivery invoiced for what actually shipped comes out as matched, nobody chases the missing goods
 - a price error behind a quantity problem is never named
 
 We are in 2026... we can have better checks than a text matcher.
 
 ## Case study: an invisible error without Grok
 
-Esselunga orders 12,000 packs of Carnaroli 1 kg at €2.20 (contract CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
+Esselunga orders 12000 packs of Carnaroli 1 kg at €2.20 (CTR-SCOTTI-ESS-2026), and the next day six more orders leave the plant. Four things go wrong on the way. `python demo.py` runs the first three; the app (`pnpm db:reset`) runs the order, the shipping and the dispatch day.
 
 | What goes wrong | Without our system | Money lost | With B.R.C x Grok |
 |---|---|---|---|
-| Pallet PAL-ESS-GOLD-001-04 (960 packs) is scanned onto the wrong truck | Nothing compares the scan with the plan. The paperwork says 12 pallets on TRUCK-PV-01, the truck carries 11, and Esselunga claims the missing packs | **€2,112** credit note (960 × €2.20) | Code checks every scan against the plan and stops the truck at the dock. Grok proposes a rescan, Marco (warehouse lead) approves, the truck leaves complete |
-| 1,200 packs go on quality hold, so 10,800 ship and are invoiced | threeway matches on reference and item code and says "matched". Nobody re-ships the 1,200 or tells Esselunga | **€2,640** of ordered goods never delivered (1,200 × €2.20) | Reconciliation compares quantities line by line and names the short delivery, so the order shows 1,200 still owed |
-| Esselunga pays €300 less for a "promotional contribution" | It looks like any short payment and gets booked as one | **€300** | Code finds no credit note behind it; Grok checks the contract and finds no clause for it (RS-GDO-MASTER-2026 §12); Sara approves a request to repay, with the evidence |
-| Six orders ship on 6 Nov to five warehouses | One truck per order, plant to warehouse and back: 6 trucks, 1,591.7 km, €1,161.50 of diesel, 7 driver days | **€426.89** of diesel more than needed | The Logistics agent puts both Esselunga orders on one stop and drives two corridors: 2 trucks, 1,006.7 km, €734.61, 3 driver days. The transport planner approves the plan |
+| Order (PAL-ESS-GOLD-001-04) is scanned onto the wrong truck | No error is flagged and Esselunga claims the missing packs | **€2,112** credit note (960 × €2.20) | Code checks every scan against the plan and flags the error so that orders can be sorted correctly |
+| 1,200 packs are held for quality, so only 10,800 ship | threeway says "matched" and nobody sends the missing packs | **€2,640** of ordered goods never delivered (1,200 × €2.20) | Code compares quantities line by line and flags the 1,200 packs still owed |
+| Esselunga pays €300 less for a "promotional contribution" | It is booked as a normal short payment | **€300** | Code finds no credit note behind it and Grok no clause in the contract, so we ask Esselunga for the €300 back |
+| Six orders ship on 6 Nov to five warehouses | Each order gets its own truck: 6 trucks, 1,591.7 km | **€426.89** of diesel more than needed | The Logistics agent puts orders on the same route on one truck: 2 trucks, 1,006.7 km |
 
 That's **€5,478.89 at stake on one order and one dispatch day**. With us, code catches all four before they become a loss, and a person decides only where judgment is needed.
 
@@ -37,14 +37,15 @@ Grok does the work and code checks it. A person signs off at a few gates with on
 
 | Agent | What it does | What code checks | Who signs off |
 |---|---|---|---|
-| Order agent | Reads every ORDERS EDI. When a field is unclear (a date, a quantity) it proposes a fix, which is parsed again. Splits an order when stock is short | Stock from production events, contract price | The order desk confirms every ORDRSP |
+| Order agent | Reads every ORDERS EDI. When a field is unclear (a date, a quantity) it proposes a fix, which is parsed again. Splits an order when stock is short | Stock from production events, contract price | The order desk confirms only unclear orders |
 | Logistics agent | Groups orders for the same and nearby warehouses into shared trucks, finds the stop order, briefs the planner | 33 pallets and 24 t per truck, 9 h daily driving (EU 561/2006), real road km, every figure in Grok's briefing | The transport planner approves the plan before any truck is booked |
 | Warehouse agent | Proposes the fix for a scan or truck exception: rescan, move a pallet, another truck | Every pallet scan against the plan, quality holds, batches | The warehouse lead approves |
 | Documents and reconciliation | Code writes DESADV, DDT, FatturaPA TD01 and INVOIC, then reconciles order, delivery and invoice | Line by line, every cause named | A person only when the documents disagree |
 | Dispute agent | Reads the claim email, pulls the documents, proposes a verdict with a source per point | Every amount tied to a document, the complaint window, duplicates | A person whenever anything is unclear |
 | Cash agent | Matches each deduction to our credit notes; the rest become claims | Remittance against invoices and credit notes | A person decides each new claim |
+| Forecast agent | Forecasts the stock we will need from past orders, so we know whether to buy, and the paddy price with Prophet, Meta's forecasting model | Each forecast against a simple guess: same week last year for demand, last price for the price | Nobody, it feeds the Purchasing agent |
 | Purchasing agent | Buy-or-wait signals for paddy | Backtest against buying the same amount every week | The buyer decides every purchase |
-| Learning | The closest past decisions go into Grok's prompt; three alike draft a rule | None overturned, and the person's reason still holds | A person approves each rule |
+| Learning | When a person closes an issue, the ticket is fed back to the agent, which learns from it | None overturned, and the person's reason still holds | A person approves each rule |
 
 **Grok and the person.** Grok reads, fixes, plans, investigates and proposes, up to the truck and after it. Code rejects any figure Grok cannot tie to a record. The person's one line on why becomes an example Grok gets for the next similar case. In the golden run, 56 of our 63 logged steps are done by code and Grok and 7 by a person (`python demo.py`). In a replay of invented claims, the share of cases that need a person falls from 80% in week 1 to 16% by week 4 (`python -m agent.replay`).
 
@@ -100,7 +101,7 @@ pnpm install
 cp .env.example .env.local    # set XAI_API_KEY=xai-... (every page also works without a key, on recorded answers)
 pnpm db:reset                 # Mini ERP with the golden order and the 6 Nov dispatch day
 pnpm dev:web                  # http://localhost:3000, then Shipping > "Send to the transport planner"
-pnpm test                     # the app's tests (127)
+pnpm test                     # the app's tests (147)
 ```
 
 The Python rows are the reference the app is ported from:
@@ -123,11 +124,4 @@ Forecast and quality: `python -m forecast_quality.data`, then `.advisor`, `.qual
 
 ## Known limitations
 
-- All data is synthetic; nothing is sent to a retailer or to SdI. The case curve and the demand forecast run on invented history.
-- One loss we can't prevent yet: Esselunga says a 240-pack pallet (€528) never arrived, while our scans put it on the truck. We credit it with three sources, but only a scan at the retailer's dock would show where it went.
-- Logistics: road km come from OSRM's car profile, slowed to the 80 km/h truck limit; no traffic, delivery slots or tolls. CO2 is an estimate (2.65 kg per litre).
-- `shipping/` is rebuilt from Nicola's v0.5.0 write-up; his code replaces ours when it arrives.
-- Grok's live calls are tested with recorded answers only. Default model `grok-4-latest`; set `XAI_MODEL` or `GROK_MODEL` to override.
-- Buy-or-wait shows no proven saving yet (+0.38% against even buying, better in 32 of 64 campaigns), so we pitch it as signals, not savings ([docs/forecast-results.md](docs/forecast-results.md)).
-
-Team, how we work and what we deliver: [docs/team.md](docs/team.md).
+- All data is synthetic, nothing is sent to a retailer or to SdI.

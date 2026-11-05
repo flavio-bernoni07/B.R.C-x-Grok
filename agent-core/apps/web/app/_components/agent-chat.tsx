@@ -29,6 +29,7 @@ import {
   PromptInputTextarea,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
+import { PageHeader } from "@/components/kit";
 import { ChipRail } from "@/components/kit/chip-rail";
 import { Button } from "@/components/ui/button";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
@@ -232,8 +233,13 @@ export function AgentChat({
         "relative flex h-full flex-col overflow-hidden bg-hh-seasalt text-ink",
       )}
     >
-      {/* With the desk as the first message, the header (and its fade) only appear once a conversation starts. */}
-      {showConversationLayout && (!intro || !isEmpty) ? (
+      {homeDock ? (
+        <div className="shrink-0 px-9 pt-8">
+          <div className="mx-auto w-full max-w-[1280px]">
+            <PageHeader title="Home" />
+          </div>
+        </div>
+      ) : showConversationLayout && (!intro || !isEmpty) ? (
         <ChatHeader canStartNewChat={activeSessionId !== undefined} />
       ) : null}
 
@@ -297,9 +303,9 @@ export function AgentChat({
         className={cn(
           "mx-auto w-full",
           homeDock
-            ? "max-w-[980px] shrink-0 pt-3 pb-6 pl-4 pr-[132px] sm:pl-6"
+            ? "max-w-[980px] shrink-0 px-4 pt-3 pb-6 sm:px-6"
             : showConversationLayout
-              ? "absolute bottom-0 left-1/2 z-20 max-w-[980px] -translate-x-1/2 bg-gradient-to-t from-hh-seasalt from-70% to-transparent pt-14 pb-5 pl-4 pr-[132px] sm:pl-6"
+              ? "absolute bottom-0 left-1/2 z-20 max-w-[980px] -translate-x-1/2 bg-gradient-to-t from-hh-seasalt from-70% to-transparent px-4 pt-14 pb-5 sm:px-6"
               : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 px-4 pb-[10vh]",
         )}
       >
