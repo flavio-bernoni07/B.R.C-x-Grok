@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { BrandTile, OrdersIcon, OverviewIcon, SignoffIcon, StockIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
+import { VoiceHold } from "./voice-hold";
 
 const NAV = [
   { href: "/", label: "Home", icon: OverviewIcon, match: (p: string) => p === "/" || p === "/s" || p.startsWith("/s/") },
@@ -141,6 +142,7 @@ export function AppShell({
       <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[16px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">
         {children}
       </main>
+      <VoiceHold />
     </div>
   );
 }

@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "@/lib/utils";
+import { VOICE_ASK_EVENT } from "@/lib/voice-ask";
 import { AgentMessage } from "./agent-message";
 import { WEB_CHAT_AGENT } from "@/app/eve-agent";
 
@@ -144,6 +145,19 @@ export function AgentChat({
       ...(clientContext ? { clientContext } : {}),
     });
   };
+
+  const voiceGate = useRef({ status: agent.status, send: sendText });
+  voiceGate.current = { status: agent.status, send: sendText };
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim() ?? "";
+      if (!text || voiceGate.current.status === "resuming") return;
+      event.preventDefault();
+      void voiceGate.current.send(text);
+    };
+    window.addEventListener(VOICE_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(VOICE_ASK_EVENT, onAsk);
+  }, []);
 
   const sentInitial = useRef(false);
   useEffect(() => {
