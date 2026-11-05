@@ -7,16 +7,32 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { sendOffAllAction } from "@/app/(app)/actions/actions";
-import { DataTable, PageHeader, Panel, Pill, day, qty } from "@/components/kit";
+import { DataTable, PageHeader, Panel, Pill, day, eur, qty } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { cn } from "@/lib/utils";
 import { Page } from "@/components/shell/app-shell";
+import { DisputeWorkspace } from "./dispute-workspace";
 import { SignoffCard, SignoffStatus, signoffUsedGrokbot } from "./signoff";
 
-/** Desk tabs: board + gates + Pending (mail/hold) + Decided (true close). */
+/** Desk tabs: board + gates + Disputes + Pending (mail/hold) + Decided (true close). */
 export type DeskTab = CoreDeskTab;
 
-const DESK_TABS = new Set<DeskTab>(["board", "sendoff", "price", "quantity", "pending", "other", "decided"]);
+const DESK_TABS = new Set<DeskTab>(["board", "sendoff", "price", "quantity", "disputes", "pending", "other", "decided"]);
+
+type PortalRow = {
+  case_id: string;
+  dispute_id: string | null | undefined;
+  retailer: string;
+  order_id: string | null;
+  summary: string | null | undefined;
+  category: string;
+  claimed_impact: number | null;
+  status: string;
+  assigned_role: string;
+  received_at: string;
+  signoff_status: string;
+  channel?: string;
+};
 
 function isOpenCase(c: Signoff) {
   return c.status === "pending" && !c.decidedAt;
@@ -53,11 +69,13 @@ function tabForBoardStage(stage: string): DeskTab {
 }
 
 function actionsHref(tab: DeskTab, caseId?: string) {
+  if (tab === "disputes" && !caseId) return "/disputes";
   if (caseId) return actionsCaseHref(caseId, tab);
   const q = new URLSearchParams();
   if (tab !== "board") q.set("tab", tab);
   const s = q.toString();
-  return s ? `/actions?${s}` : "/actions";
+  // Legacy SignoffView; /actions redirects to /signoff on the redesigned shell.
+  return s ? `/signoff?${s}` : "/signoff";
 }
 
 /** Plain <a> tabs — full page load so ?tab= SSR sticks without next/link hydration. */
@@ -119,6 +137,8 @@ export function SignoffView({
 } = {}) {
   const [cases, setCases] = useState<Signoff[]>(() => initialCases ?? []);
   const [board, setBoard] = useState<OrderBoardRow[]>(() => initialBoard ?? []);
+  const [portalRows, setPortalRows] = useState<PortalRow[]>([]);
+  const [notifCount, setNotifCount] = useState(0);
   // Prefer live URL so opening a case works even if soft-nav skips a full RSC remount.
   const params = useSearchParams();
   const tabRaw = params.get("tab");
@@ -135,6 +155,13 @@ export function SignoffView({
     fetch("/api/orders/board")
       .then((r) => r.json())
       .then((d: { rows?: OrderBoardRow[] }) => setBoard(d.rows ?? []))
+      .catch(() => {});
+    fetch("/api/actions/disputes")
+      .then((r) => r.json())
+      .then((d) => {
+        setPortalRows(d.disputes ?? []);
+        setNotifCount((d.notifications ?? []).length);
+      })
       .catch(() => {});
   }, []);
   useEffect(load, [load]);
@@ -157,21 +184,31 @@ export function SignoffView({
   const sendoff = useMemo(() => waiting.filter((c) => tabFor(c) === "sendoff"), [waiting]);
   const price = useMemo(() => waiting.filter((c) => tabFor(c) === "price"), [waiting]);
   const quantity = useMemo(() => waiting.filter((c) => tabFor(c) === "quantity"), [waiting]);
+  const disputes = useMemo(() => waiting.filter((c) => tabFor(c) === "disputes"), [waiting]);
   const other = useMemo(() => waiting.filter((c) => tabFor(c) === "other"), [waiting]);
   const pendingHold = useMemo(() => cases.filter(isPendingCase), [cases]);
   const decided = useMemo(() => cases.filter((c) => c.status === "approved" || c.status === "rejected"), [cases]);
+  const pendingPortal = useMemo(() => portalRows.filter((r) => r.signoff_status === "pending"), [portalRows]);
 
   const rows = useMemo(() => {
     if (tab === "sendoff") return sendoff;
     if (tab === "price") return price;
     if (tab === "quantity") return quantity;
+    if (tab === "disputes") return disputes;
     if (tab === "pending") return pendingHold;
     if (tab === "other") return other;
     if (tab === "decided") return decided;
     return [];
-  }, [tab, sendoff, price, quantity, pendingHold, other, decided]);
+  }, [tab, sendoff, price, quantity, disputes, pendingHold, other, decided]);
 
   const current = cases.find((c) => c.caseId === selected) ?? null;
+  const currentIsPortal =
+    current?.kind === "customer_dispute" ||
+    (current?.kind === "verdict" &&
+      (() => {
+        const ch = (current.proposal as { channel?: string } | null)?.channel;
+        return ch === "phone" || ch === "customer_chat";
+      })());
 
   const emptyCopy =
     tab === "sendoff"
@@ -180,17 +217,23 @@ export function SignoffView({
         ? "No price errors waiting."
         : tab === "quantity"
           ? "No quantity errors waiting."
-          : tab === "pending"
-            ? "No Pending orders waiting on the retailer."
-            : tab === "other"
-              ? "No other cases waiting."
-              : "No decisions yet.";
+          : tab === "disputes"
+            ? "No customer disputes waiting."
+            : tab === "pending"
+              ? "No Pending orders waiting on the retailer."
+              : tab === "other"
+                ? "No other cases waiting."
+                : "No decisions yet.";
 
   const tabOptions: { value: DeskTab; label: string }[] = [
     { value: "board", label: `Board${countLabel(board.length)}` },
     { value: "sendoff", label: `Send-off${countLabel(sendoff.length)}` },
     { value: "price", label: `Price error${countLabel(price.length)}` },
     { value: "quantity", label: `Quantity error${countLabel(quantity.length)}` },
+    {
+      value: "disputes",
+      label: `Disputes${countLabel(Math.max(disputes.length, pendingPortal.length))}${notifCount ? ` · ${notifCount} new` : ""}`,
+    },
     { value: "pending", label: `Pending${countLabel(pendingHold.length)}` },
     ...(other.length ? [{ value: "other" as const, label: `Other${countLabel(other.length)}` }] : []),
     { value: "decided", label: `Decided${countLabel(decided.length)}` },
@@ -200,6 +243,7 @@ export function SignoffView({
     <Page>
       <PageHeader
         title="Sign-off"
+        sub="Board shows every order’s stage. Retailer phone/chat disputes also land here for a person. After a price/qty mail the case moves to Pending (not Decided). Send-off all releases every ready ORDRSP."
       >
         <DeskTabs tab={tab} options={tabOptions} />
       </PageHeader>
@@ -313,8 +357,76 @@ export function SignoffView({
           stay here until a new message arrives.
         </p>
       ) : null}
+      {tab === "disputes" ? (
+        <p className="mb-3 text-[13px] text-ink-78">
+          Customer-reported disputes from phone or the{" "}
+          <a className="underline underline-offset-2" href="/support">
+            retailer support chat
+          </a>
+          . Claimed quantities are not treated as verified evidence. No credit note is issued from this tab alone.
+        </p>
+      ) : null}
 
-      {tab !== "board" ? (
+      {tab === "disputes" ? (
+        <div
+          className={
+            current
+              ? "mt-1 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+              : "mt-1 grid gap-5"
+          }
+        >
+          <Panel title="Customer disputes" aside={`${pendingPortal.length} pending`}>
+            <DataTable
+              rows={pendingPortal.length ? pendingPortal : portalRows}
+              rowKey={(r) => r.case_id}
+              empty={emptyCopy}
+              columns={[
+                {
+                  key: "retailer",
+                  header: "Retailer",
+                  main: true,
+                  cell: (r) => (
+                    <a href={actionsHref("disputes", r.case_id)} className="hover:underline">
+                      {r.retailer}
+                    </a>
+                  ),
+                },
+                { key: "order", header: "Order", cell: (r) => r.order_id ?? "—" },
+                {
+                  key: "summary",
+                  header: "Complaint",
+                  cell: (r) => <span className="line-clamp-2 max-w-[240px]">{r.summary}</span>,
+                },
+                { key: "category", header: "Category", cell: (r) => r.category },
+                {
+                  key: "impact",
+                  header: "Claimed €",
+                  align: "right",
+                  cell: (r) => (r.claimed_impact != null ? eur(r.claimed_impact) : "—"),
+                },
+                { key: "status", header: "Status", cell: (r) => r.status },
+                { key: "role", header: "Role", cell: (r) => r.assigned_role },
+                { key: "when", header: "Received", cell: (r) => day(r.received_at) },
+              ]}
+            />
+          </Panel>
+          {current && currentIsPortal ? (
+            <Panel
+              title={current.title ?? current.kind}
+              aside={
+                <a href={actionsHref("disputes")} className="text-[13px] text-ink-68 hover:text-ink">
+                  Close
+                </a>
+              }
+              className="lg:sticky lg:top-0"
+            >
+              <DisputeWorkspace key={current.caseId} caseId={current.caseId} onDecided={load} />
+            </Panel>
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab !== "board" && tab !== "disputes" ? (
         <div
           className={
             current
@@ -389,15 +501,19 @@ export function SignoffView({
               <p className="mb-3 text-[12px] text-ink-68">
                 {current.caseId} · {current.subjectRef ?? current.row}
               </p>
-              <SignoffCard
-                key={`${current.caseId}-${openMail ? "mail" : "card"}`}
-                signoff={current}
-                confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
-                embedded
-                returnTab={tab === "board" ? tabFor(current) : tab}
-                initialCompose={openMail}
-                formError={formError}
-              />
+              {currentIsPortal ? (
+                <DisputeWorkspace key={current.caseId} caseId={current.caseId} onDecided={load} />
+              ) : (
+                <SignoffCard
+                  key={`${current.caseId}-${openMail ? "mail" : "card"}`}
+                  signoff={current}
+                  confirmLabel={current.kind === "confirm" ? "Send off" : undefined}
+                  embedded
+                  returnTab={tab === "board" ? tabFor(current) : tab}
+                  initialCompose={openMail}
+                  formError={formError}
+                />
+              )}
             </Panel>
           ) : null}
         </div>

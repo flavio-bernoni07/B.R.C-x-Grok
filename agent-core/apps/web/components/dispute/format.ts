@@ -32,8 +32,12 @@ export function grokSays(g: ClaimRow["grok"]): string {
 }
 
 export function outcomePill(r: Pick<ClaimRow, "status" | "outcome">): { tone: PillTone; label: string } {
-  if (r.status === "awaiting_sign_off") return { tone: "attention", label: "Needs a person" };
-  if (r.status === "reopened") return { tone: "attention", label: "Reopened" };
+  if (r.status === "awaiting_sign_off" || r.status === "action_required" || r.status === "customer_reported") {
+    return { tone: "attention", label: "Needs a person" };
+  }
+  if (r.status === "reopened" || r.status === "awaiting_customer_evidence") return { tone: "attention", label: "Reopened" };
+  if (r.status === "investigating") return { tone: "wait", label: "Investigating" };
+  if (r.status === "resolved" || r.status === "closed") return { tone: "ok", label: "Closed" };
   if (r.outcome?.kind === "credit_note") return { tone: "ok", label: "Credit note" };
   if (r.outcome?.kind === "reject_reply") return { tone: "ok", label: "Reply sent" };
   return { tone: "wait", label: "Checking" };

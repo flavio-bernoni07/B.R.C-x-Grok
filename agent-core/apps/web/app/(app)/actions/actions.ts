@@ -23,17 +23,14 @@ const BY_ROW = {
   purchasing: decidePurchasing,
 } as const;
 
-const DESK_TABS = new Set(["board", "sendoff", "price", "quantity", "pending", "other", "decided"]);
-
-function deskHref(tab: string, opts?: { caseId?: string; err?: string; mail?: boolean }) {
+/** After the redesign, form POSTs land on Sign-off (`?case=` only; tabs are dropped by /actions → /signoff). */
+function deskHref(_tab: string, opts?: { caseId?: string; err?: string; mail?: boolean }) {
   const q = new URLSearchParams();
-  const t = DESK_TABS.has(tab) ? tab : "board";
-  if (t !== "board") q.set("tab", t);
   if (opts?.caseId) q.set("case", opts.caseId);
   if (opts?.mail) q.set("mail", "1");
   if (opts?.err) q.set("err", opts.err);
   const s = q.toString();
-  return s ? `/actions?${s}` : "/actions";
+  return s ? `/signoff?${s}` : "/signoff";
 }
 
 function str(fd: FormData, key: string) {
@@ -111,7 +108,9 @@ export async function decideSignoffAction(formData: FormData) {
     redirect(deskHref(tab, { caseId, err: (err as Error).message, mail: intent === "mail" }));
   }
 
+  revalidatePath("/signoff");
   revalidatePath("/actions");
+  revalidatePath("/disputes");
   revalidatePath("/orders");
   revalidatePath("/");
 
@@ -145,6 +144,7 @@ export async function sendOffAllAction(formData: FormData) {
     redirect(deskHref("sendoff", { err: (err as Error).message }));
   }
 
+  revalidatePath("/signoff");
   revalidatePath("/actions");
   revalidatePath("/orders");
   redirect(deskHref("decided"));

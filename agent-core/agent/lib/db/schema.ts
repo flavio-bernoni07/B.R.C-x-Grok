@@ -229,6 +229,21 @@ export const siProposals = sqliteTable("si_proposals", {
 });
 
 /**
+ * Internal inbox notifications for customer-reported disputes (same Mini ERP SQLite file).
+ * Conversation transcripts are stored as `documents` (kind `customer conversation`), not separate tables.
+ */
+export const notifications = sqliteTable("notifications", {
+  notificationId: text("notification_id").primaryKey(),
+  kind: text("kind").notNull(),
+  subjectRef: text("subject_ref"),
+  title: text("title").notNull(),
+  body: text("body"),
+  assignedRole: text("assigned_role"),
+  read: integer("read").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+/**
  * DDL used to create the tables (same statements as the Python modules, so a file
  * created by either side is compatible). Kept next to the Drizzle definitions above.
  */
@@ -277,4 +292,6 @@ CREATE TABLE IF NOT EXISTS si_loadings (loading_id TEXT PRIMARY KEY, order_ref T
 CREATE TABLE IF NOT EXISTS si_exceptions (exception_id TEXT PRIMARY KEY, status TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS si_exception_cases (case_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS si_proposals (proposal_id TEXT PRIMARY KEY, case_id TEXT NOT NULL, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS notifications (notification_id TEXT PRIMARY KEY, kind TEXT NOT NULL, subject_ref TEXT,
+  title TEXT NOT NULL, body TEXT, assigned_role TEXT, read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 `;

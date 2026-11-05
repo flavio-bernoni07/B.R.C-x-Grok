@@ -27,7 +27,8 @@ describe("voice answers", () => {
   it("answers an order ref from the records, with no Grok call", async () => {
     const grok = recorded({ text: "unused", href: null });
     const a = await answerQuestion(erp, "Where is order ESS-GOLD-001?", { caller: grok.caller });
-    expect(a.text).toMatch(/^ESS-GOLD-001 is /);
+    // orderAnswer speaks workspace statusText: "<ref>, <retailer>: <status>."
+    expect(a.text).toMatch(/^ESS-GOLD-001, Esselunga:/);
     expect(a.href).toBe("/orders?ref=ESS-GOLD-001");
     expect(grok.seen).toHaveLength(0);
   });

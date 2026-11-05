@@ -22,7 +22,13 @@ export function caseAmount(c: Pick<Signoff, "proposal">): { eur: number; label: 
   const p = obj(c.proposal);
   if (!p) return undefined;
   const verdict = obj(p.verdict);
-  const direct = num(p.amount) ?? num(p.financial_impact_eur) ?? num(verdict?.amount) ?? num(obj(verdict?.claim)?.amount);
+  const intake = obj(p.intake);
+  const direct =
+    num(p.amount) ??
+    num(p.financial_impact_eur) ??
+    num(verdict?.amount) ??
+    num(obj(verdict?.claim)?.amount) ??
+    num(intake?.claimed_amount);
   if (direct != null) return { eur: direct, label: "at stake" };
   if (Array.isArray(p.lines)) {
     let total = 0;
@@ -61,6 +67,17 @@ export function caseNextStep(c: Pick<Signoff, "row" | "kind" | "proposal">): str
     const acts = Array.isArray(p.actions) ? p.actions.map((a) => String(obj(a)?.action ?? "")).filter(Boolean) : [];
     return acts.length ? `Approve ${acts.join(", ").replace(/_/g, " ").toLowerCase()}` : "Approve the proposed resolution";
   }
+  if (c.kind === "customer_dispute") {
+    const channel = p.channel === "phone" ? "phone" : "chat";
+    return `Review the ${channel} claim (no money issued automatically)`;
+  }
+  if (c.kind === "verdict" && (p.channel === "phone" || p.channel === "customer_chat")) {
+    const d = obj(p.verdict)?.decision;
+    const channel = p.channel === "phone" ? "phone" : "chat";
+    return typeof d === "string"
+      ? `${d.charAt(0).toUpperCase()}${d.slice(1).replace(/_/g, " ")} the ${channel} claim`
+      : `Decide the ${channel} claim`;
+  }
   const d = obj(p.verdict)?.decision;
   return typeof d === "string" ? `${d.charAt(0).toUpperCase()}${d.slice(1).replace(/_/g, " ")} the claim` : "Decide the claim";
 }
@@ -76,7 +93,12 @@ export function caseUrgency(c: Pick<Signoff, "status" | "reasons" | "proposal" |
 export function caseOrderRef(c: Pick<Signoff, "row" | "subjectRef" | "proposal" | "title">): string | undefined {
   if (c.row === "order") return c.subjectRef ?? undefined;
   const p = obj(c.proposal) ?? {};
-  const fromClaim = obj(obj(p.verdict)?.claim)?.order_ref ?? obj(obj(p.facts)?.claim)?.order_ref ?? p.order_ref;
+  const intake = obj(p.intake);
+  const fromClaim =
+    obj(obj(p.verdict)?.claim)?.order_ref ??
+    obj(obj(p.facts)?.claim)?.order_ref ??
+    p.order_ref ??
+    intake?.order_ref;
   if (typeof fromClaim === "string") return fromClaim;
   const t = /\bon ([A-Z0-9][A-Z0-9-]+\d)\b/.exec((c as { title?: string | null }).title ?? "");
   return t?.[1];

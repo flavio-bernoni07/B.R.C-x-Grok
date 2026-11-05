@@ -81,6 +81,86 @@ export type HandleClaimResult =
   | { status: "awaiting_person"; claim_id: string; case_id: string; verdict: Obj }
   | { status: "closed"; claim_id: string; verdict: Obj; outcome: DisputeOutcome };
 
+/**
+ * Run the normal dispute pipeline on an existing claim: pull facts → Grok verdict →
+ * emit outcome, or open a sign-off only when the verdict is ambiguous.
+ * Used by email `handleClaim` and by phone/chat intake after a DSP-… is registered.
+ */
+export async function applyVerdictToClaim(
+  erp: Erp,
+  claimId: string,
+  extraction: import("./claim_reader").ClaimExtraction,
+  opts: {
+    outDir?: string | null;
+    verdictCaller?: Caller | null;
+    includeFixtures?: boolean;
+    issueDate?: string | null;
+    playbookPath?: string | null;
+    /** Kept on the claim when present (phone/chat channel metadata). */
+    portal?: Obj | null;
+  } = {},
+): Promise<HandleClaimResult> {
+  const outDir = opts.outDir || runtimeOutDir();
+  const existing = erp.claim(claimId);
+  if (!existing) throw new Error(`missing claim ${claimId}`);
+
+  const facts = pullFacts(extraction, { store: disputeStore(erp, opts.includeFixtures ?? true) });
+  erp.log("code", "dispute.facts_pulled", claimId, {
+    detail: { misses: facts.misses, threeway: facts.threeway ? facts.threeway.summary : null },
+  });
+  const verdict = await decideVerdict(extraction, facts, {
+    caller: opts.verdictCaller,
+    playbookPath: opts.playbookPath || runtimePlaybookPath(),
+  });
+  const verdictDict: Obj = { ...verdict, claim: extraction };
+  erp.log("grok", "dispute.verdict", claimId, {
+    detail: { decision: verdict.decision, amount: verdict.amount, sign_off_reasons: verdict.sign_off_reasons },
+  });
+
+  const portal = opts.portal ?? ((existing.extraction as Obj | null)?.portal as Obj | undefined) ?? null;
+  const extractionOut: Obj = portal ? { ...(extraction as unknown as Obj), portal } : (extraction as unknown as Obj);
+  erp.setClaim(claimId, {
+    orderRef: extraction.order_ref,
+    invoiceRef: extraction.invoice_ref ?? existing.invoiceRef,
+    extraction: extractionOut,
+    verdict: verdictDict,
+  });
+
+  const factsDict = facts as unknown as Obj;
+  if (verdict.needs_sign_off) {
+    const caseId = requestSignoff(erp, {
+      row: "dispute",
+      kind: "verdict",
+      subjectRef: claimId,
+      title: `Claim ${claimId} on ${extraction.order_ref || "an unknown order"}: Grok proposes ${verdict.decision}`,
+      proposal: { verdict: verdictDict, facts: factsDict, out_dir: outDir, channel: portal?.channel ?? null },
+      reasons: verdict.sign_off_reasons,
+    });
+    if (portal) {
+      erp.setClaim(claimId, {
+        status: "awaiting_sign_off",
+        extraction: { ...extractionOut, portal: { ...portal, status: "ACTION_REQUIRED", case_id: caseId } },
+      });
+    } else {
+      erp.setClaim(claimId, { status: "awaiting_sign_off" });
+    }
+    return { status: "awaiting_person", claim_id: claimId, case_id: caseId, verdict: verdictDict };
+  }
+
+  const outcome = emitOutcome(verdictDict, { facts: factsDict, outDir, issueDate: opts.issueDate });
+  saveOutcome(erp, claimId, outcome);
+  if (portal) {
+    const closedStatus = outcome.kind === "credit_note" ? "RESOLVED" : "CLOSED";
+    erp.setClaim(claimId, {
+      extraction: {
+        ...extractionOut,
+        portal: { ...portal, status: closedStatus, case_id: portal.case_id ?? null, updated_at: new Date().toISOString() },
+      },
+    });
+  }
+  return { status: "closed", claim_id: claimId, verdict: verdictDict, outcome };
+}
+
 export async function handleClaim(
   erp: Erp,
   emailText: string,
@@ -94,7 +174,6 @@ export async function handleClaim(
     playbookPath?: string | null;
   } = {},
 ): Promise<HandleClaimResult> {
-  const outDir = opts.outDir || runtimeOutDir();
   const docId = erp.addDocument("claim email", null, emailText, { path: opts.sourceName ?? "claim email" });
   const claimId = erp.nextId("claim", "CLM-");
   erp.saveClaim({ claimId, sourceDoc: docId, status: "received" });
@@ -102,42 +181,13 @@ export async function handleClaim(
 
   const extraction = await readClaim(emailText, { caller: opts.readCaller });
   erp.log("grok", "dispute.claim_read", claimId, { sourceDoc: docId, detail: extraction });
-  const facts = pullFacts(extraction, { store: disputeStore(erp, opts.includeFixtures ?? true) });
-  erp.log("code", "dispute.facts_pulled", claimId, {
-    detail: { misses: facts.misses, threeway: facts.threeway ? facts.threeway.summary : null },
+  return applyVerdictToClaim(erp, claimId, extraction, {
+    outDir: opts.outDir,
+    verdictCaller: opts.verdictCaller,
+    includeFixtures: opts.includeFixtures,
+    issueDate: opts.issueDate,
+    playbookPath: opts.playbookPath,
   });
-  const verdict = await decideVerdict(extraction, facts, {
-    caller: opts.verdictCaller,
-    playbookPath: opts.playbookPath || runtimePlaybookPath(),
-  });
-  const verdictDict: Obj = { ...verdict, claim: extraction };
-  erp.log("grok", "dispute.verdict", claimId, {
-    detail: { decision: verdict.decision, amount: verdict.amount, sign_off_reasons: verdict.sign_off_reasons },
-  });
-  erp.setClaim(claimId, {
-    orderRef: extraction.order_ref,
-    invoiceRef: extraction.invoice_ref,
-    extraction: extraction as unknown as Obj,
-    verdict: verdictDict,
-  });
-
-  const factsDict = facts as unknown as Obj;
-  if (verdict.needs_sign_off) {
-    const caseId = requestSignoff(erp, {
-      row: "dispute",
-      kind: "verdict",
-      subjectRef: claimId,
-      title: `Claim ${claimId} on ${extraction.order_ref || "an unknown order"}: Grok proposes ${verdict.decision}`,
-      proposal: { verdict: verdictDict, facts: factsDict, out_dir: outDir },
-      reasons: verdict.sign_off_reasons,
-    });
-    erp.setClaim(claimId, { status: "awaiting_sign_off" });
-    return { status: "awaiting_person", claim_id: claimId, case_id: caseId, verdict: verdictDict };
-  }
-
-  const outcome = emitOutcome(verdictDict, { facts: factsDict, outDir, issueDate: opts.issueDate });
-  saveOutcome(erp, claimId, outcome);
-  return { status: "closed", claim_id: claimId, verdict: verdictDict, outcome };
 }
 
 function disputeCase(erp: Erp, caseId: string) {
@@ -163,6 +213,7 @@ export function approveVerdict(
   });
   const claimId = c.subjectRef as string;
   saveOutcome(erp, claimId, outcome);
+  syncPortalAfterVerdict(erp, claimId, outcome.kind === "credit_note" ? "RESOLVED" : "CLOSED");
   const claim = (verdict.claim ?? {}) as Obj;
   recordPastCase(opts.playbookPath || runtimePlaybookPath(), {
     when: opts.issueDate || todayIso(),
@@ -186,6 +237,7 @@ export function rejectVerdict(
   const claim = (verdict?.claim ?? {}) as Obj;
   const claimId = c.subjectRef as string;
   erp.setClaim(claimId, { status: "reopened" });
+  syncPortalAfterVerdict(erp, claimId, "INVESTIGATING");
   recordPastCase(opts.playbookPath || runtimePlaybookPath(), {
     when: todayIso(),
     orderRef: (claim.order_ref as string) || "—",
@@ -195,6 +247,21 @@ export function rejectVerdict(
     notes: `${opts.by}: ${opts.reason}`,
   });
   return { status: "reopened", claim_id: claimId };
+}
+
+/** Keep phone/chat portal.status in sync when a person decides a normal verdict case. */
+function syncPortalAfterVerdict(erp: Erp, claimId: string, portalStatus: string) {
+  const row = erp.claim(claimId);
+  if (!row) return;
+  const extraction = (row.extraction ?? {}) as Obj;
+  const portal = extraction.portal as Obj | undefined;
+  if (!portal || typeof portal !== "object") return;
+  erp.setClaim(claimId, {
+    extraction: {
+      ...extraction,
+      portal: { ...portal, status: portalStatus, updated_at: new Date().toISOString() },
+    },
+  });
 }
 
 /** Recorded Grok answers (for a demo with the network off). Same code checks apply. */

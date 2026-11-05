@@ -12,7 +12,11 @@ const columns: Column<ClaimRow>[] = [
     main: true,
     cell: (r) => (
       <span className="flex flex-col leading-tight">
-        <span>{r.claim_id}</span>
+        <span className="inline-flex items-center gap-2">
+          <span>{r.claim_id}</span>
+          {r.channel === "phone" ? <Pill tone="live">Phone</Pill> : null}
+          {r.channel === "customer_chat" ? <Pill tone="quiet">Chat</Pill> : null}
+        </span>
         <span className="font-normal text-[12px] text-ink-68">{[r.customer, r.order_ref].filter(Boolean).join(" · ") || "no order found"}</span>
       </span>
     ),
@@ -24,7 +28,9 @@ const columns: Column<ClaimRow>[] = [
     cell: (r) => (
       <span className="flex items-center gap-2">
         {r.grok && !r.grok.needs_sign_off && !r.outcome?.approved_by ? <GrokMark size={15} title="Settled by Grok, no person needed" /> : null}
-        <span className={r.grok?.needs_sign_off ? "font-bold text-ink" : undefined}>{grokSays(r.grok)}</span>
+        <span className={r.grok?.needs_sign_off ? "font-bold text-ink" : undefined}>
+          {r.channel && r.grok?.decision === "review" ? "Needs review" : grokSays(r.grok)}
+        </span>
       </span>
     ),
   },

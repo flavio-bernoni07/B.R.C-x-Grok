@@ -35,6 +35,7 @@ export type Signoff = Omit<typeof s.signoffs.$inferSelect, "proposal" | "reasons
   proposal: Json | null;
   reasons: string[] | null;
 };
+export type Notification = typeof s.notifications.$inferSelect;
 
 export const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00");
 
@@ -107,6 +108,10 @@ export class Erp {
     if (filter.ref) conds.push(eq(s.documents.ref, filter.ref));
     if (filter.kind) conds.push(eq(s.documents.kind, filter.kind));
     return this.db.select().from(s.documents).where(and(...conds)).orderBy(asc(s.documents.docId)).all();
+  }
+
+  updateDocument(docId: string, fields: { body?: string | null; path?: string | null; ref?: string | null }) {
+    this.db.update(s.documents).set(fields).where(eq(s.documents.docId, docId)).run();
   }
 
   // ----- master data ---------------------------------------------------------
@@ -385,6 +390,36 @@ export class Erp {
       .map((r) => this.signoff(r.id)!);
   }
 
+  // ----- inbox notifications (customer dispute chat → Actions) ---------------
+  saveNotification(n: {
+    notificationId: string;
+    kind: string;
+    subjectRef?: string | null;
+    title: string;
+    body?: string | null;
+    assignedRole?: string | null;
+    createdAt: string;
+  }) {
+    this.db
+      .insert(s.notifications)
+      .values({
+        notificationId: n.notificationId,
+        kind: n.kind,
+        subjectRef: n.subjectRef ?? null,
+        title: n.title,
+        body: n.body ?? null,
+        assignedRole: n.assignedRole ?? null,
+        read: 0,
+        createdAt: n.createdAt,
+      })
+      .run();
+  }
+
+  notifications(filter: { unreadOnly?: boolean } = {}): Notification[] {
+    const rows = this.db.select().from(s.notifications).orderBy(asc(s.notifications.createdAt)).all();
+    return filter.unreadOnly ? rows.filter((r) => !r.read) : rows;
+  }
+
   /**
    * Wipe operational Order / Shipping / Sign-off state so a simulation starts as the company's
    * first orders. Master data (products, retailers, batches, production events) stays.
@@ -410,6 +445,7 @@ export class Erp {
       this.db.delete(s.orders).run();
       this.db.delete(s.documents).run();
       this.db.delete(s.audit).run();
+      this.db.delete(s.notifications).run();
       this.db.delete(s.counters).run();
     });
   }

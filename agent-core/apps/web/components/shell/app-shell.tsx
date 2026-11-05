@@ -103,6 +103,12 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
             </ul>
           </div>
         ) : null}
+
+        <div className="mt-auto flex flex-col gap-2 px-2.5 pt-3 max-md:hidden">
+          <Link href="/support" className="text-[12px] text-ink-68 underline-offset-2 hover:underline">
+            Retailer support chat (voice)
+          </Link>
+        </div>
       </aside>
 
       <main className="voice-sheet relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[18px] bg-hh-seasalt shadow-[inset_0_0_0_1px_rgb(32_49_25/0.06),0_10px_30px_-18px_rgb(32_49_25/0.25)]">

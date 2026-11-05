@@ -24,6 +24,8 @@ export type ClaimRow = {
   claimed_amount: number | null;
   claimed_quantity: number | null;
   product: string | null;
+  /** How the retailer opened it: phone / customer_chat from portal intake, else null (email paste). */
+  channel: "phone" | "customer_chat" | null;
   grok: {
     decision: string;
     amount: number | null;
@@ -35,7 +37,7 @@ export type ClaimRow = {
     sign_off_reasons: string[];
   } | null;
   outcome: { kind: string; credit_note_number: string | null; approved_by: string | null; amount: number | null } | null;
-  signoff: { case_id: string; status: string; decided_by: string | null } | null;
+  signoff: { case_id: string; status: string; kind: string; decided_by: string | null } | null;
 };
 
 export type OutcomeDocument = { doc_id: string; kind: string; key: string; path: string | null; created_at: string; body: string | null };
@@ -60,6 +62,13 @@ function latestSignoff(erp: Erp, claimId: string): Signoff | null {
   return all.at(-1) ?? null;
 }
 
+function portalChannel(extraction: ClaimExtraction | null): "phone" | "customer_chat" | null {
+  const portal = extraction && typeof extraction === "object" ? (extraction as { portal?: { channel?: string } }).portal : undefined;
+  if (portal?.channel === "phone") return "phone";
+  if (portal?.channel === "customer_chat" || portal?.channel === "customer_portal") return "customer_chat";
+  return null;
+}
+
 function rowOf(erp: Erp, claimId: string, store: MiniErpStore): ClaimRow | null {
   const c = erp.claim(claimId);
   if (!c) return null;
@@ -69,6 +78,7 @@ function rowOf(erp: Erp, claimId: string, store: MiniErpStore): ClaimRow | null 
   const so = latestSignoff(erp, claimId);
   const [order] = store.findOrder(c.orderRef ?? extraction?.order_ref ?? null);
   const sources = verdict ? verdict.points.filter((p) => p.source?.ref && p.source.ref !== "unspecified").length : 0;
+  const channel = portalChannel(extraction);
   return {
     claim_id: c.claimId,
     received_at: c.receivedAt,
@@ -80,6 +90,7 @@ function rowOf(erp: Erp, claimId: string, store: MiniErpStore): ClaimRow | null 
     claimed_amount: extraction?.amount ?? null,
     claimed_quantity: extraction?.quantity ?? null,
     product: extraction?.product ?? null,
+    channel,
     grok: verdict
       ? {
           decision: verdict.decision,
@@ -94,7 +105,7 @@ function rowOf(erp: Erp, claimId: string, store: MiniErpStore): ClaimRow | null 
     outcome: outcome
       ? { kind: outcome.kind, credit_note_number: outcome.credit_note_number, approved_by: outcome.approved_by, amount: outcome.amount }
       : null,
-    signoff: so ? { case_id: so.caseId, status: so.status, decided_by: so.decidedBy ?? null } : null,
+    signoff: so ? { case_id: so.caseId, status: so.status, kind: so.kind, decided_by: so.decidedBy ?? null } : null,
   };
 }
 

@@ -39,7 +39,7 @@ describe("search", () => {
     expect(search(erp, "TRUCK-PV-01")[0]).toMatchObject({ href: "/shipping" });
     expect(search(erp, "esselunga").some((h) => h.sub === "Retailer")).toBe(true);
     const claim = search(erp, "CLM-00002")[0];
-    expect(claim.href).toMatch(/^\/signoff\?case=SO-/);
+    expect(claim.href).toMatch(/^\/disputes\?claim=CLM-/);
     expect(search(erp, "x")).toEqual([]);
   });
 });
