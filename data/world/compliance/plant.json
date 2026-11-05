@@ -1,0 +1,30 @@
+{
+  "_comment": "DEMO DATA: plant-level food-safety certificates for the Pavia mill. Invented ids for the hackathon; kinds match what Riso Scotti publishes (BRC, IFS, ISO 22000). Not live certification-body records.",
+  "demo": true,
+  "plant": "Riso Scotti — Bivio Vela, Pavia",
+  "certs": [
+    {
+      "id": "CERT-IFS-2026",
+      "scheme": "IFS Food",
+      "level": "Higher",
+      "valid_to": "2027-03-31",
+      "body": "Demo certification body (hackathon)",
+      "note": "Retailer-driven food-safety standard (not an EU regulation)."
+    },
+    {
+      "id": "CERT-BRC-2026",
+      "scheme": "BRCGS Food Safety",
+      "level": "AA",
+      "valid_to": "2027-02-28",
+      "body": "Demo certification body (hackathon)",
+      "note": "Retailer-driven food-safety standard (not an EU regulation)."
+    },
+    {
+      "id": "CERT-ISO22000-2026",
+      "scheme": "ISO 22000",
+      "valid_to": "2027-06-30",
+      "body": "Demo certification body (hackathon)",
+      "note": "Food-safety management system."
+    }
+  ]
+}

@@ -15,6 +15,7 @@
  */
 import type { Erp } from "../core/erp";
 import { decide } from "../core/signoff";
+import { recordEvent } from "../core/stock";
 import { decideResolution, executeResolution, recheckExceptionCase, viewExceptionCase } from "./cases";
 import { applyDispatchPlan } from "./routes";
 
@@ -81,6 +82,17 @@ export async function decideSignoff(
     if (!d.approve) return { row: "shipping", kind: so.kind, case_id: caseId, status: decided.status };
     const booked = applyDispatchPlan(erp, caseId, d.by.trim());
     return { row: "shipping", kind: so.kind, case_id: caseId, status: "planned", ...booked };
+  }
+
+  if (so.kind === "compliance_docs") {
+    // Quality / import papers: approve releases the held batch; reject leaves it on hold.
+    const decided = decide(erp, caseId, { approve: d.approve, by: d.by, reason: d.reason, edits: d.edits ?? null });
+    const batch = String((so.proposal ?? {}).batch ?? so.subjectRef ?? "");
+    if (d.approve && batch) {
+      recordEvent(erp, "hold_released", { batch, note: `compliance papers accepted: ${d.reason.trim()}` });
+      return { row: "shipping", kind: so.kind, case_id: caseId, batch, status: "released" };
+    }
+    return { row: "shipping", kind: so.kind, case_id: caseId, batch, status: decided.status };
   }
 
   // Any other shipping sign-off: record the decision only.

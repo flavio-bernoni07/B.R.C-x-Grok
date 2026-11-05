@@ -9,6 +9,7 @@
  *   person approves in Sign-off. The price model is shown against "price stays the same", even when that wins.
  * The demand forecast runs on demo history: an estimate, labelled as one.
  */
+import type { LotPassport } from "@agent/lib/compliance/passport";
 import type { InventoryProduct } from "@agent/lib/core/inventory";
 import type { ProjectionRow } from "@agent/lib/forecast/demand";
 import { type PaddyWeek, type ProductionPlan, paddyPlan } from "@agent/lib/forecast/plan";
@@ -17,6 +18,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { PassportBody } from "@/components/compliance/passport";
 import { Btn, Card, DataTable, Drawer, Kpi, Legend, PageHeader, Pill, type PillTone, Segmented, day, eur } from "@/components/kit";
 import { LineChart } from "@/components/kit/chart";
 import { whenShort } from "@/components/home/home-intro";
@@ -74,6 +76,17 @@ function HowComputed({ children }: { readonly children: React.ReactNode }) {
 /** One product in the side panel: what is free, what is promised, the batches, who waits, what to make next. */
 function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gtin: string }) {
   const p = inv.products.find((x) => x.gtin === gtin);
+  const [openBatch, setOpenBatch] = useState<string | null>(null);
+  const [passports, setPassports] = useState<Record<string, LotPassport | null>>({});
+  useEffect(() => {
+    if (!openBatch || openBatch in passports) return;
+    fetch(`/api/compliance/batch/${encodeURIComponent(openBatch)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { passport?: LotPassport } | null) => {
+        setPassports((prev) => ({ ...prev, [openBatch]: d?.passport ?? null }));
+      })
+      .catch(() => setPassports((prev) => ({ ...prev, [openBatch]: null })));
+  }, [openBatch, passports]);
   if (!p) return null;
   const pr = inv.forecast.projections.find((x) => x.gtin === gtin);
   const next = pr?.plan.batches[0];
@@ -122,18 +135,40 @@ function ProductDetail({ inv, gtin }: { readonly inv: InventoryData; readonly gt
       ) : null}
       <Card title="Batches">
         {batches.length ? (
-          <ul className="space-y-1.5 text-[14px]">
-            {batches.map((b) => (
-              <li key={b.batch} className="flex justify-between gap-3">
-                <span>
-                  <b>{b.batch}</b> <span className="text-ink-68">· {b.status}</span>
-                </span>
-                <span className="text-ink-68 tabular-nums">
-                  {n0(b.qty)}
-                  {b.availableFrom ? ` · ${day(b.availableFrom)}` : ""}
-                </span>
-              </li>
-            ))}
+          <ul className="space-y-1 text-[14px]">
+            {batches.map((b) => {
+              const open = openBatch === b.batch;
+              const pass = passports[b.batch];
+              return (
+                <li key={b.batch} className="border-hairline border-b last:border-0">
+                  <button
+                    type="button"
+                    className="flex w-full items-baseline justify-between gap-3 py-1.5 text-left hover:text-ink"
+                    onClick={() => setOpenBatch(open ? null : b.batch)}
+                    aria-expanded={open}
+                  >
+                    <span>
+                      <b>{b.batch}</b>{" "}
+                      <span className="text-ink-68">
+                        · {b.status}
+                        {open ? " · passport" : " · passport ›"}
+                      </span>
+                    </span>
+                    <span className="text-ink-68 tabular-nums">
+                      {n0(b.qty)}
+                      {b.availableFrom ? ` · ${day(b.availableFrom)}` : ""}
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="border-hairline border-t bg-hh-seasalt/40 px-1 py-3">
+                      {pass === undefined ? <p className="text-[13px] text-ink-68">Loading passport…</p> : null}
+                      {pass === null ? <p className="text-[13px] text-ink-68">No compliance passport for this batch.</p> : null}
+                      {pass ? <PassportBody p={pass} /> : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-[14px] text-ink-68">No batch on record.</p>

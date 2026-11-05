@@ -13,6 +13,7 @@ import { orderDetail } from "./views";
 import { type Caught, caughtProblems } from "./caught";
 import { type ContractSummary, contractFor } from "../core/contracts";
 import { orderDocuments } from "../core/document-file";
+import { type OrderCompliance, orderCompliance } from "../compliance/passport";
 
 export type InboxStatus = "attention" | "on_track" | "waiting" | "completed";
 export const STATUS_LABEL: Record<InboxStatus, string> = {
@@ -110,6 +111,8 @@ export type OrderWorkspace = {
   contract: ContractSummary | null;
   /** Every document tied to the order, each downloadable at its href. */
   documents: { docId: string; kind: string; ref: string | null; filename: string; href: string }[];
+  /** Lot compliance passports for batches on this order (Art. 18 / origin / MRL / plant certs). */
+  compliance: OrderCompliance;
 };
 
 const ATTENTION_STATUSES = new Set(["awaiting_confirmation", "pending_price", "price_fix", "pending_manual_edi", "manual_edi", "stock_short"]);
@@ -515,5 +518,6 @@ export function orderWorkspace(erp: Erp, ref: string): OrderWorkspace | null {
     caught: caughtProblems(erp, ref),
     contract: contractFor(order.buyerGln),
     documents: orderDocuments(erp, ref, [...c.invoices.map((i) => i.invoice), ...c.claims.map((cl) => cl.claim_id), ...c.shipments.map((sh) => sh.desadv)]),
+    compliance: orderCompliance(erp, ref),
   };
 }

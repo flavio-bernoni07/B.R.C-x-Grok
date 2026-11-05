@@ -2,6 +2,7 @@
 
 import type { InboxStatus, OrderWorkspace } from "@agent/lib/order/workspace";
 import type { ReactNode } from "react";
+import { OrderComplianceSection } from "@/components/compliance/passport";
 import { day, eur, Facts, Panel, Pill, type PillTone, qty, SourceTag } from "@/components/kit";
 import { GrokbotIcon } from "@/components/kit/icons";
 import { askHref } from "@/components/shell/overview-chat";
@@ -172,6 +173,9 @@ export function OrderWorkspaceBody({ ws, compact }: { readonly ws: OrderWorkspac
                 {e.note ? ` (${e.note})` : ""}
               </Muted>
             ))}
+          </Section>
+          <Section title="Compliance" open={ws.compliance.status === "gap"}>
+            <OrderComplianceSection data={ws.compliance} />
           </Section>
           <Section title="Shipping">
             {ws.shipping ? (
