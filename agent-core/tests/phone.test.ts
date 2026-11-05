@@ -9,6 +9,7 @@ import {
   buildSubmitMessage,
   dispatchPhoneTool,
   PHONE_INSTRUCTIONS,
+  PHONE_WELCOME_MESSAGE,
   simulatePhoneDispute,
 } from "../agent/lib/dispute/phone_agent";
 import { resolvePhoneSession, resolveRetailerGln } from "../agent/lib/dispute/phone_identity";
@@ -79,6 +80,8 @@ describe("phone dispute tools", () => {
     expect(resolveRetailerGln(erp, "")).toBeNull();
     expect(resolvePhoneSession(erp, "+39333", {}).ok).toBe(false);
     expect(PHONE_INSTRUCTIONS).toMatch(/Retailer/);
+    expect(PHONE_WELCOME_MESSAGE).toMatch(/how can I help you/i);
+    expect(PHONE_INSTRUCTIONS).toContain(PHONE_WELCOME_MESSAGE);
   });
 
   it("lookup_order denies unauthorized refs and returns evidence for ORD-3001", async () => {

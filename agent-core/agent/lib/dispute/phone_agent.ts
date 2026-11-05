@@ -17,10 +17,20 @@ import {
 
 export const PHONE_VOICE = process.env.XAI_SPEECH_VOICE?.trim() || "eve";
 
+/**
+ * Exact opening line for Voice Agent Builder → Welcome message (and our SIP first turn).
+ * Keeps the start of the call from dead air.
+ */
+export const PHONE_WELCOME_MESSAGE = "Hey, how's it going — how can I help you?";
+
 /** Paste-ready playbook for Voice Agent Builder + our SIP phone_agent. */
 export const PHONE_INSTRUCTIONS = `
 You are Riso Scotti's retailer support agent on a live phone call (Grok Voice).
 Language: answer in the caller's language (Italian or English). Keep turns short and natural.
+
+As soon as the call connects, greet immediately — never leave silence. Say exactly:
+"${PHONE_WELCOME_MESSAGE}"
+If the caller already spoke Italian first, use instead: "Ciao, come va — come posso aiutarti?"
 
 Collect ONLY what is still missing — never re-ask for facts the caller already gave.
 Required before submit_dispute:
@@ -298,7 +308,13 @@ export async function handleIncomingPhoneCall(
           tools: PHONE_TOOLS,
         },
       });
-      send({ type: "response.create" });
+      // Speak the short welcome immediately so the caller never hears dead air.
+      send({
+        type: "response.create",
+        response: {
+          instructions: `Say exactly this greeting and nothing else: ${PHONE_WELCOME_MESSAGE}`,
+        },
+      });
     });
 
     ws.on("message", (data) => {

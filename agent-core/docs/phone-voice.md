@@ -51,8 +51,11 @@ xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with 
 
 1. Open [console.x.ai](https://console.x.ai) → team **grok hackathon** → **Voice Agents (Beta)**.
 2. Open one of your **Untitled** agents, or click **Create agent** / **Customer Support**.
-3. Paste the playbook from `PHONE_INSTRUCTIONS` in `agent/lib/dispute/phone_agent.ts` (or the block below). Core rule: **ask only for missing fields**, including **which retailer** (Esselunga / Carrefour / …) if not said yet.
-4. Add an **API Request** tool named `submit_dispute`:
+3. **Welcome message** (on in the Voice Agent UI): paste exact text  
+   `Hey, how's it going — how can I help you?`  
+   (same as `PHONE_WELCOME_MESSAGE` in `phone_agent.ts`). Leave **Caller can interrupt** on.
+4. Paste the playbook from `PHONE_INSTRUCTIONS` in `agent/lib/dispute/phone_agent.ts` (or the block below). Core rule: **ask only for missing fields**, including **which retailer** (Esselunga / Carrefour / …) if not said yet.
+5. Add an **API Request** tool named `submit_dispute`:
    - Method: **POST**
    - URL: `https://YOUR-TUNNEL-HOST/api/telephony/simulate`
    - Body JSON fields (**Generated**, not System):
@@ -63,9 +66,9 @@ xAI’s **free phone number** lives in the **Voice Agents** UI. It answers with 
      - `claimed_amount` (number, optional)
      - `customer_description` (string, required)
      - `language` (`en` or `it`)
-5. Find **Phone number** / telephony on the agent (often near Publish / Live). Claim the **free US number**. Note the number.
-6. **Publish / Live** the agent (drafts stay silent).
-7. Call that number → expect a spoken `DSP-…` → open **Disputes**.
+6. Find **Phone number** / telephony on the agent (often near Publish / Live). Claim the **free US number**. Note the number.
+7. **Publish / Live** the agent (drafts stay silent).
+8. Call that number → expect a spoken `DSP-…` → open **Disputes**.
 
 You do **not** need `XAI_VOICE_WEBHOOK_SECRET` for Path 1.
 
