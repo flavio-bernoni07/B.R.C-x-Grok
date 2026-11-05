@@ -12,6 +12,9 @@ import { promisify } from "node:util";
 import { xai } from "@ai-sdk/xai";
 import { generateText } from "ai";
 import { dataPath } from "./paths";
+// Bundled with the server so Vercel (no planning/, no uv) still has Cost / Price outlook.
+import arborio8w from "./rice/forecasts/Arborio_8w.json";
+import carnaroli8w from "./rice/forecasts/Carnaroli_8w.json";
 
 const run = promisify(execFile);
 
@@ -129,16 +132,28 @@ export function getMarketSnapshot(): Promise<MarketSnapshot> {
 }
 
 /**
- * Shipped demo baseline under data/market/forecasts/. Used when uv/Prophet is missing
- * (hosted Vercel, a Mac without the planning toolchain) so Stock → Buying still shows Cost and Price outlook.
+ * Demo baseline used when uv/Prophet is missing (hosted Vercel, Mac without planning/).
+ * Prefer the JSON bundled next to this module — filesystem copies under data/ may not ship on Vercel.
  */
 function demoForecast(variety: string, horizonWeeks: number): PriceForecast | null {
-  const file = dataPath("market", "forecasts", `${variety}_${horizonWeeks}w.json`);
-  if (!existsSync(file)) return null;
-  return JSON.parse(readFileSync(file, "utf8")) as PriceForecast;
+  const bundled = ({ Arborio_8: arborio8w, Carnaroli_8: carnaroli8w } as Record<string, PriceForecast>)[`${variety}_${horizonWeeks}`];
+  if (bundled) return bundled;
+  try {
+    const file = dataPath("market", "forecasts", `${variety}_${horizonWeeks}w.json`);
+    if (!existsSync(file)) return null;
+    return JSON.parse(readFileSync(file, "utf8")) as PriceForecast;
+  } catch {
+    return null;
+  }
 }
 
 export async function getPriceForecast(variety: string, horizonWeeks = 8): Promise<PriceForecast> {
+  // Hosted Vercel has no planning/ and no uv — skip straight to the bundled baseline.
+  if (process.env.VERCEL) {
+    const demo = demoForecast(variety, horizonWeeks);
+    if (demo) return demo;
+    throw new Error(`No price forecast for ${variety}`);
+  }
   try {
     return await cli<PriceForecast>(["forecast", "--variety", variety, "--horizon", String(horizonWeeks)]);
   } catch {
