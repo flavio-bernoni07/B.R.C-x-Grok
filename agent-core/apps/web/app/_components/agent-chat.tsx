@@ -34,7 +34,7 @@ import { ChipRail } from "@/components/kit/chip-rail";
 import { Button } from "@/components/ui/button";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "@/lib/utils";
-import { VOICE_ASK_EVENT } from "@/lib/voice-ask";
+import { VoiceButton } from "@/components/shell/voice-hold";
 import { AgentMessage } from "./agent-message";
 import { WEB_CHAT_AGENT } from "@/app/eve-agent";
 
@@ -148,19 +148,6 @@ export function AgentChat({
       ...(clientContext ? { clientContext } : {}),
     });
   };
-
-  const voiceGate = useRef({ status: agent.status, send: sendText });
-  voiceGate.current = { status: agent.status, send: sendText };
-  useEffect(() => {
-    const onAsk = (event: Event) => {
-      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim() ?? "";
-      if (!text || voiceGate.current.status === "resuming") return;
-      event.preventDefault();
-      void voiceGate.current.send(text);
-    };
-    window.addEventListener(VOICE_ASK_EVENT, onAsk);
-    return () => window.removeEventListener(VOICE_ASK_EVENT, onAsk);
-  }, []);
 
   const sentInitial = useRef(false);
   useEffect(() => {
@@ -426,19 +413,21 @@ function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) 
     <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
       <div className="relative mx-auto flex h-full w-full max-w-[980px] items-center justify-between bg-hh-seasalt px-6">
         <span />
-        {canStartNewChat ? (
-          <Button
-            aria-label="Start a new chat"
-            className="pointer-events-auto"
-            onClick={() => window.location.assign("/s")}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon className="size-4" />
-            <span className="hidden font-normal text-sm sm:inline">New chat</span>
-          </Button>
-        ) : null}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {canStartNewChat ? (
+            <Button
+              aria-label="Start a new chat"
+              onClick={() => window.location.assign("/s")}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <PlusIcon className="size-4" />
+              <span className="hidden font-normal text-sm sm:inline">New chat</span>
+            </Button>
+          ) : null}
+          <VoiceButton />
+        </div>
       </div>
     </header>
   );

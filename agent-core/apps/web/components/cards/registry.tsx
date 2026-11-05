@@ -46,11 +46,17 @@ function Fold({ children }: { readonly children: ReactNode }) {
   const [tall, setTall] = useState(false);
   const [open, setOpen] = useState(false);
   useLayoutEffect(() => {
-    if (ref.current) setTall(ref.current.scrollHeight > 340);
-  }, []);
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setTall(el.scrollHeight > 340);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, children]);
   return (
-    <div className="relative">
-      <div ref={ref} className={tall && !open ? "max-h-[320px] overflow-hidden" : undefined}>
+    <div className="relative min-w-0 max-w-full">
+      <div ref={ref} className={tall && !open ? "max-h-[320px] overflow-hidden" : "min-w-0 max-w-full"}>
         {children}
       </div>
       {tall && !open ? (

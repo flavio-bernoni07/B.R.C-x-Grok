@@ -1,6 +1,6 @@
 /**
- * Hold-to-talk clip → Grok Voice transcript. Does not write a record or send a message.
- * The dashboard posts the text into the existing agent thread after this returns.
+ * A voice clip → Grok Voice transcript. Does not write a record or a chat message.
+ * The dashboard asks the Mini ERP with the transcript, then speaks the answer.
  */
 import { transcribeAudio, voiceCapabilities } from "@agent/lib/grok/voice";
 
