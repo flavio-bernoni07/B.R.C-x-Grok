@@ -167,4 +167,29 @@ describe("phone dispute tools", () => {
     const submit = result.submit as { dispute_id?: string };
     expect(submit.dispute_id).toMatch(/^DSP-/);
   });
+
+  it("ORD-3003 Carrefour damage is seeded for a second phone call", async () => {
+    const erp = freshErp();
+    seedPortalDemoOrders(erp);
+    expect(erp.order("ORD-3003")?.buyerGln).toBe("8000000000100");
+    const denied = await dispatchPhoneTool(
+      erp,
+      null,
+      "lookup_order",
+      { retailer: "Esselunga", order_ref: "ORD-3003" },
+      {},
+    );
+    expect(denied.ok).toBe(false);
+    const good = await simulatePhoneDispute(erp, {
+      retailer: "Carrefour",
+      order_ref: "ORD-3003",
+      category: "damage",
+      claimed_quantity: 60,
+      customer_description: "60 Arborio packs crushed on arrival",
+      language: "en",
+      caller: "+14155550101",
+    });
+    expect(good.ok).toBe(true);
+    expect((good.submit as { dispute_id?: string }).dispute_id).toMatch(/^DSP-/);
+  });
 });

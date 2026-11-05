@@ -86,12 +86,18 @@ You only need Path 2 if you later bring a Twilio/Telnyx number. Then:
 ## Offline rehearsal (no phone, no tunnel)
 
 ```bash
+# Call 1 — Esselunga shortage
 curl -s -X POST http://localhost:3000/api/telephony/simulate \
   -H 'content-type: application/json' \
-  -d '{"order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli","language":"en"}'
+  -d '{"retailer":"Esselunga","order_ref":"ORD-3001","category":"shortage","claimed_quantity":1100,"customer_description":"Received only 1100 of 1200 Carnaroli","language":"en"}'
+
+# Call 2 — Carrefour damage
+curl -s -X POST http://localhost:3000/api/telephony/simulate \
+  -H 'content-type: application/json' \
+  -d '{"retailer":"Carrefour","order_ref":"ORD-3003","category":"damage","claimed_quantity":60,"customer_description":"60 Arborio packs crushed on arrival at CeDi","language":"en"}'
 ```
 
-Then open **Disputes** — you should see a Phone-channel case.
+Then open **Disputes** — you should see Phone-channel cases.
 
 ## Smoke-check Voice key
 

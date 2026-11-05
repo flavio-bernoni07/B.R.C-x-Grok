@@ -294,7 +294,7 @@ export function SupportChat() {
                       </button>
                     ))}
                   </div>
-                  <p className="text-[12.5px] text-ink-50">Demo tip: after naming the problem, send “ORD-3001” (shortage) or “ORD-3002” (invoice price).</p>
+                  <p className="text-[12.5px] text-ink-50">Demo tip: ORD-3001 shortage · ORD-3002 invoice price · ORD-3003 Carrefour damage.</p>
                 </div>
               ) : null}
               {messages.map((m, i) => (

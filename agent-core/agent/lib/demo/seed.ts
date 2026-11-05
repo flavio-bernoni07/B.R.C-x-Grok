@@ -13,7 +13,7 @@ export async function seedDemo(erp: Erp, opts: { say?: (line: string) => void } 
   const scenarios = await seedScenarios(erp);
   const portalOrders = seedPortalDemoOrders(erp);
   opts.say?.(
-    `== Scenarios\nESS-AMB-001: ${scenarios.ambiguousOrder.status} (${scenarios.ambiguousOrder.case_id ?? "already there"})\nPortal demo orders: ${portalOrders.ord3001}, ${portalOrders.ord3002}`,
+    `== Scenarios\nESS-AMB-001: ${scenarios.ambiguousOrder.status} (${scenarios.ambiguousOrder.case_id ?? "already there"})\nPortal demo orders: ${portalOrders.ord3001}, ${portalOrders.ord3002}, ${portalOrders.ord3003}`,
   );
   erp.log("code", "demo.seeded", null, {
     detail: { grok: "recorded", scenarios: Object.keys(scenarios), portal_orders: portalOrders },
