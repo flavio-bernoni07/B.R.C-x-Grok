@@ -15,13 +15,31 @@ red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 green() { printf '\033[32m%s\033[0m\n' "$*" >&2; }
 bold() { printf '\033[1m%s\033[0m\n' "$*" >&2; }
 
+# .env.local is dotenv, not bash — never `source` it (comments/values often contain `(`).
 load_dotenv() {
-  if [ -f .env.local ]; then
-    set -a
-    # shellcheck disable=SC1091
-    . ./.env.local
-    set +a
-  fi
+  [ -f .env.local ] || return 0
+  local line key val
+  while IFS= read -r line || [ -n "$line" ]; do
+    # strip CR, leading spaces, and full-line comments
+    line="${line%$'\r'}"
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    key="${line%%=*}"
+    case "$key" in
+      XAI_API_KEY|XAI_VOICE_WEBHOOK_SECRET|XAI_WEBHOOK_SECRET|BRC_PUBLIC_BASE_URL|BRC_PHONE_ALLOWLIST|BRC_PHONE_DEMO_OPEN|XAI_SPEECH_VOICE) ;;
+      *) continue ;;
+    esac
+    val="${line#*=}"
+    # trim surrounding single/double quotes only
+    if [[ "$val" == \"*\" && "$val" == *\" ]]; then val="${val:1:${#val}-2}"; fi
+    if [[ "$val" == \'*\' && "$val" == *\' ]]; then val="${val:1:${#val}-2}"; fi
+    export "$key=$val"
+  done < .env.local
 }
 
 ensure_env() {
@@ -34,6 +52,11 @@ ensure_env() {
     fi
     red "XAI_API_KEY is missing. Add it to agent-core/.env.local (from grok.com or console.x.ai)."
     exit 1
+  fi
+  local major
+  major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "$major" != "24" ]; then
+    bold "Note: Node $major detected (engines want 24.x). Prefer: nvm use 24"
   fi
 }
 
